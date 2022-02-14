@@ -1,0 +1,55 @@
+## Defaults
+__pycache__
+.idea
+.DS_Store
+.deps
+.vscode
+.docs
+.env
+node_modules
+tenderly.yaml
+settings.json
+.mocharc.json
+venv
+
+# Build output
+cache
+build
+export
+**/artifacts
+.openzeppelin
+docgen/docs
+docgen/SUMMARY.md
+solidity-flattenedContracts
+./crytic-export
+typechain
+
+
+# Test output
+coverage
+coverage.json
+
+# Running output
+gas-report.txt
+gasReporterOutput.json
+addresses.json
+blockchain_db
+ganache*
+yarn-error.log
+
+# deployments
+deployments/*
+!deployments/kovan
+!deployments/rinkeby
+!deployments/mainnet
+!deployments/polygon
+
+# bin
+bin
+
+# temporary delete
+test/perpetualManager/perpetualManagerChangeBase.test.js
+typechain/cacheIndex.ts
+
+# used for storing temporary vyper artifacts
+vyper_temp_dir
