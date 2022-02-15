@@ -3,7 +3,7 @@
 pragma solidity 0.8.7;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeMath } from "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 struct StrategyParams {
     uint256 performanceFee;
@@ -155,7 +155,6 @@ interface VaultAPI is IERC20 {
  */
 
 abstract contract BaseStrategy {
-    using SafeMath for uint256;
     using SafeERC20 for IERC20;
     string public metadataURI;
 
@@ -252,13 +251,13 @@ abstract contract BaseStrategy {
 
     // modifiers
     modifier onlyAuthorized() {
-        require(msg.sender == strategist || msg.sender == governance(), "!authorized");
+        require(msg.sender == strategist || msg.sender == _governance(), "!authorized");
         _;
     }
 
     modifier onlyEmergencyAuthorized() {
         require(
-            msg.sender == strategist || msg.sender == governance() || msg.sender == vault.guardian() || msg.sender == vault.management(),
+            msg.sender == strategist || msg.sender == _governance() || msg.sender == vault.guardian() || msg.sender == vault.management(),
             "!authorized"
         );
         _;
@@ -270,7 +269,7 @@ abstract contract BaseStrategy {
     }
 
     modifier onlyGovernance() {
-        require(msg.sender == governance(), "!authorized");
+        require(msg.sender == _governance(), "!authorized");
         _;
     }
 
@@ -278,7 +277,7 @@ abstract contract BaseStrategy {
         require(
             msg.sender == keeper ||
                 msg.sender == strategist ||
-                msg.sender == governance() ||
+                msg.sender == _governance() ||
                 msg.sender == vault.guardian() ||
                 msg.sender == vault.management(),
             "!authorized"
@@ -287,11 +286,11 @@ abstract contract BaseStrategy {
     }
 
     modifier onlyVaultManagers() {
-        require(msg.sender == vault.management() || msg.sender == governance(), "!authorized");
+        require(msg.sender == vault.management() || msg.sender == _governance(), "!authorized");
         _;
     }
 
-    constructor(address _vault) public {
+    constructor(address _vault) {
         _initialize(_vault, msg.sender, msg.sender, msg.sender);
     }
 
@@ -317,7 +316,7 @@ abstract contract BaseStrategy {
 
         vault = VaultAPI(_vault);
         want = IERC20(vault.token());
-        want.safeApprove(_vault, uint256(-1)); // Give Vault unlimited access (might save gas)
+        want.safeApprove(_vault, type(uint256).max); // Give Vault unlimited access (might save gas)
         strategist = _strategist;
         rewards = _rewards;
         keeper = _keeper;
@@ -328,7 +327,7 @@ abstract contract BaseStrategy {
         profitFactor = 100;
         debtThreshold = 0;
 
-        vault.approve(rewards, uint256(-1)); // Allow rewards to be pulled
+        vault.approve(rewards, type(uint256).max); // Allow rewards to be pulled
     }
 
     function setHealthCheck(address _healthCheck) external onlyVaultManagers {
@@ -383,7 +382,7 @@ abstract contract BaseStrategy {
         require(_rewards != address(0));
         vault.approve(rewards, 0);
         rewards = _rewards;
-        vault.approve(rewards, uint256(-1));
+        vault.approve(rewards, type(uint256).max);
         emit UpdatedRewards(_rewards);
     }
 
@@ -471,7 +470,7 @@ abstract contract BaseStrategy {
      * Resolve governance address from Vault contract, used to make assertions
      * on protected functions in the Strategy.
      */
-    function governance() internal view returns (address) {
+    function _governance() internal view returns (address) {
         return vault.governance();
     }
 
@@ -553,7 +552,7 @@ abstract contract BaseStrategy {
      *
      * See `vault.debtOutstanding()`.
      */
-    function prepareReturn(uint256 _debtOutstanding)
+    function _prepareReturn(uint256 _debtOutstanding)
         internal
         virtual
         returns (
@@ -571,7 +570,7 @@ abstract contract BaseStrategy {
      *
      * See comments regarding `_debtOutstanding` on `prepareReturn()`.
      */
-    function adjustPosition(uint256 _debtOutstanding) internal virtual;
+    function _adjustPosition(uint256 _debtOutstanding) internal virtual;
 
     /**
      * Liquidate up to `_amountNeeded` of `want` of this strategy's positions,
@@ -583,7 +582,7 @@ abstract contract BaseStrategy {
      *
      * NOTE: The invariant `_liquidatedAmount + _loss <= _amountNeeded` should always be maintained
      */
-    function liquidatePosition(uint256 _amountNeeded) internal virtual returns (uint256 _liquidatedAmount, uint256 _loss);
+    function _liquidatePosition(uint256 _amountNeeded) internal virtual returns (uint256 _liquidatedAmount, uint256 _loss);
 
     /**
      * Liquidate everything and returns the amount that got freed.
@@ -591,7 +590,7 @@ abstract contract BaseStrategy {
      * liquidate all of the Strategy's positions back to the Vault.
      */
 
-    function liquidateAllPositions() internal virtual returns (uint256 _amountFreed);
+    function _liquidateAllPositions() internal virtual returns (uint256 _amountFreed);
 
     /**
      * @notice
@@ -632,7 +631,7 @@ abstract contract BaseStrategy {
      */
     function tend() external onlyKeepers {
         // Don't take profits with this call, but adjust for better gains
-        adjustPosition(vault.debtOutstanding());
+        _adjustPosition(vault.debtOutstanding());
     }
 
     /**
@@ -673,10 +672,10 @@ abstract contract BaseStrategy {
         if (params.activation == 0) return false;
 
         // Should not trigger if we haven't waited long enough since previous harvest
-        if (block.timestamp.sub(params.lastReport) < minReportDelay) return false;
+        if (block.timestamp - params.lastReport < minReportDelay) return false;
 
         // Should trigger if hasn't been called in a while
-        if (block.timestamp.sub(params.lastReport) >= maxReportDelay) return true;
+        if (block.timestamp - params.lastReport >= maxReportDelay) return true;
 
         // If some amount is owed, pay it back
         // NOTE: Since debt is based on deposits, it makes sense to guard against large
@@ -689,15 +688,15 @@ abstract contract BaseStrategy {
         // Check for profits and losses
         uint256 total = estimatedTotalAssets();
         // Trigger if we have a loss to report
-        if (total.add(debtThreshold) < params.totalDebt) return true;
+        if (total + debtThreshold < params.totalDebt) return true;
 
         uint256 profit = 0;
-        if (total > params.totalDebt) profit = total.sub(params.totalDebt); // We've earned a profit!
+        if (total > params.totalDebt) profit = total - params.totalDebt; // We've earned a profit!
 
         // Otherwise, only trigger if it "makes sense" economically (gas cost
         // is <N% of value moved)
         uint256 credit = vault.creditAvailable();
-        return (profitFactor.mul(callCost) < credit.add(profit));
+        return (profitFactor * callCost < credit + profit);
     }
 
     /**
@@ -724,16 +723,16 @@ abstract contract BaseStrategy {
         uint256 debtPayment = 0;
         if (emergencyExit) {
             // Free up as much capital as possible
-            uint256 amountFreed = liquidateAllPositions();
+            uint256 amountFreed = _liquidateAllPositions();
             if (amountFreed < debtOutstanding) {
-                loss = debtOutstanding.sub(amountFreed);
+                loss = debtOutstanding - amountFreed;
             } else if (amountFreed > debtOutstanding) {
-                profit = amountFreed.sub(debtOutstanding);
+                profit = amountFreed - debtOutstanding;
             }
-            debtPayment = debtOutstanding.sub(loss);
+            debtPayment = debtOutstanding- loss;
         } else {
             // Free up returns for Vault to pull
-            (profit, loss, debtPayment) = prepareReturn(debtOutstanding);
+            (profit, loss, debtPayment) = _prepareReturn(debtOutstanding);
         }
 
         // Allow Vault to take up to the "harvested" balance of this contract,
@@ -743,7 +742,7 @@ abstract contract BaseStrategy {
         debtOutstanding = vault.report(profit, loss, debtPayment);
 
         // Check if free returns are left, and re-invest them
-        adjustPosition(debtOutstanding);
+        _adjustPosition(debtOutstanding);
 
         // call healthCheck contract
         if (doHealthCheck && healthCheck != address(0)) {
@@ -767,7 +766,7 @@ abstract contract BaseStrategy {
         require(msg.sender == address(vault), "!vault");
         // Liquidate as much as possible to `want`, up to `_amountNeeded`
         uint256 amountFreed;
-        (amountFreed, _loss) = liquidatePosition(_amountNeeded);
+        (amountFreed, _loss) = _liquidatePosition(_amountNeeded);
         // Send it directly back (NOTE: Using `msg.sender` saves some gas here)
         want.safeTransfer(msg.sender, amountFreed);
         // NOTE: Reinvest anything leftover on next `tend`/`harvest`
@@ -778,7 +777,7 @@ abstract contract BaseStrategy {
      * transferring any reserve or LP tokens, CDPs, or other tokens or stores of
      * value.
      */
-    function prepareMigration(address _newStrategy) internal virtual;
+    function _prepareMigration(address _newStrategy) internal virtual;
 
     /**
      * @notice
@@ -795,7 +794,7 @@ abstract contract BaseStrategy {
     function migrate(address _newStrategy) external {
         require(msg.sender == address(vault));
         require(BaseStrategy(_newStrategy).vault() == vault);
-        prepareMigration(_newStrategy);
+        _prepareMigration(_newStrategy);
         want.safeTransfer(_newStrategy, want.balanceOf(address(this)));
     }
 
@@ -834,7 +833,7 @@ abstract contract BaseStrategy {
      *    }
      * ```
      */
-    function protectedTokens() internal view virtual returns (address[] memory);
+    function _protectedTokens() internal view virtual returns (address[] memory);
 
     /**
      * @notice
@@ -857,9 +856,9 @@ abstract contract BaseStrategy {
         require(_token != address(want), "!want");
         require(_token != address(vault), "!shares");
 
-        address[] memory _protectedTokens = protectedTokens();
+        address[] memory _protectedTokens = _protectedTokens();
         for (uint256 i; i < _protectedTokens.length; i++) require(_token != _protectedTokens[i], "!protected");
 
-        IERC20(_token).safeTransfer(governance(), IERC20(_token).balanceOf(address(this)));
+        IERC20(_token).safeTransfer(_governance(), IERC20(_token).balanceOf(address(this)));
     }
 }
