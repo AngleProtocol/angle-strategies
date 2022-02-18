@@ -10,9 +10,9 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import "./AaveLibraries.sol";
 import "./AaveInterfaces.sol";
 import "./UniswapInterfaces.sol";
-import "./BaseStrategy.sol";
+import "../BaseStrategy.sol";
 
-contract Strategy is BaseStrategy, IERC3156FlashBorrower {
+contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     using SafeERC20 for IERC20;
     using Address for address;
 
@@ -81,21 +81,17 @@ contract Strategy is BaseStrategy, IERC3156FlashBorrower {
     uint256 private constant _PESSIMISM_FACTOR = 1000;
     uint256 private _DECIMALS;
 
-    constructor(address _vault) public BaseStrategy(_vault) {
-        _initializeThis();
-    }
-
-    function initialize(
-        address _vault,
-        address _strategist,
-        address _rewards,
-        address _keeper
-    ) external {
-        _initialize(_vault, _strategist, _rewards, _keeper);
-        _initializeThis();
-    }
-
-    function _initializeThis() internal {
+    /// @notice Constructor of the `Strategy`
+    /// @param _poolManager Address of the `PoolManager` lending to this strategy
+    /// @param _rewards  The token given to reward keepers.
+    /// @param governorList List of addresses with governor privilege
+    /// @param guardian Address of the guardian
+    constructor(
+        address _poolManager,
+        IERC20 _rewards,
+        address[] memory governorList,
+        address guardian
+    ) BaseStrategy(_poolManager, _rewards, governorList, guardian) {
         require(address(aToken) == address(0));
 
         // initialize operational state
@@ -135,7 +131,7 @@ contract Strategy is BaseStrategy, IERC3156FlashBorrower {
         (uint256 daiLtv, ) = _getProtocolCollatRatios(_dai);
         daiBorrowCollatRatio = daiLtv - _DEFAULT_COLLAT_MAX_MARGIN;
 
-        _DECIMALS = 10**vault.decimals();
+        _DECIMALS = wantBase;
 
         // approve spend aave spend
         _approveMaxSpend(address(want), address(_lendingPool));
@@ -161,7 +157,7 @@ contract Strategy is BaseStrategy, IERC3156FlashBorrower {
         uint256 _maxCollatRatio,
         uint256 _maxBorrowCollatRatio,
         uint256 _daiBorrowCollatRatio
-    ) external onlyVaultManagers {
+    ) external onlyRole(GUARDIAN_ROLE) {
         (uint256 ltv, uint256 liquidationThreshold) =
             _getProtocolCollatRatios(address(want));
         (uint256 daiLtv, ) = _getProtocolCollatRatios(_dai);
@@ -179,12 +175,12 @@ contract Strategy is BaseStrategy, IERC3156FlashBorrower {
 
     function setIsFlashMintActive(bool _isFlashMintActive)
         external
-        onlyVaultManagers
+        onlyRole(GUARDIAN_ROLE)
     {
         isFlashMintActive = _isFlashMintActive;
     }
 
-    function setWithdrawCheck(bool _withdrawCheck) external onlyVaultManagers {
+    function setWithdrawCheck(bool _withdrawCheck) external onlyRole(GUARDIAN_ROLE) {
         withdrawCheck = _withdrawCheck;
     }
 
@@ -192,7 +188,7 @@ contract Strategy is BaseStrategy, IERC3156FlashBorrower {
         uint256 _minWant,
         uint256 _minRatio,
         uint8 _maxIterations
-    ) external onlyVaultManagers {
+    ) external onlyRole(GUARDIAN_ROLE) {
         require(_minRatio < maxBorrowCollatRatio);
         require(_maxIterations > 0 && _maxIterations < 16);
         minWant = _minWant;
@@ -209,7 +205,7 @@ contract Strategy is BaseStrategy, IERC3156FlashBorrower {
         uint24 _stkAaveToAaveSwapFee,
         uint24 _aaveToWethSwapFee,
         uint24 _wethToWantSwapFee
-    ) external onlyVaultManagers {
+    ) external onlyRole(GUARDIAN_ROLE) {
         require(
             _swapRouter == SwapRouter.UniV2 ||
                 _swapRouter == SwapRouter.SushiV2 ||
@@ -224,10 +220,6 @@ contract Strategy is BaseStrategy, IERC3156FlashBorrower {
         stkAaveToAaveSwapFee = _stkAaveToAaveSwapFee;
         aaveToWethSwapFee = _aaveToWethSwapFee;
         wethToWantSwapFee = _wethToWantSwapFee;
-    }
-
-    function name() external view override returns (string memory) {
-        return "StrategyGenLevAAVE-Flashmint";
     }
 
     function estimatedTotalAssets() public view override returns (uint256) {
@@ -270,7 +262,7 @@ contract Strategy is BaseStrategy, IERC3156FlashBorrower {
         _claimAndSellRewards();
 
         // account for profit / losses
-        uint256 totalDebt = vault.strategies(address(this)).totalDebt;
+        uint256 totalDebt = poolManager.strategies(address(this)).totalStrategyDebt;
 
         // Assets immediately convertable to want only
         uint256 supply = getCurrentSupply();
@@ -327,7 +319,9 @@ contract Strategy is BaseStrategy, IERC3156FlashBorrower {
         }
     }
 
-    function _adjustPosition(uint256 _debtOutstanding) internal override {
+    function _adjustPosition() internal override {
+        uint256 _debtOutstanding = poolManager.debtOutstanding();
+
         if (_alreadyAdjusted) {
             _alreadyAdjusted = false; // reset for next time
             return;
@@ -405,23 +399,24 @@ contract Strategy is BaseStrategy, IERC3156FlashBorrower {
         }
     }
 
-    function tendTrigger(uint256 gasCost) public view override returns (bool) {
-        if (harvestTrigger(gasCost)) {
-            //harvest takes priority
-            return false;
-        }
-        // pull the liquidation liquidationThreshold from aave to be extra safu
-        (, uint256 liquidationThreshold) =
-            _getProtocolCollatRatios(address(want));
+    // harvestTrigger is external, therefore this function cannot exist
+    // function tendTrigger() public view override returns (bool) {
+    //     if (harvestTrigger()) {
+    //         //harvest takes priority
+    //         return false;
+    //     }
+    //     // pull the liquidation liquidationThreshold from aave to be extra safu
+    //     (, uint256 liquidationThreshold) =
+    //         _getProtocolCollatRatios(address(want));
 
-        uint256 currentCollatRatio = getCurrentCollatRatio();
+    //     uint256 currentCollatRatio = getCurrentCollatRatio();
 
-        if (currentCollatRatio >= liquidationThreshold) {
-            return true;
-        }
+    //     if (currentCollatRatio >= liquidationThreshold) {
+    //         return true;
+    //     }
 
-        return (liquidationThreshold - currentCollatRatio <= _LIQUIDATION_WARNING_THRESHOLD);
-    }
+    //     return (liquidationThreshold - currentCollatRatio <= _LIQUIDATION_WARNING_THRESHOLD);
+    // }
 
     function _liquidateAllPositions()
         internal
@@ -429,10 +424,6 @@ contract Strategy is BaseStrategy, IERC3156FlashBorrower {
         returns (uint256 _amountFreed)
     {
         (_amountFreed, ) = _liquidatePosition(type(uint256).max);
-    }
-
-    function _prepareMigration(address _newStrategy) internal override {
-        require(getCurrentSupply() < minWant);
     }
 
     function _protectedTokens()
@@ -443,18 +434,18 @@ contract Strategy is BaseStrategy, IERC3156FlashBorrower {
     {}
 
     //emergency function that we can use to deleverage manually if something is broken
-    function manualDeleverage(uint256 amount) external onlyVaultManagers {
+    function manualDeleverage(uint256 amount) external onlyRole(GUARDIAN_ROLE) {
         _withdrawCollateral(amount);
         _repayWant(amount);
     }
 
     //emergency function that we can use to deleverage manually if something is broken
-    function manualReleaseWant(uint256 amount) external onlyVaultManagers {
+    function manualReleaseWant(uint256 amount) external onlyRole(GUARDIAN_ROLE) {
         _withdrawCollateral(amount);
     }
 
     // emergency function that we can use to sell rewards if something is broken
-    function manualClaimAndSellRewards() external onlyVaultManagers {
+    function manualClaimAndSellRewards() external onlyRole(GUARDIAN_ROLE) {
         _claimAndSellRewards();
     }
 
@@ -772,15 +763,6 @@ contract Strategy is BaseStrategy, IERC3156FlashBorrower {
         return amounts[amounts.length - 1];
     }
 
-    function ethToWant(uint256 _amtInWei)
-        public
-        view
-        override
-        returns (uint256)
-    {
-        return _tokenToWant(_weth, _amtInWei);
-    }
-
     function _checkCooldown() internal view returns (CooldownStatus) {
         uint256 cooldownStartTimestamp =
             IStakedAave(_stkAave).stakersCooldowns(address(this));
@@ -932,5 +914,22 @@ contract Strategy is BaseStrategy, IERC3156FlashBorrower {
 
     function _approveMaxSpend(address token, address spender) internal {
         IERC20(token).safeApprove(spender, type(uint256).max);
+    }
+
+    /// @notice Adds a new guardian address and echoes the change to the contracts
+    /// that interact with this collateral `PoolManager`
+    /// @param _guardian New guardian address
+    /// @dev This internal function has to be put in this file because `AccessControl` is not defined
+    /// in `PoolManagerInternal`
+    function addGuardian(address _guardian) external override onlyRole(POOLMANAGER_ROLE) {
+        // Granting the new role
+        // Access control for this contract
+        _grantRole(GUARDIAN_ROLE, _guardian);
+    }
+
+    /// @notice Revokes the guardian role and propagates the change to other contracts
+    /// @param guardian Old guardian address to revoke
+    function revokeGuardian(address guardian) external override onlyRole(POOLMANAGER_ROLE) {
+        _revokeRole(GUARDIAN_ROLE, guardian);
     }
 }

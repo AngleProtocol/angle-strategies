@@ -68,15 +68,11 @@ library FlashMintLib {
     uint256 private constant _COLLAT_RATIO_PRECISION = 1 ether;
     address private constant _WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address private constant _DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-    IAToken public constant ADAI =
-        IAToken(0x028171bCA77440897B824Ca71D1c56caC55b68A3);
-    IProtocolDataProvider private constant _protocolDataProvider =
-        IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
-    ILendingPool private constant _lendingPool =
-        ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
+    IAToken public constant ADAI = IAToken(0x028171bCA77440897B824Ca71D1c56caC55b68A3);
+    IProtocolDataProvider private constant _protocolDataProvider = IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
+    ILendingPool private constant _lendingPool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
 
-    bytes32 public constant CALLBACK_SUCCESS =
-        keccak256("ERC3156FlashBorrower.onFlashLoan");
+    bytes32 public constant CALLBACK_SUCCESS = keccak256("ERC3156FlashBorrower.onFlashLoan");
 
     uint16 private constant _referral = 7; // Yearn's aave referral code
 
