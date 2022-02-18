@@ -17,15 +17,15 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     using Address for address;
 
     // AAVE protocol address
-    IProtocolDataProvider private constant _protocolDataProvider = IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
-    IAaveIncentivesController private constant _incentivesController = IAaveIncentivesController(0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5);
-    ILendingPool private constant _lendingPool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
+    IProtocolDataProvider private _protocolDataProvider; // 0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d
+    IAaveIncentivesController private _incentivesController; // 0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5
+    ILendingPool private _lendingPool; // 0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9
 
     // Token addresses
-    address private constant _aave = 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9;
-    IStakedAave private constant _stkAave = IStakedAave(0x4da27a545c0c5B758a6BA100e3a049001de870f5);
-    address private constant _weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address private constant _dai = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
+    address private _aave; // 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9
+    IStakedAave private _stkAave; // 0x4da27a545c0c5B758a6BA100e3a049001de870f5
+    address private immutable _weth; // 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
+    address private _dai; // 0x6B175474E89094C44Da98b954EedeAC495271d0F
 
     // Supply and borrow tokens
     IAToken public aToken;
@@ -90,9 +90,26 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         address _poolManager,
         IERC20 _rewards,
         address[] memory governorList,
-        address guardian
+        address guardian,
+        address protocolDataProvider_,
+        address incentivesController_,
+        address lendingPool_,
+        address dai_,
+        address aave_,
+        address stkAave_,
+        address weth_
     ) BaseStrategy(_poolManager, _rewards, governorList, guardian) {
         require(address(aToken) == address(0));
+        require(protocolDataProvider_ != address(0));
+
+        _protocolDataProvider = IProtocolDataProvider(protocolDataProvider_);
+        _incentivesController = IAaveIncentivesController(incentivesController_);
+        _lendingPool = ILendingPool(lendingPool_);
+
+        _dai = dai_;
+        _stkAave = IStakedAave(stkAave_);
+        _aave = aave_;
+        _weth = weth_;
 
         // initialize operational state
         maxIterations = 6;
@@ -117,18 +134,16 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         _alreadyAdjusted = false;
 
         // Set aave tokens
-        (address _aToken, , address _debtToken) =
-            _protocolDataProvider.getReserveTokensAddresses(address(want));
+        (address _aToken, , address _debtToken) = IProtocolDataProvider(protocolDataProvider_).getReserveTokensAddresses(address(want));
         aToken = IAToken(_aToken);
         debtToken = IVariableDebtToken(_debtToken);
 
         // Let collateral targets
-        (uint256 ltv, uint256 liquidationThreshold) =
-            _getProtocolCollatRatios(address(want));
+        (uint256 ltv, uint256 liquidationThreshold) = _getProtocolCollatRatios(address(want));
         targetCollatRatio = liquidationThreshold - _DEFAULT_COLLAT_TARGET_MARGIN;
         maxCollatRatio = liquidationThreshold - _DEFAULT_COLLAT_MAX_MARGIN;
         maxBorrowCollatRatio = ltv - _DEFAULT_COLLAT_MAX_MARGIN;
-        (uint256 daiLtv, ) = _getProtocolCollatRatios(_dai);
+        (uint256 daiLtv, ) = _getProtocolCollatRatios(dai_);
         daiBorrowCollatRatio = daiLtv - _DEFAULT_COLLAT_MAX_MARGIN;
 
         _DECIMALS = wantBase;
@@ -138,17 +153,16 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         _approveMaxSpend(address(aToken), address(_lendingPool));
 
         // approve flashloan spend
-        address dai = _dai;
-        if (address(want) != dai) {
-            _approveMaxSpend(dai, address(_lendingPool));
+        if (address(want) != dai_) {
+            _approveMaxSpend(dai_, address(_lendingPool));
         }
-        _approveMaxSpend(dai, FlashMintLib.LENDER);
+        _approveMaxSpend(dai_, FlashMintLib.LENDER);
 
         // approve swap router spend
-        _approveMaxSpend(address(_stkAave), address(_UNI_V3_ROUTER));
-        _approveMaxSpend(_aave, address(_UNI_V2_ROUTER));
-        _approveMaxSpend(_aave, address(_SUSHI_V2_ROUTER));
-        _approveMaxSpend(_aave, address(_UNI_V3_ROUTER));
+        _approveMaxSpend(address(stkAave_), address(_UNI_V3_ROUTER));
+        _approveMaxSpend(aave_, address(_UNI_V2_ROUTER));
+        _approveMaxSpend(aave_, address(_SUSHI_V2_ROUTER));
+        _approveMaxSpend(aave_, address(_UNI_V3_ROUTER));
     }
 
     // SETTERS
@@ -786,7 +800,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
 
     function _getTokenOutPathV2(address _token_in, address _token_out)
         internal
-        pure
+        view
         returns (address[] memory _path)
     {
         bool is_weth =

@@ -7,8 +7,8 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import "../interfaces/IPoolManager.sol";
-import "../interfaces/IStrategy.sol";
+import "../../interfaces/IPoolManager.sol";
+import "../../interfaces/IStrategy.sol";
 
 contract MockPoolManager is AccessControl {
     using SafeERC20 for IERC20;
@@ -36,11 +36,7 @@ contract MockPoolManager is AccessControl {
     event StrategyAdded(address indexed strategy, uint256 debtRatio);
     event StrategyRevoked(address indexed strategy);
 
-    constructor(address[] memory _strategies, StrategyParams[] memory _strategiesParams, address _token, uint256 _creditAvailable) {
-        require(_strategies.length == _strategiesParams.length, "wrong length");
-        for (uint256 i = 0; i < _strategies.length; i++) {
-            strategies[_strategies[i]] = _strategiesParams[i]; // StrategyParams(3, 4, 5);
-        }
+    constructor(address _token, uint256 _creditAvailable) {
         token = IERC20(_token);
         creditAvailable = _creditAvailable;
     }
