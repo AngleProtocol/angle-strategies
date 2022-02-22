@@ -12,6 +12,8 @@ import "./AaveInterfaces.sol";
 import "./UniswapInterfaces.sol";
 import "../BaseStrategy.sol";
 
+import "hardhat/console.sol";
+
 contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     using SafeERC20 for IERC20;
     using Address for address;
@@ -27,6 +29,12 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     address private immutable _weth; // 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
     address private _dai; // 0x6B175474E89094C44Da98b954EedeAC495271d0F
 
+    struct FlashMintLibParams {
+        address lender;
+        address adai;
+    }
+    FlashMintLib public flashMintlib;
+
     // Supply and borrow tokens
     IAToken public aToken;
     IVariableDebtToken public debtToken;
@@ -38,9 +46,9 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     enum CooldownStatus {None, Claim, Initiated}
 
     // SWAP routers
-    IUni private constant _UNI_V2_ROUTER = IUni(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
-    IUni private constant _SUSHI_V2_ROUTER = IUni(0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F);
-    ISwapRouter private constant _UNI_V3_ROUTER = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+    IUni private _UNI_V2_ROUTER; // 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
+    IUni private _SUSHI_V2_ROUTER; // 0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F
+    ISwapRouter private _UNI_V3_ROUTER; // 0xE592427A0AEce92De3Edee1F18E0157C05861564
 
     // OPS State Variables
     uint256 private constant _DEFAULT_COLLAT_TARGET_MARGIN = 0.02 ether;
@@ -73,6 +81,8 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
 
     bool private _alreadyAdjusted; // Signal whether a position adjust was done in prepareReturn
 
+    // TODO: get a referral code from AAVE
+    // https://docs.aave.com/developers/v/1.0/integrating-aave/referral-program
     uint16 private constant _referral = 7; // Yearn's aave referral code
 
     uint256 private constant _MAX_BPS = 1e4;
@@ -94,10 +104,9 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         address protocolDataProvider_,
         address incentivesController_,
         address lendingPool_,
-        address dai_,
-        address aave_,
-        address stkAave_,
-        address weth_
+        address[] memory _tokens, // dai, aave, stkAave, weth
+        address[] memory _routers, // uniV2Router, univ3Router, sushiV2Router,
+        FlashMintLibParams memory _flashMintLibParams
     ) BaseStrategy(_poolManager, _rewards, governorList, guardian) {
         require(address(aToken) == address(0));
         require(protocolDataProvider_ != address(0));
@@ -106,10 +115,14 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         _incentivesController = IAaveIncentivesController(incentivesController_);
         _lendingPool = ILendingPool(lendingPool_);
 
-        _dai = dai_;
-        _stkAave = IStakedAave(stkAave_);
-        _aave = aave_;
-        _weth = weth_;
+        _UNI_V2_ROUTER = IUni(_routers[0]);
+        _SUSHI_V2_ROUTER = IUni(_routers[2]);
+        _UNI_V3_ROUTER = ISwapRouter(_routers[1]);
+
+        _dai = _tokens[0];
+        _aave = _tokens[1];
+        _stkAave = IStakedAave(_tokens[2]);
+        _weth = _tokens[3];
 
         // initialize operational state
         maxIterations = 6;
@@ -133,6 +146,8 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
 
         _alreadyAdjusted = false;
 
+        flashMintlib = new FlashMintLib(_flashMintLibParams.lender, _tokens[3], _tokens[0], _flashMintLibParams.adai, protocolDataProvider_, lendingPool_);
+
         // Set aave tokens
         (address _aToken, , address _debtToken) = IProtocolDataProvider(protocolDataProvider_).getReserveTokensAddresses(address(want));
         aToken = IAToken(_aToken);
@@ -143,7 +158,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         targetCollatRatio = liquidationThreshold - _DEFAULT_COLLAT_TARGET_MARGIN;
         maxCollatRatio = liquidationThreshold - _DEFAULT_COLLAT_MAX_MARGIN;
         maxBorrowCollatRatio = ltv - _DEFAULT_COLLAT_MAX_MARGIN;
-        (uint256 daiLtv, ) = _getProtocolCollatRatios(dai_);
+        (uint256 daiLtv, ) = _getProtocolCollatRatios(_tokens[0]);
         daiBorrowCollatRatio = daiLtv - _DEFAULT_COLLAT_MAX_MARGIN;
 
         _DECIMALS = wantBase;
@@ -153,16 +168,16 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         _approveMaxSpend(address(aToken), address(_lendingPool));
 
         // approve flashloan spend
-        if (address(want) != dai_) {
-            _approveMaxSpend(dai_, address(_lendingPool));
+        if (address(want) != _tokens[0]) {
+            _approveMaxSpend(_tokens[0], address(_lendingPool));
         }
-        _approveMaxSpend(dai_, FlashMintLib.LENDER);
+        _approveMaxSpend(_tokens[0], _flashMintLibParams.lender);
 
         // approve swap router spend
-        _approveMaxSpend(address(stkAave_), address(_UNI_V3_ROUTER));
-        _approveMaxSpend(aave_, address(_UNI_V2_ROUTER));
-        _approveMaxSpend(aave_, address(_SUSHI_V2_ROUTER));
-        _approveMaxSpend(aave_, address(_UNI_V3_ROUTER));
+        _approveMaxSpend(address(_tokens[2]), address(ISwapRouter(_routers[1])));
+        _approveMaxSpend(_tokens[1], address(IUni(_routers[0])));
+        _approveMaxSpend(_tokens[1], address(IUni(_routers[2])));
+        _approveMaxSpend(_tokens[1], address(ISwapRouter(_routers[1])));
     }
 
     // SETTERS
@@ -281,6 +296,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         // Assets immediately convertable to want only
         uint256 supply = getCurrentSupply();
         uint256 totalAssets = _balanceOfWant() + supply;
+        console.log("supply: %s / totalAssets: %s", supply, totalAssets);
 
         if (totalDebt > totalAssets) {
             // we have losses
@@ -331,6 +347,10 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
                 _profit = amountRequired - _debtPayment;
             }
         }
+        
+        console.log("*_prepareReturn* supply %s / totalAssets %s", supply, totalAssets);
+        console.log("*_prepareReturn* _profit %s / _loss %s", _profit , _loss );
+        console.log("*_prepareReturn* _debtPayment %s / _debtOutstanding %s", _debtPayment, _debtOutstanding);
     }
 
     function _adjustPosition() internal override {
@@ -342,6 +362,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         }
 
         uint256 wantBalance = _balanceOfWant();
+        console.log("*_adjustPosition* wantBalance %s / _debtOutstanding %s", wantBalance, _debtOutstanding);
         // deposit available want as collateral
         if (
             wantBalance > _debtOutstanding &&
@@ -561,7 +582,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
             depositsDeficitToMeetLtv = depositsToMeetLtv - deposits;
         }
         return
-            FlashMintLib.doFlashMint(
+            flashMintlib.doFlashMint(
                 false,
                 amount,
                 address(want),
@@ -649,7 +670,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
             amount = borrows;
         }
         return
-            FlashMintLib.doFlashMint(
+            flashMintlib.doFlashMint(
                 true,
                 amount,
                 address(want),
@@ -721,12 +742,12 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         uint256 fee,
         bytes calldata data
     ) external override returns (bytes32) {
-        require(msg.sender == FlashMintLib.LENDER);
+        require(msg.sender == flashMintlib.LENDER());
         require(initiator == address(this));
         (bool deficit, uint256 amountWant) = abi.decode(data, (bool, uint256));
 
         return
-            FlashMintLib.loanLogic(deficit, amountWant, amount, address(want));
+            flashMintlib.loanLogic(deficit, amountWant, amount, address(want));
     }
 
     function getCurrentPosition()
@@ -895,8 +916,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         view
         returns (uint256 ltv, uint256 liquidationThreshold)
     {
-        (, ltv, liquidationThreshold, , , , , , , ) = _protocolDataProvider
-            .getReserveConfigurationData(token);
+        (, ltv, liquidationThreshold, , , , , , , ) = _protocolDataProvider.getReserveConfigurationData(token);
         // convert bps to wad
         ltv = ltv * _BPS_WAD_RATIO;
         liquidationThreshold = liquidationThreshold * _BPS_WAD_RATIO;

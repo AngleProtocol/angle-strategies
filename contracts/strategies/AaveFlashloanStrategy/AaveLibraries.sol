@@ -53,7 +53,7 @@ library DataTypes {
     enum InterestRateMode {NONE, STABLE, VARIABLE}
 }
 
-library FlashMintLib {
+contract FlashMintLib {
     event Leverage(
         uint256 amountRequested,
         uint256 amountUsed,
@@ -63,18 +63,28 @@ library FlashMintLib {
         address flashLoan
     );
 
-    address public constant LENDER = 0x1EB4CF3A948E7D72A198fe073cCb8C7a948cD853;
+    address public immutable LENDER; // 0x1EB4CF3A948E7D72A198fe073cCb8C7a948cD853
     uint256 private constant _DAI_DECIMALS = 1e18;
     uint256 private constant _COLLAT_RATIO_PRECISION = 1 ether;
-    address private constant _WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address private constant _DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-    IAToken public constant ADAI = IAToken(0x028171bCA77440897B824Ca71D1c56caC55b68A3);
-    IProtocolDataProvider private constant _protocolDataProvider = IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
-    ILendingPool private constant _lendingPool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
+    address private immutable _WETH; // 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
+    address private immutable _DAI; // 0x6B175474E89094C44Da98b954EedeAC495271d0F
+    IAToken public immutable ADAI; // 0x028171bCA77440897B824Ca71D1c56caC55b68A3
+    IProtocolDataProvider private immutable _protocolDataProvider; // 0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d
+    ILendingPool private immutable _lendingPool; // 0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9
 
     bytes32 public constant CALLBACK_SUCCESS = keccak256("ERC3156FlashBorrower.onFlashLoan");
 
+    // TODO: get our own referral code
     uint16 private constant _referral = 7; // Yearn's aave referral code
+
+    constructor(address _lender, address _weth, address _dai, address _adai, address protocolDataProvider_, address lendingPool_) {
+        LENDER = _lender;
+        _WETH = _weth;
+        _DAI = _dai;
+        ADAI = IAToken(_adai);
+        _protocolDataProvider = IProtocolDataProvider(protocolDataProvider_);
+        _lendingPool = ILendingPool(lendingPool_);
+    }
 
     function doFlashMint(
         bool deficit,
@@ -229,7 +239,8 @@ library FlashMintLib {
         address[] memory tokens = new address[](2);
         tokens[0] = asset;
         tokens[1] = dai;
-        uint256[] memory prices = priceOracle().getAssetsPrices(tokens);
+        IPriceOracle _oracle = priceOracle();
+        uint256[] memory prices = _oracle.getAssetsPrices(tokens);
 
         uint256 ethPrice = (_amount * prices[0]) / (uint256(10)**uint256(IOptionalERC20(asset).decimals()));
         return (ethPrice * _DAI_DECIMALS) / prices[1];
