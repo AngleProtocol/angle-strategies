@@ -372,8 +372,11 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
             // we update the value
             wantBalance = _balanceOfWant();
         }
+        console.log("wantBalance2 %s", wantBalance);
         // check current position
         uint256 currentCollatRatio = getCurrentCollatRatio();
+
+        console.log("currentCollatRatio %s < targetCollatRatio %s", currentCollatRatio, targetCollatRatio);
 
         // Either we need to free some funds OR we want to be max levered
         if (_debtOutstanding > wantBalance) {

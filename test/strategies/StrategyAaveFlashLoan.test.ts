@@ -128,6 +128,9 @@ describe('AaveFlashloan Strat', () => {
     console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
     console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
 
+    console.log('\nLENDING BALANCE', (await wantToken.balanceOf(lendingPool.address)).toString());
+    console.log('BALANCE aToken\n', (await aToken.balanceOf(strategy.address)).toString());
+
     await strategy.harvest();
     console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
     console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
