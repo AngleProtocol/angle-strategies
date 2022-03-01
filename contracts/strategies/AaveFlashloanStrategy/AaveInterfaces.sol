@@ -68,6 +68,15 @@ interface IAaveIncentivesController {
             uint256,
             uint256
         );
+
+    function assets(address asset)
+        external
+        view
+        returns (
+            uint256 emissionPerSecond,
+            uint256 index,
+            uint256 lastUpdateTimestamp
+        );
 }
 
 interface ILendingPool {
@@ -922,4 +931,53 @@ interface IAToken is IERC20, IScaledBalanceToken, IInitializableAToken {
      * @dev Returns the address of the underlying asset of this aToken (E.g. WETH for aWETH)
      **/
     function UNDERLYING_ASSET_ADDRESS() external view returns (address);
+}
+
+/**
+ * @title IReserveInterestRateStrategyInterface interface
+ * @dev Interface for the calculation of the interest rates
+ * @author Aave
+ */
+interface IReserveInterestRateStrategy {
+  function baseVariableBorrowRate() external view returns (uint256);
+  function getMaxVariableBorrowRate() external view returns (uint256);
+  function stableRateSlope1() external view returns (uint256);
+  function stableRateSlope2() external view returns (uint256);
+  function variableRateSlope1() external view returns (uint256);
+  function variableRateSlope2() external view returns (uint256);
+  function OPTIMAL_UTILIZATION_RATE() external view returns (uint256);
+
+  function calculateInterestRates(
+    address reserve,
+    uint256 availableLiquidity,
+    uint256 totalStableDebt,
+    uint256 totalVariableDebt,
+    uint256 averageStableBorrowRate,
+    uint256 reserveFactor
+  )
+    external
+    view
+    returns (
+      uint256,
+      uint256,
+      uint256
+    );
+
+  function calculateInterestRates(
+    address reserve,
+    address aToken,
+    uint256 liquidityAdded,
+    uint256 liquidityTaken,
+    uint256 totalStableDebt,
+    uint256 totalVariableDebt,
+    uint256 averageStableBorrowRate,
+    uint256 reserveFactor
+  )
+    external
+    view
+    returns (
+      uint256 liquidityRate,
+      uint256 stableBorrowRate,
+      uint256 variableBorrowRate
+    );
 }
