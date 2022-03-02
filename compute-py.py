@@ -8,11 +8,11 @@ import numpy as np
 # currently deposited assets on the poolManager
 poolManagerFund = 168439706352281000000000000000000000 / 10**27
 # current deposits on compound
-compDeposit = 2512994819641760000000000000000000000 / 10**27
+compDeposit = 2327880275443382000000000000000000000 / 10**27
 # current stable borrows on compound
-compBorrowStable = 13681150081127000000000000000000000 / 10**27
+compBorrowStable = 12952786073367000000000000000000000 / 10**27
 # current variable borrows on compound
-compBorrowVariable = 1491284996535607000000000000000000000 / 10**27
+compBorrowVariable = 1350219982386577000000000000000000000 / 10**27
 # optimal utilisation ratio
 uOptimal = 900000000000000000000000000 / 10**27
 # base rate
@@ -22,7 +22,7 @@ slope1 = 40000000000000000000000000 / 10**27
 # slope borrow rate after U optimal
 slope2 = 600000000000000000000000000 / 10**27
 # fixed borow rate
-rFixed = 103308299526693132047655280 / 10**27
+rFixed = 103013007441955644227054734 / 10**27
 # reserve factor
 rf = 100000000000000000000000000 / 10**27
 # rewards per second (in dollar) in farm tokens from deposits
