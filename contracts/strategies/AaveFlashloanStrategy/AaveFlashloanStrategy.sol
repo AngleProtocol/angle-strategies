@@ -1010,25 +1010,25 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     }
 
     struct SCalculateBorrow {
-        uint256 slope1;
-        uint256 slope2;
-        uint256 r0;
-        uint256 totalStableDebt;
-        uint256 totalVariableDebt;
-        uint256 uOptimal;
-        uint256 totalDeposits;
-        uint256 reserveFactor;
-        uint256 stableBorrowRate;
-        uint256 rewardDeposit;
-        uint256 rewardBorrow;
-        uint256 poolManagerAssets;
+        int256 slope1;
+        int256 slope2;
+        int256 r0;
+        int256 totalStableDebt;
+        int256 totalVariableDebt;
+        int256 uOptimal;
+        int256 totalDeposits;
+        int256 reserveFactor;
+        int256 stableBorrowRate;
+        int256 rewardDeposit;
+        int256 rewardBorrow;
+        int256 poolManagerAssets;
     }
 
-    uint256 BASE_RAY = 10 ** 27;
+    int256 BASE_RAY = 10 ** 27;
 
     // borrow must be in BASE token (6 for USDC)
-    function calculateInterest(uint256 borrow, SCalculateBorrow memory parameters) public view returns(uint256 interests) {
-        uint256 newUtilization = (parameters.totalStableDebt + parameters.totalVariableDebt + borrow) * BASE_RAY / (parameters.totalDeposits + borrow); // BASE ray / parameters.totalDeposits=(availableLiquidity + totalStableDebt + totalVariableDebt)
+    function calculateInterest(int256 borrow, SCalculateBorrow memory parameters) public view returns(int256 interests) {
+        int256 newUtilization = (parameters.totalStableDebt + parameters.totalVariableDebt + borrow) * BASE_RAY / (parameters.totalDeposits + borrow); // BASE ray / parameters.totalDeposits=(availableLiquidity + totalStableDebt + totalVariableDebt)
 
         if (newUtilization < parameters.uOptimal) {
             interests = parameters.r0 + parameters.slope1 * newUtilization / parameters.uOptimal;
@@ -1039,11 +1039,11 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     }
 
     // return value "interests" in BASE ray
-    function calculateInterestPrime(uint256 borrow, SCalculateBorrow memory parameters) public view returns(uint256 interests) {
-        uint256 newUtilization = (parameters.totalStableDebt + parameters.totalVariableDebt + borrow) * BASE_RAY / (parameters.totalDeposits + borrow); // BASE ray (availableLiquidity + totalStableDebt + totalVariableDebt)
+    function calculateInterestPrime(int256 borrow, SCalculateBorrow memory parameters) public view returns(int256 interests) {
+        int256 newUtilization = (parameters.totalStableDebt + parameters.totalVariableDebt + borrow) * BASE_RAY / (parameters.totalDeposits + borrow); // BASE ray (availableLiquidity + totalStableDebt + totalVariableDebt)
 
         // uint256 uprime = (parameters.totalDeposits - parameters.totalStableDebt - parameters.totalVariableDebt) * 10**(6*2) * BASE_RAY / ((parameters.totalDeposits + borrow) ** 2); // BASE ray
-        uint256 uprime = (parameters.totalDeposits - parameters.totalStableDebt - parameters.totalVariableDebt) * BASE_RAY / (parameters.totalDeposits + borrow); // BASE ray
+        int256 uprime = (parameters.totalDeposits - parameters.totalStableDebt - parameters.totalVariableDebt) * BASE_RAY / (parameters.totalDeposits + borrow); // BASE ray
         uprime = uprime * BASE_RAY / (parameters.totalDeposits + borrow); // BASE ray
         if (newUtilization < parameters.uOptimal) {
             interests = parameters.slope1 * uprime / parameters.uOptimal;
@@ -1055,55 +1055,55 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     }
 
     // return value "interests" in BASE ray
-    function calculateInterestPrime2(uint256 borrow, SCalculateBorrow memory parameters) public view returns(int256 interests) {
-        uint256 newUtilization = (parameters.totalStableDebt + parameters.totalVariableDebt + borrow) * BASE_RAY / (parameters.totalDeposits + borrow); // BASE ray (availableLiquidity + totalStableDebt + totalVariableDebt)
+    function calculateInterestPrime2(int256 borrow, SCalculateBorrow memory parameters) public view returns(int256 interests) {
+        int256 newUtilization = (parameters.totalStableDebt + parameters.totalVariableDebt + borrow) * BASE_RAY / (parameters.totalDeposits + borrow); // BASE ray (availableLiquidity + totalStableDebt + totalVariableDebt)
 
         // uint256 uprime = 2 * ((parameters.totalDeposits - parameters.totalStableDebt - parameters.totalVariableDebt) *  10**(6*3) * BASE_RAY) / ((parameters.totalDeposits + borrow) ** 3); // BASE ray
-        int256 uprime = -2 * int256(parameters.totalDeposits - parameters.totalStableDebt - parameters.totalVariableDebt) * int256(BASE_RAY) / int256(parameters.totalDeposits + borrow); // BASE ray
-        uprime = uprime * int256(BASE_RAY) / int256(parameters.totalDeposits + borrow); // BASE ray
-        uprime = uprime * int256(BASE_RAY) / int256(parameters.totalDeposits + borrow); // BASE ray
+        int256 uprime = -2 * (parameters.totalDeposits - parameters.totalStableDebt - parameters.totalVariableDebt) * (BASE_RAY) / (parameters.totalDeposits + borrow); // BASE ray
+        uprime = uprime * BASE_RAY / (parameters.totalDeposits + borrow); // BASE ray
+        uprime = uprime * BASE_RAY / (parameters.totalDeposits + borrow); // BASE ray
         if (newUtilization < parameters.uOptimal) {
-            interests = int256(parameters.slope1) * uprime / int256(parameters.uOptimal);
+            interests = parameters.slope1 * uprime / parameters.uOptimal;
         } else {
-            interests = int256(parameters.slope2) * uprime / int256(BASE_RAY - parameters.uOptimal);
+            interests = parameters.slope2 * uprime / (BASE_RAY - parameters.uOptimal);
         }
         return interests;
     }
 
-    function revenue(uint256 borrow, SCalculateBorrow memory parameters) public view returns(uint256) {
-        uint256 newRate = calculateInterest(borrow, parameters);
-        uint256 poolManagerFund = parameters.poolManagerAssets;
-        uint256 newPoolDeposit = borrow + poolManagerFund;
-        uint256 newCompDeposit = borrow + parameters.totalDeposits;
-        uint256 newCompBorrowVariable = borrow + parameters.totalVariableDebt;
+    function revenue(int256 borrow, SCalculateBorrow memory parameters) public view returns(int256) {
+        int256 newRate = calculateInterest(borrow, parameters);
+        int256 poolManagerFund = parameters.poolManagerAssets;
+        int256 newPoolDeposit = borrow + poolManagerFund;
+        int256 newCompDeposit = borrow + parameters.totalDeposits;
+        int256 newCompBorrowVariable = borrow + parameters.totalVariableDebt;
 
-        uint256 f1 = newPoolDeposit * (BASE_RAY - parameters.reserveFactor) / newCompDeposit;
-        uint256 f2 = (parameters.totalStableDebt * parameters.stableBorrowRate  + newCompBorrowVariable * newRate) / BASE_RAY;
+        int256 f1 = newPoolDeposit * (BASE_RAY - parameters.reserveFactor) / newCompDeposit;
+        int256 f2 = (parameters.totalStableDebt * parameters.stableBorrowRate  + newCompBorrowVariable * newRate) / BASE_RAY;
         
-        uint256 earnings = (f1 * f2) / BASE_RAY;
-        uint256 cost = (borrow * newRate) / BASE_RAY;
-        uint256 rewards = borrow / (parameters.totalStableDebt + newCompBorrowVariable) * parameters.rewardBorrow + (poolManagerFund+borrow)/newCompDeposit * parameters.rewardDeposit;
+        int256 earnings = (f1 * f2) / BASE_RAY;
+        int256 cost = (borrow * newRate) / BASE_RAY;
+        int256 rewards = borrow / (parameters.totalStableDebt + newCompBorrowVariable) * parameters.rewardBorrow + (poolManagerFund+borrow)/newCompDeposit * parameters.rewardDeposit;
         return  earnings + rewards - cost;
     }
 
     struct SRevenuePrimeVars {
-        uint256 newRate;
-        uint256 newRatePrime;
-        uint256 poolManagerFund;
-        uint256 newPoolDeposit;
-        uint256 newCompDeposit;
-        uint256 newCompBorrowVariable;
-        uint256 newCompBorrow;
+        int256 newRate;
+        int256 newRatePrime;
+        int256 poolManagerFund;
+        int256 newPoolDeposit;
+        int256 newCompDeposit;
+        int256 newCompBorrowVariable;
+        int256 newCompBorrow;
     }
-    function revenuePrimeVars(uint256 borrow, SCalculateBorrow memory parameters) public view returns(SRevenuePrimeVars memory) {
-        uint256 newRate = calculateInterest(borrow, parameters);
-        uint256 newRatePrime = calculateInterestPrime(borrow, parameters);
+    function revenuePrimeVars(int256 borrow, SCalculateBorrow memory parameters) public view returns(SRevenuePrimeVars memory) {
+        int256 newRate = calculateInterest(borrow, parameters);
+        int256 newRatePrime = calculateInterestPrime(borrow, parameters);
 
-        uint256 poolManagerFund = parameters.poolManagerAssets;
-        uint256 newPoolDeposit = borrow + poolManagerFund;
-        uint256 newCompDeposit = borrow + parameters.totalDeposits;
-        uint256 newCompBorrowVariable = borrow + parameters.totalVariableDebt;
-        uint256 newCompBorrow = newCompBorrowVariable + parameters.totalStableDebt;
+        int256 poolManagerFund = parameters.poolManagerAssets;
+        int256 newPoolDeposit = borrow + poolManagerFund;
+        int256 newCompDeposit = borrow + parameters.totalDeposits;
+        int256 newCompBorrowVariable = borrow + parameters.totalVariableDebt;
+        int256 newCompBorrow = newCompBorrowVariable + parameters.totalStableDebt;
         return SRevenuePrimeVars({
             newRate: newRate,
             newRatePrime: newRatePrime,
@@ -1115,57 +1115,105 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         });
     }
 
-    function revenuePrime(uint256 borrow, SCalculateBorrow memory parameters) public view returns(int256) {
+    function revenuePrime(int256 borrow, SCalculateBorrow memory parameters) public view returns(int256) {
         SRevenuePrimeVars memory vars = revenuePrimeVars(borrow, parameters);
 
-        uint256 f1 = vars.newPoolDeposit * (BASE_RAY - parameters.reserveFactor) / vars.newCompDeposit;
-        uint256 f2 = (parameters.totalStableDebt * parameters.stableBorrowRate + vars.newCompBorrowVariable * vars.newRate) / BASE_RAY;
+        int256 f1 = vars.newPoolDeposit * (BASE_RAY - parameters.reserveFactor) / vars.newCompDeposit;
+        int256 f2 = (parameters.totalStableDebt * parameters.stableBorrowRate + vars.newCompBorrowVariable * vars.newRate) / BASE_RAY;
 
-        uint256 f1prime = (parameters.totalDeposits - vars.poolManagerFund) * (BASE_RAY - parameters.reserveFactor) / vars.newCompDeposit;
+        int256 f1prime = (parameters.totalDeposits - vars.poolManagerFund) * (BASE_RAY - parameters.reserveFactor) / vars.newCompDeposit;
         f1prime = f1prime * BASE_RAY / vars.newCompDeposit;
-        uint256 f2prime = (vars.newRate * BASE_RAY + vars.newCompBorrowVariable * vars.newRatePrime) / BASE_RAY;
-        uint256 f3prime = (vars.newRate * BASE_RAY + borrow * vars.newRatePrime) / BASE_RAY;
+        int256 f2prime = (vars.newRate * BASE_RAY + vars.newCompBorrowVariable * vars.newRatePrime) / BASE_RAY;
+        int256 f3prime = (vars.newRate * BASE_RAY + borrow * vars.newRatePrime) / BASE_RAY;
         
-        // uint256 f4prime = parameters.rewardBorrow * (parameters.totalStableDebt + parameters.totalVariableDebt) / vars.newCompBorrow**2 + parameters.rewardDeposit * (parameters.totalDeposits - vars.poolManagerFund) / vars.newPoolDeposit**2;
-        uint256 f4prime1 = parameters.rewardBorrow * (parameters.totalStableDebt + parameters.totalVariableDebt) / vars.newCompBorrow;
+        // int256 f4prime = parameters.rewardBorrow * (parameters.totalStableDebt + parameters.totalVariableDebt) / vars.newCompBorrow**2 + parameters.rewardDeposit * (parameters.totalDeposits - vars.poolManagerFund) / vars.newPoolDeposit**2;
+        int256 f4prime1 = parameters.rewardBorrow * (parameters.totalStableDebt + parameters.totalVariableDebt) / vars.newCompBorrow;
         f4prime1 = f4prime1 * BASE_RAY / vars.newCompBorrow;
-        uint256 f4prime2 = parameters.rewardDeposit * (parameters.totalDeposits - vars.poolManagerFund) / vars.newPoolDeposit;
+        int256 f4prime2 = parameters.rewardDeposit * (parameters.totalDeposits - vars.poolManagerFund) / vars.newPoolDeposit;
         f4prime2 = f4prime2 * BASE_RAY / vars.newPoolDeposit;
         
-        return int256((f1prime*f2 + f2prime*f1) / BASE_RAY) - int256(f3prime) + int256(f4prime1+f4prime2);
+        return ((f1prime*f2 + f2prime*f1) / BASE_RAY) - f3prime + (f4prime1+f4prime2);
     }
 
-    function revenuePrime2(uint256 borrow, SCalculateBorrow memory parameters) public view returns(int256) {
+    function revenuePrime2(int256 borrow, SCalculateBorrow memory parameters) public view returns(int256) {
         int256 newRatePrime2 = calculateInterestPrime2(borrow, parameters);
         SRevenuePrimeVars memory vars = revenuePrimeVars(borrow, parameters);
 
         int256 derivate;
         {
-            uint256 f1 = vars.newPoolDeposit * (BASE_RAY - parameters.reserveFactor) / vars.newCompDeposit;
-            uint256 f2 = (parameters.totalStableDebt * parameters.stableBorrowRate + vars.newCompBorrowVariable * vars.newRate) / BASE_RAY;
-            uint256 f1prime = (parameters.totalDeposits - vars.poolManagerFund) * (BASE_RAY - parameters.reserveFactor) / vars.newCompDeposit;
+            int256 f1 = vars.newPoolDeposit * (BASE_RAY - parameters.reserveFactor) / vars.newCompDeposit;
+            int256 f2 = (parameters.totalStableDebt * parameters.stableBorrowRate + vars.newCompBorrowVariable * vars.newRate) / BASE_RAY;
+            int256 f1prime = (parameters.totalDeposits - vars.poolManagerFund) * (BASE_RAY - parameters.reserveFactor) / vars.newCompDeposit;
             f1prime = f1prime * BASE_RAY / vars.newCompDeposit;
-            uint256 f2prime = (vars.newRate * BASE_RAY + vars.newCompBorrowVariable * vars.newRatePrime) / BASE_RAY;
+            int256 f2prime = (vars.newRate * BASE_RAY + vars.newCompBorrowVariable * vars.newRatePrime) / BASE_RAY;
 
-            int256 f1prime2nd = - int256(parameters.totalDeposits - vars.poolManagerFund) * int256(BASE_RAY - parameters.reserveFactor) * 2 / int256(vars.newCompDeposit);
-            f1prime2nd = f1prime2nd * int256(BASE_RAY) / int256(vars.newCompDeposit);
-            f1prime2nd = f1prime2nd * int256(BASE_RAY) / int256(vars.newCompDeposit);
+            int256 f1prime2nd = - (parameters.totalDeposits - vars.poolManagerFund) * (BASE_RAY - parameters.reserveFactor) * 2 / (vars.newCompDeposit);
+            f1prime2nd = f1prime2nd * (BASE_RAY) / (vars.newCompDeposit);
+            f1prime2nd = f1prime2nd * (BASE_RAY) / (vars.newCompDeposit);
 
-            int256 f2prime2nd = (int256(vars.newRatePrime * BASE_RAY + vars.newRatePrime * BASE_RAY) + int256(vars.newCompBorrowVariable) * newRatePrime2) / int256(BASE_RAY);
-            int256 f3prime2nd = (int256(vars.newRatePrime * BASE_RAY + vars.newRatePrime * BASE_RAY) + int256(borrow) * newRatePrime2) / int256(BASE_RAY);
+            int256 f2prime2nd = ((vars.newRatePrime * BASE_RAY + vars.newRatePrime * BASE_RAY) + (vars.newCompBorrowVariable) * newRatePrime2) / (BASE_RAY);
+            int256 f3prime2nd = ((vars.newRatePrime * BASE_RAY + vars.newRatePrime * BASE_RAY) + (borrow) * newRatePrime2) / (BASE_RAY);
 
-            // uint256 f4prime2nd = parameters.rewardBorrow * (parameters.totalStableDebt + parameters.totalVariableDebt) * 2/ vars.newCompBorrow**3 + parameters.rewardDeposit * (parameters.totalDeposits - vars.poolManagerFund) * 2 / vars.newPoolDeposit**3;
-            int256 f4prime2nd1 = - int256(parameters.rewardBorrow) * int256(parameters.totalStableDebt + parameters.totalVariableDebt) * 2 / int256(vars.newCompBorrow);
-            f4prime2nd1 = f4prime2nd1 * int256(BASE_RAY) / int256(vars.newCompBorrow);
-            f4prime2nd1 = f4prime2nd1 * int256(BASE_RAY) / int256(vars.newCompBorrow);
-            int256 f4prime2nd2 = int256(parameters.rewardDeposit) * int256(parameters.totalDeposits - vars.poolManagerFund) * 2 / int256(vars.newPoolDeposit);
-            f4prime2nd2 = f4prime2nd2 * int256(BASE_RAY) / int256(vars.newPoolDeposit);
-            f4prime2nd2 = f4prime2nd2 * int256(BASE_RAY) / int256(vars.newPoolDeposit);
+            // int256 f4prime2nd = parameters.rewardBorrow * (parameters.totalStableDebt + parameters.totalVariableDebt) * 2/ vars.newCompBorrow**3 + parameters.rewardDeposit * (parameters.totalDeposits - vars.poolManagerFund) * 2 / vars.newPoolDeposit**3;
+            int256 f4prime2nd1 = - (parameters.rewardBorrow) * (parameters.totalStableDebt + parameters.totalVariableDebt) * 2 / (vars.newCompBorrow);
+            f4prime2nd1 = f4prime2nd1 * (BASE_RAY) / (vars.newCompBorrow);
+            f4prime2nd1 = f4prime2nd1 * (BASE_RAY) / (vars.newCompBorrow);
+            int256 f4prime2nd2 = (parameters.rewardDeposit) * (parameters.totalDeposits - vars.poolManagerFund) * 2 / (vars.newPoolDeposit);
+            f4prime2nd2 = f4prime2nd2 * (BASE_RAY) / (vars.newPoolDeposit);
+            f4prime2nd2 = f4prime2nd2 * (BASE_RAY) / (vars.newPoolDeposit);
             
-            derivate = f1prime2nd * int256(f2) + int256(f1prime * f2prime) + int256(f2prime * f1prime) + f2prime2nd*int256(f1) - f3prime2nd * int256(BASE_RAY) - (f4prime2nd1 + f4prime2nd2) * int256(BASE_RAY);
+            derivate = f1prime2nd * (f2) + (f1prime * f2prime) + (f2prime * f1prime) + f2prime2nd*(f1) - f3prime2nd * (BASE_RAY) - (f4prime2nd1 + f4prime2nd2) * (BASE_RAY);
         }
 
-        return derivate / int256(BASE_RAY);
+        return derivate / (BASE_RAY);
+    }
+
+    function revenue3D(int256 borrow, int256 rewards, SCalculateBorrow memory parameters) public view returns(int256) {
+        int256 newRate = calculateInterest(borrow, parameters);
+        int256 poolManagerFund = parameters.poolManagerAssets;
+        int256 newPoolDeposit = borrow + poolManagerFund;
+        int256 newCompDeposit = borrow + parameters.totalDeposits;
+        int256 newCompBorrowVariable = borrow + parameters.totalVariableDebt;
+
+        int256 earnings = newPoolDeposit * (BASE_RAY - parameters.reserveFactor) * (parameters.totalStableDebt * parameters.stableBorrowRate  + newCompBorrowVariable * newRate) / newCompDeposit;
+        int256 cost = (borrow * newRate) / BASE_RAY;
+        rewards = borrow * rewards / BASE_RAY;
+        return  earnings + rewards - cost;
+    }
+
+    function abs(int256 x) private pure returns (int256) {
+        return x >= 0 ? x : -x;
+    }
+
+    function computeAlpha(int256 count) private view returns(int256) {
+        return 5000;
+    }
+
+    function gradientDescent(int256 _borrow, int256 tolerance, SCalculateBorrow memory parameters) public view returns(int256 borrow, int256 count) {
+        int256 grad = tolerance + 1;
+        count = 0;
+        borrow = _borrow;
+        while (abs(grad) > tolerance) {
+            grad = - revenuePrime(borrow, parameters);
+            int256 alpha = computeAlpha(count);
+            borrow = borrow - alpha * grad;
+            count +=1;
+        }
+    }
+
+    function newtonRaphson(int256 _borrow, int256 epsilon, int256 tolerance, SCalculateBorrow memory parameters) public view returns(int256 borrow, int256 count) {
+        int256 grad = tolerance + 1;
+        int256 grad2nd = grad;
+        count = 0;
+        int256 borrowInit = _borrow;
+        borrow = _borrow;
+        while (abs(grad2nd) > tolerance && (count == 0 || abs(borrowInit - borrow) > tolerance)) {
+            grad = - revenuePrime(borrow, parameters);
+            grad2nd = - revenuePrime2(borrow, parameters);
+            borrowInit = borrow;
+            borrow = borrowInit - grad * BASE_RAY / grad2nd;
+            count +=1;
+        }
     }
 
     function calculateBorrow() public view {
@@ -1219,28 +1267,28 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
 
 
         console.log("interests");
-        console.log("%s ,", calculateInterest(BASE_RAY * 0, parameters));
-        console.log("%s ,", calculateInterest(BASE_RAY * 1, parameters));
-        console.log("%s ,", calculateInterest(BASE_RAY * 5, parameters));
-        console.log("%s ,", calculateInterest(BASE_RAY * 10, parameters));
-        console.log("%s ,", calculateInterest(BASE_RAY * 100, parameters));
-        console.log("%s ,", calculateInterest(BASE_RAY * 1000, parameters));
-        console.log("%s ,", calculateInterest(BASE_RAY * 58749, parameters));
-        console.log("%s ,", calculateInterest(BASE_RAY * 100000, parameters));
-        console.log("%s ,", calculateInterest(BASE_RAY * 3089873, parameters));
-        console.log("%s ,", calculateInterest(BASE_RAY * 28746827, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 0, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 1, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 5, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 10, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 100, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 1000, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 58749, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 100000, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 3089873, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 28746827, parameters));
 
         console.log("interests prime");
-        console.log("%s ,", calculateInterestPrime(BASE_RAY * 0, parameters));
-        console.log("%s ,", calculateInterestPrime(BASE_RAY * 1, parameters));
-        console.log("%s ,", calculateInterestPrime(BASE_RAY * 5, parameters));
-        console.log("%s ,", calculateInterestPrime(BASE_RAY * 10, parameters));
-        console.log("%s ,", calculateInterestPrime(BASE_RAY * 100, parameters));
-        console.log("%s ,", calculateInterestPrime(BASE_RAY * 1000, parameters));
-        console.log("%s ,", calculateInterestPrime(BASE_RAY * 58749, parameters));
-        console.log("%s ,", calculateInterestPrime(BASE_RAY * 100000, parameters));
-        console.log("%s ,", calculateInterestPrime(BASE_RAY * 3089873, parameters));
-        console.log("%s ,", calculateInterestPrime(BASE_RAY * 28746827, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 0, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 1, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 5, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 10, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 100, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 1000, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 58749, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 100000, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 3089873, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 28746827, parameters));
         
         console.log("interests prime 2");
         console.logInt(calculateInterestPrime2(BASE_RAY * 0, parameters));
@@ -1255,16 +1303,16 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         console.logInt(calculateInterestPrime2(BASE_RAY * 28746827, parameters));
 
         console.log("revenue");
-        console.log("%s ,", revenue(BASE_RAY * 0, parameters));
-        console.log("%s ,", revenue(BASE_RAY * 1, parameters));
-        console.log("%s ,", revenue(BASE_RAY * 5, parameters));
-        console.log("%s ,", revenue(BASE_RAY * 10, parameters));
-        console.log("%s ,", revenue(BASE_RAY * 100, parameters));
-        console.log("%s ,", revenue(BASE_RAY * 1000, parameters));
-        console.log("%s ,", revenue(BASE_RAY * 58749, parameters));
-        console.log("%s ,", revenue(BASE_RAY * 100000, parameters));
-        console.log("%s ,", revenue(BASE_RAY * 3089873, parameters));
-        console.log("%s ,", revenue(BASE_RAY * 28746827, parameters));
+        console.logInt(revenue(BASE_RAY * 0, parameters));
+        console.logInt(revenue(BASE_RAY * 1, parameters));
+        console.logInt(revenue(BASE_RAY * 5, parameters));
+        console.logInt(revenue(BASE_RAY * 10, parameters));
+        console.logInt(revenue(BASE_RAY * 100, parameters));
+        console.logInt(revenue(BASE_RAY * 1000, parameters));
+        console.logInt(revenue(BASE_RAY * 58749, parameters));
+        console.logInt(revenue(BASE_RAY * 100000, parameters));
+        console.logInt(revenue(BASE_RAY * 3089873, parameters));
+        console.logInt(revenue(BASE_RAY * 28746827, parameters));
 
         console.log("revenuePrime");
         console.logInt(revenuePrime(BASE_RAY * 0, parameters));
@@ -1289,6 +1337,14 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         console.logInt(revenuePrime2(BASE_RAY * 100000, parameters));
         console.logInt(revenuePrime2(BASE_RAY * 3089873, parameters));
         console.logInt(revenuePrime2(BASE_RAY * 28746827, parameters));
+
+        int256 epsilon = 10**(27-4);
+        int256 tolerance = 10**(27-8);
+        // gradientDescent(BASE_RAY * 100, epsilon, parameters);
+        (int b, int count) = newtonRaphson(168439706352281000000000000000000000, epsilon, tolerance, parameters);
+        console.log("newtonRaphson");
+        console.logInt(b);
+        console.logInt(count);
 
         // uint256 borrow = BASE_RAY * 0;
         // computeInterestRate

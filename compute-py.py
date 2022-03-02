@@ -290,13 +290,11 @@ def newtonRaphson(bInit, epsilon, tol):
 
     return(b,count)
 
-# bSol,count = gradientDescent(np.array([poolManagerFund]), epsilon)
+bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]), epsilon, tolNR)
+print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
 
-# print('Gradient descent method: We get in %s from the optimisation :%s', count,bSol)
-
-# bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]), epsilon, tolNR)
-
-# print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
+bSol,count = gradientDescent(np.array([poolManagerFund]), epsilon)
+print('Gradient descent method: We get in %s from the optimisation :%s', count,bSol)
 
 
 # fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
