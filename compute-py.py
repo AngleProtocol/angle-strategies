@@ -1,61 +1,65 @@
-# from curses.ascii import BS
-# from multiprocessing import pool
 # import matplotlib.pyplot as plt
 import numpy as np
-# from matplotlib import cm
-# import seaborn as sns
+
 
 # currently deposited assets on the poolManager
 poolManagerFund = 168439706352281000000000000000000000 / 10**27
-# current deposits on compound
+# current deposits on compound 
 compDeposit = 2327880275443382000000000000000000000 / 10**27
-# current stable borrows on compound
+# current stable borrows on compound 
 compBorrowStable = 12952786073367000000000000000000000 / 10**27
-# current variable borrows on compound
+# current variable borrows on compound 
 compBorrowVariable = 1350219982386577000000000000000000000 / 10**27
 # optimal utilisation ratio
-uOptimal = 900000000000000000000000000 / 10**27
-# base rate
+uOptimal = 0.9
+# base rate 
 r0 = 0
 # slope borrow rate before U optimal
-slope1 = 40000000000000000000000000 / 10**27
+slope1 = 0.04
 # slope borrow rate after U optimal
-slope2 = 600000000000000000000000000 / 10**27
+slope2 = 0.6
 # fixed borow rate
 rFixed = 103013007441955644227054734 / 10**27
 # reserve factor
-rf = 100000000000000000000000000 / 10**27
+rf = 0.1
 # rewards per second (in dollar) in farm tokens from deposits
-rewardDeposit = 1903258773510960000000000 / 10**27 # this is as if there was 150$ distributed each week
+rewardDeposit = 1903258773510960000000000 * 60 * 60 * 24 * 365 / 10**27 # this is as if there was 150$ distributed each week
 # rewards per second (in dollar) in farm tokens from borrows
-rewardBorrow = 3806517547021920000000000 / 10**27
-# tolerance for method to stop
-epsilon = 10**(-4)
-# tolerance on gradient on Newton Raphson
-tolNR = 10**(-8)
+rewardBorrow = 10*3806517547021920000000000 * 60 * 60 * 24 * 365 / 10**27
 
-# different borrow
-b = np.arange(0, 1000, 10)
+# TODO gradient are really low maybe only check for delta between bs 
+# epsilon for Gradient descent to stop
+epsGD = 10**(-12)
+# epsilon for Newton method to stop
+epsNR = 10**(-12)
+# tolerance on diff between b on GD
+tolGD = 10**(-1)
+# tolerance on diffbetween b on Newton Raphson
+tolNR = 10**(-1)
+# max iteration methods
+maxCount = 30
+
+# different borrow 
+b = np.arange(0, poolManagerFund , poolManagerFund/10000)
 # if we only consider the rewards from borrow as the full revenue will only be a translation of the one only considering borrow rewards
 rewards = np.arange(0, 0.1, 0.005)
-
 
 
 def computeInterestRate(b):
     newUtilisation = (compBorrowVariable + b + compBorrowStable) / (compDeposit+ b)
 
-    interests = np.empty_like(newUtilisation)
+    interests = np.zeros_like(newUtilisation)
     mask = newUtilisation <= uOptimal
 
-    interests[mask] = r0 + slope1 * newUtilisation[mask] / uOptimal
-    interests[~mask] = r0 + slope1 + slope2 * (newUtilisation[~mask] - uOptimal) / (1-uOptimal)
+    interests[mask] = r0 + slope1 * newUtilisation[mask] / uOptimal 
+    interests[~mask] = r0 + slope1 + slope2 * (newUtilisation[~mask] - uOptimal) / (1-uOptimal) 
 
     return interests
 
 def interestRatePrime(b):
     newUtilisation = (compBorrowVariable + b + compBorrowStable) / (compDeposit+ b)
 
-    derInterests = np.empty_like(newUtilisation)
+    derInterests = np.zeros_like(newUtilisation)
     mask = newUtilisation <= uOptimal
 
     uprime = (compDeposit - compBorrowStable - compBorrowVariable) / (compDeposit + b)**2
@@ -67,7 +71,7 @@ def interestRatePrime(b):
 def interestRatePrime2nd(b):
     newUtilisation = (compBorrowVariable + b + compBorrowStable) / (compDeposit+ b)
 
-    derInterests = np.empty_like(newUtilisation)
+    derInterests = np.zeros_like(newUtilisation)
     mask = newUtilisation <= uOptimal
 
     uprime = - 2* (compDeposit - compBorrowStable - compBorrowVariable) / (compDeposit + b)**3
@@ -87,8 +91,9 @@ def revenue(b):
 
     earnings = f1*f2
     cost = b * newRate
-    rewards = b / (compBorrowStable+newCompBorrowVariable) * rewardBorrow + (poolManagerFund+b)/newCompDeposit * rewardDeposit
+    rewards = b / (compBorrowStable+newCompBorrowVariable) * rewardBorrow + newPoolDeposit/newCompDeposit * rewardDeposit
     return  earnings + rewards - cost
+
 
 def revenuePrime(b):
     newRate = computeInterestRate(b)
@@ -101,7 +106,7 @@ def revenuePrime(b):
 
     f1 = newPoolDeposit / newCompDeposit * (1-rf)
     f2 = compBorrowStable * rFixed  + newCompBorrowVariable * newRate
-    f1prime = (compDeposit - poolManagerFund) * (1-rf) / newCompDeposit**2
+    f1prime = (compDeposit - poolManagerFund) * (1-rf) / newCompDeposit**2 
     f2prime = newRate + newCompBorrowVariable * newRatePrime
     f3prime = newRate + b * newRatePrime
     f4prime =  rewardBorrow * (compBorrowStable + compBorrowVariable) / newCompBorrow**2 + rewardDeposit * (compDeposit - poolManagerFund) / newPoolDeposit**2
@@ -121,7 +126,7 @@ def revenuePrime2nd(b):
 
     f1 = newPoolDeposit / newCompDeposit * (1-rf)
     f2 = compBorrowStable * rFixed  + newCompBorrowVariable * newRate
-    f1prime = (compDeposit - poolManagerFund) * (1-rf) / newCompDeposit**2
+    f1prime = (compDeposit - poolManagerFund) * (1-rf) / newCompDeposit**2 
     f2prime = newRate + newCompBorrowVariable * newRatePrime
     f1prime2nd = - (compDeposit - poolManagerFund) * (1-rf) *2 / newCompDeposit**3
     f2prime2nd = newRatePrime + newRatePrime + newCompBorrowVariable * newRatePrime2nd
@@ -142,7 +147,8 @@ def revenue3D(b, rewards):
     rewards = b * rewards # as it doesn' impact the optimisation
     return  earnings + rewards - cost
 
-# allRevenues = revenue(b)
+allRevenues = revenue(b)
+allRevenuesPrime = revenuePrime(b)
 
 # during optim we should first check whether current apr: depositInterest +  rewardDeposit + rewardBorrow - borrowFees > 0
 # otherwise your leverage should be 0 as fold is not profitable
@@ -150,10 +156,64 @@ def revenue3D(b, rewards):
 # plt.plot(b,allRevenues)
 # plt.show()
 
-# plt.plot(b,revenuePrime(b))
+# plt.plot(b,allRevenuesPrime)
 # plt.show()
 
-# print(computeInterestRate(np.arange(0, 1000, 10)))
+
+def computeAlpha(count):
+    return 0.5*10**10
+
+def gradientDescent(bInit, epsilon, tol):
+    grad = epsilon + 1
+    b = bInit
+    count = 0
+    if(revenue(np.array([1]))[0]<revenue(np.array([0]))[0]):
+        return(0,1)
+    while(np.greater(np.abs(grad),epsilon) and (count==0 or np.greater(np.abs(bInit-b),tol)) and maxCount>count):
+        grad = - revenuePrime(b)
+        alpha = computeAlpha(count)
+        bInit = b
+        b = bInit - alpha * grad
+        count +=1
+
+    return(b,count)
+
+def newtonRaphson(bInit, epsilon, tol):
+    grad = tol + 1
+    grad2nd = grad
+    b = bInit
+    count = 0
+    if(revenue(np.array([1]))[0]<revenue(np.array([0]))[0]):
+        return(0,1)
+    while(np.greater(np.abs(grad2nd),epsilon) and (count==0 or np.greater(np.abs(bInit-b),tol)) and maxCount>count):
+        grad = - revenuePrime(b)
+        grad2nd = - revenuePrime2nd(b)
+        bInit = b
+        b = bInit - grad / grad2nd
+        count +=1
+
+    return(b,count)
+
+bSol,count = gradientDescent(np.array([poolManagerFund]), epsGD, tolGD)
+
+print('Gradient descent method: We get in %s from the optimisation :%s', count,bSol)
+
+bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]), epsNR ,tolNR)
+
+print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
+
+
+# fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+
+# X, Y = np.meshgrid(b, rewards)
+# allRevenues3D = revenue3D(X,Y)
+
+# # Plot the surface.
+# surf = ax.plot_surface(X, Y, allRevenues3D, cmap=cm.coolwarm,
+#                        linewidth=0, antialiased=False)
+
+# plt.show()
+
 arr = np.array([0, 1, 5, 10, 100, 1000, 58749, 100000, 3089873, 28746827])
 
 res1 = [
@@ -260,50 +320,3 @@ for i,val in enumerate(revenuePrime2nd(arr)):
     print(res6[i])
 
 
-
-def computeAlpha(count):
-    return 5000
-
-def gradientDescent(bInit, tol):
-    grad = tol + 1
-    b = bInit
-    count = 0
-    while(np.greater(np.abs(grad),tol)):
-        grad = - revenuePrime(b)
-        alpha = computeAlpha(count)
-        b = b - alpha * grad
-        count +=1
-
-    return(b,count)
-
-def newtonRaphson(bInit, epsilon, tol):
-    grad = tol + 1
-    grad2nd = grad
-    b = bInit
-    count = 0
-    while(np.greater(np.abs(grad2nd),tol) and (count==0 or np.greater(np.abs(bInit-b),tol))):
-        grad = - revenuePrime(b)
-        grad2nd = - revenuePrime2nd(b)
-        bInit = b
-        b = bInit - grad / grad2nd
-        count +=1
-
-    return(b,count)
-
-bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]), epsilon, tolNR)
-print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
-
-bSol,count = gradientDescent(np.array([poolManagerFund]), epsilon)
-print('Gradient descent method: We get in %s from the optimisation :%s', count,bSol)
-
-
-# fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-
-# X, Y = np.meshgrid(b, rewards)
-# allRevenues3D = revenue3D(X,Y)
-
-# # Plot the surface.
-# surf = ax.plot_surface(X, Y, allRevenues3D, cmap=cm.coolwarm,
-#                        linewidth=0, antialiased=False)
-
-# plt.show()

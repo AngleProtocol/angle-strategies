@@ -96,7 +96,9 @@ async function main() {
   // });
 
   console.log('---');
-  await strategy.calculateBorrow();
+  const computeProfitabilityContract = await (await ethers.getContractFactory('ComputeProfitability')).deploy();
+  console.log('done 1');
+  await strategy.computeProfitability(computeProfitabilityContract.address);
   console.log('---');
   return;
 
