@@ -1046,20 +1046,18 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
             rewardBorrow: 10*3806517547021920000000000 * 60 * 60 * 24 * 365,
             poolManagerAssets: 168439706352281000000000000000000000
         });
-
-        console.log("decimals %s", _DECIMALS);
         
-        console.log("%s", interestRateStrategyAddress.variableRateSlope1());
-        console.log("%s", interestRateStrategyAddress.variableRateSlope2());
-        console.log("%s", interestRateStrategyAddress.baseVariableBorrowRate());
-        console.log("%s", totalStableDebt * (10**27 / _DECIMALS));
-        console.log("%s", totalVariableDebt * (10**27 / _DECIMALS));
-        console.log("%s", interestRateStrategyAddress.OPTIMAL_UTILIZATION_RATE());
-        console.log("%s", aToken.totalSupply() * (10**27 / _DECIMALS));
-        console.log("%s", reserveFactor * 10**23);
-        console.log("%s", stableBorrowRate);
-        console.log("%s", emissionPerSecondAToken * 10**9);
-        console.log("%s", emissionPerSecondDebtToken * 10**9);
+        // console.log("%s", interestRateStrategyAddress.variableRateSlope1());
+        // console.log("%s", interestRateStrategyAddress.variableRateSlope2());
+        // console.log("%s", interestRateStrategyAddress.baseVariableBorrowRate());
+        // console.log("%s", totalStableDebt * (10**27 / _DECIMALS));
+        // console.log("%s", totalVariableDebt * (10**27 / _DECIMALS));
+        // console.log("%s", interestRateStrategyAddress.OPTIMAL_UTILIZATION_RATE());
+        // console.log("%s", aToken.totalSupply() * (10**27 / _DECIMALS));
+        // console.log("%s", reserveFactor * 10**23);
+        // console.log("%s", stableBorrowRate);
+        // console.log("%s", emissionPerSecondAToken * 10**9);
+        // console.log("%s", emissionPerSecondDebtToken * 10**9);
         
         _computeProfitability.computeProfitability(parameters);
     }

@@ -39,10 +39,10 @@ tolNR = 10**(-1)
 # max iteration methods
 maxCount = 30
 
-# different borrow 
-b = np.arange(0, poolManagerFund , poolManagerFund/10000)
-# if we only consider the rewards from borrow as the full revenue will only be a translation of the one only considering borrow rewards
-rewards = np.arange(0, 0.1, 0.005)
+# # different borrow 
+# b = np.arange(0, poolManagerFund , poolManagerFund/10000)
+# # if we only consider the rewards from borrow as the full revenue will only be a translation of the one only considering borrow rewards
+# rewards = np.arange(0, 0.1, 0.005)
 
 
 def computeInterestRate(b):
@@ -63,8 +63,8 @@ def interestRatePrime(b):
     mask = newUtilisation <= uOptimal
 
     uprime = (compDeposit - compBorrowStable - compBorrowVariable) / (compDeposit + b)**2
-    derInterests[mask] = slope1 / uOptimal * uprime[mask]
-    derInterests[~mask] = slope2 / (1-uOptimal) * uprime[~mask]
+    derInterests[mask] = slope1 * uprime[mask] / uOptimal 
+    derInterests[~mask] = slope2 * uprime[~mask] / (1-uOptimal)
 
     return derInterests
 
@@ -75,8 +75,8 @@ def interestRatePrime2nd(b):
     mask = newUtilisation <= uOptimal
 
     uprime = - 2* (compDeposit - compBorrowStable - compBorrowVariable) / (compDeposit + b)**3
-    derInterests[mask] = slope1 / uOptimal * uprime[mask]
-    derInterests[~mask] = slope2 / (1-uOptimal) * uprime[~mask]
+    derInterests[mask] = slope1 * uprime[mask] / uOptimal
+    derInterests[~mask] = slope2 * uprime[~mask] / (1-uOptimal)
 
     return derInterests
 
@@ -85,13 +85,14 @@ def revenue(b):
     newPoolDeposit = b + poolManagerFund
     newCompDeposit = b + compDeposit
     newCompBorrowVariable = b + compBorrowVariable
+    newCompBorrow = newCompBorrowVariable + compBorrowStable
 
     f1 = newPoolDeposit / newCompDeposit * (1-rf)
     f2 = compBorrowStable * rFixed  + newCompBorrowVariable * newRate
 
     earnings = f1*f2
     cost = b * newRate
-    rewards = b / (compBorrowStable+newCompBorrowVariable) * rewardBorrow + newPoolDeposit/newCompDeposit * rewardDeposit
+    rewards = b * rewardBorrow / newCompBorrow + newPoolDeposit * rewardDeposit /newCompDeposit
     return  earnings + rewards - cost
 
 
@@ -109,9 +110,10 @@ def revenuePrime(b):
     f1prime = (compDeposit - poolManagerFund) * (1-rf) / newCompDeposit**2 
     f2prime = newRate + newCompBorrowVariable * newRatePrime
     f3prime = newRate + b * newRatePrime
-    f4prime =  rewardBorrow * (compBorrowStable + compBorrowVariable) / newCompBorrow**2 + rewardDeposit * (compDeposit - poolManagerFund) / newPoolDeposit**2
+    f4prime =  rewardBorrow * (compBorrowStable + compBorrowVariable) / newCompBorrow**2 
+    f5prime =  rewardDeposit * (compDeposit - poolManagerFund) / newCompDeposit**2
 
-    derivate = f1prime*f2 + f2prime*f1 - f3prime + f4prime
+    derivate = f1prime*f2 + f2prime*f1 - f3prime + f4prime + f5prime
     return  derivate
 
 def revenuePrime2nd(b):
@@ -131,9 +133,10 @@ def revenuePrime2nd(b):
     f1prime2nd = - (compDeposit - poolManagerFund) * (1-rf) *2 / newCompDeposit**3
     f2prime2nd = newRatePrime + newRatePrime + newCompBorrowVariable * newRatePrime2nd
     f3prime2nd = newRatePrime + newRatePrime + b * newRatePrime2nd
-    f4prime2nd =  - rewardBorrow * (compBorrowStable + compBorrowVariable) * 2/ newCompBorrow**3 - rewardDeposit * (compDeposit - poolManagerFund) * 2 / newPoolDeposit**3
+    f4prime2nd =  - rewardBorrow * (compBorrowStable + compBorrowVariable) * 2/ newCompBorrow**3 
+    f5prime2nd =  - rewardDeposit * (compDeposit - poolManagerFund) * 2 / newCompDeposit**3
 
-    derivate = f1prime2nd*f2 + f1prime*f2prime + f2prime*f1prime + f2prime2nd*f1 - f3prime2nd + f4prime2nd
+    derivate = f1prime2nd*f2 + f1prime*f2prime + f2prime*f1prime + f2prime2nd*f1 - f3prime2nd + f4prime2nd + f5prime2nd
     return  derivate
 
 def revenue3D(b, rewards):
@@ -147,8 +150,8 @@ def revenue3D(b, rewards):
     rewards = b * rewards # as it doesn' impact the optimisation
     return  earnings + rewards - cost
 
-allRevenues = revenue(b)
-allRevenuesPrime = revenuePrime(b)
+# allRevenues = revenue(b)
+# allRevenuesPrime = revenuePrime(b)
 
 # during optim we should first check whether current apr: depositInterest +  rewardDeposit + rewardBorrow - borrowFees > 0
 # otherwise your leverage should be 0 as fold is not profitable
@@ -195,11 +198,9 @@ def newtonRaphson(bInit, epsilon, tol):
     return(b,count)
 
 bSol,count = gradientDescent(np.array([poolManagerFund]), epsGD, tolGD)
-
 print('Gradient descent method: We get in %s from the optimisation :%s', count,bSol)
 
 bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]), epsNR ,tolNR)
-
 print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
 
 
@@ -216,107 +217,107 @@ print('Newton raphson method: We get in {} from the optimisation :{}', countNR,b
 
 arr = np.array([0, 1, 5, 10, 100, 1000, 58749, 100000, 3089873, 28746827])
 
-res1 = [
-26616602537848525433819048 ,
-26616602544942786735178637 ,
-26616602573319831884156381 ,
-26616602608791138193342183 ,
-26616603247274627621776001 ,
-26616609632107006586949724 ,
-26617019308862577744175521 ,
-26617311935749760901967919 ,
-26638495985043111725348189 ,
-26818233528846130678991097 ,
-]
-for i,val in enumerate(computeInterestRate(arr)):
-    print(val * 10**17)
-    print(res1[i])
+# res1 = [
+# 26026019041919173758309758,
+# 26026019049831275419596907,
+# 26026019081479681996768626,
+# 26026019121040190065285300,
+# 26026019833129306238471561,
+# 26026026954017439601866892,
+# 26026483858249245669133776,
+# 26026810218098663395004295,
+# 26050434024406951118702356,
+# 26250692384642694385757352
+# ]
+# for i,val in enumerate(computeInterestRate(arr)):
+#     print(val * 10**17)
+#     print(res1[i])
 
-print("")
+# print("")
 
-res2 = [
-7094261304182619 ,
-7094261298536558 ,
-7094261275952313 ,
-7094261247722007 ,
-7094260739576530 ,
-7094255658124765 ,
-7093929615363163 ,
-7093696731759579 ,
-7076847814970011 ,
-6934698079518307 ,
-]
-for i,val in enumerate(interestRatePrime(arr)):
-    print(val * 10**27)
-    print(res2[i])
+# res2 = [
+# 7912101664685993,
+# 7912101657888305,
+# 7912101630697554,
+# 7912101596709115,
+# 7912100984917257,
+# 7912094867002581,
+# 7911702322443344,
+# 7911421939706082,
+# 7891139417774604,
+# 7720250709557837,
+# ]
+# for i,val in enumerate(interestRatePrime(arr)):
+#     print(val * 10**27)
+#     print(res2[i])
 
-print("")
+# print("")
 
-res3 = [
--5646061,
--5646061,
--5646061,
--5646061,
--5646060,
--5646054,
--5645665,
--5645387,
--5625285,
--5456650,
-]
-for i,val in enumerate(interestRatePrime2nd(arr)):
-    print(val * 10**27)
-    print(res3[i])
+# res3 = [
+# -6797687,
+# -6797687,
+# -6797687,
+# -6797687,
+# -6797686,
+# -6797679,
+# -6797173,
+# -6796811,
+# -6770691,
+# -6551949,
+# ]
+# for i,val in enumerate(interestRatePrime2nd(arr)):
+#     print(val * 10**27)
+#     print(res3[i])
 
-print("")
-res4 = [
-2479727464860833275815169190498434 ,
-2479727454223068978709793328093782 ,
-2479727411672011791140829499698658 ,
-2479727358483190308597839037086472 ,
-2479726401084403987285561786574571 ,
-2479716827096578755732098452933863 ,
-2479102506993456749978861194786366 ,
-2478663688858334913504449232349283 ,
-2446858559012809815178863307286320 ,
-2173982702258861724008118286134272 ,
-]
-for i,val in enumerate(revenue(arr)):
-    print(val * 10**27)
-    print(res4[i])
+# print("")
+# res4 = [
+# 2379670543812338783344954513657837 ,
+# 2379670534162973065750615109418929 ,
+# 2379670495565510179252556432342650 ,
+# 2379670447318681534858406609523886 ,
+# 2379669578875759044165647340617037 ,
+# 2379660894445815961714392285537344 ,
+# 2379103650444209168890476108389167 ,
+# 2378705599182043589020665488730977,
+# 2349847584782967144713271195022879,
+# 2101656068332964648010446696573724,
+# ]
+# for i,val in enumerate(revenue(arr)):
+#     print(val * 10**27)
+#     print(res4[i])
 
-print("")
-res5 = [
--10637764137340206900705414,
--10637764137254954779464458,
--10637764136913946423107670,
--10637764136487685857145678,
--10637764128814970988198709,
--10637764052085291372289899,
--10637759119063283859724042,
--10637755583732043994211602,
--10637473690864349485001585,
--10633036905268623741363881,
-]
-for i,val in enumerate(revenuePrime(arr)):
-    print(val * 10**27)
-    print(res5[i])
+# print("")
+# res5 = [
+# -9649365716788304384030022,
+# -9649365718400374498206115,
+# -9649365724848654878986905,
+# -9649365732909005130393012,
+# -9649365877995264504408393,
+# -9649367328853222424279269,
+# -9649460406338616491643354,
+# -9649526871774563362923613,
+# -9654297297556283738680427,
+# -9691537873413962027602059,
+# ]
+# for i,val in enumerate(revenuePrime(arr)):
+#     print(val * 10**27)
+#     print(res5[i])
 
-print("")
-res6 = [
-85252131951110,
-85252123975911,
-85252133181432,
-85252175518071,
-85252739794720,
-85257817185732,
-85585819409418,
-85820101274660,
-102718101792698,
-241227315872567,
-]
-for i,val in enumerate(revenuePrime2nd(arr)):
-    print(val * 10**27)
-    print(res6[i])
+# print("")
+# res6 = [
+# 0,
+# 0,
+# 0,
+# 0,
+# 0,
+# 0,
+# 0,
+# 0,
+# 0,
+# 0,
+# ]
+# for i,val in enumerate(revenuePrime2nd(arr)):
+#     print(val * 10**27)
+#     print(res6[i])
 
 
