@@ -248,8 +248,7 @@ library FlashMintLib {
         address[] memory tokens = new address[](2);
         tokens[0] = asset;
         tokens[1] = dai;
-        IPriceOracle _oracle = priceOracle();
-        uint256[] memory prices = _oracle.getAssetsPrices(tokens);
+        uint256[] memory prices = priceOracle().getAssetsPrices(tokens);
 
         uint256 ethPrice = (_amount * prices[0]) / (uint256(10)**uint256(IOptionalERC20(asset).decimals()));
         return (ethPrice * _DAI_DECIMALS) / prices[1];

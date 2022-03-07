@@ -22,9 +22,13 @@ contract ComputeProfitability {
 
     int256 BASE_RAY = 10 ** 27;
 
+    function computeUtilization(int256 borrow, SCalculateBorrow memory parameters) public view returns(int256) {
+        return (parameters.totalStableDebt + parameters.totalVariableDebt + borrow) * BASE_RAY / (parameters.totalDeposits + borrow);
+    }
+
     // borrow must be in BASE token (6 for USDC)
     function calculateInterest(int256 borrow, SCalculateBorrow memory parameters) public view returns(int256 interests) {
-        int256 newUtilization = (parameters.totalStableDebt + parameters.totalVariableDebt + borrow) * BASE_RAY / (parameters.totalDeposits + borrow);
+        int256 newUtilization = computeUtilization(borrow, parameters);
 
         if (newUtilization < parameters.uOptimal) {
             interests = parameters.r0 + parameters.slope1 * newUtilization / parameters.uOptimal;
@@ -34,13 +38,15 @@ contract ComputeProfitability {
         return interests;
     }
 
+    function computeUprime(int256 borrow, SCalculateBorrow memory parameters) public view returns(int256) {
+        return (parameters.totalDeposits - parameters.totalStableDebt - parameters.totalVariableDebt) * BASE_RAY / (parameters.totalDeposits + borrow);
+    }
+
     // return value "interests" in BASE ray
     function calculateInterestPrime(int256 borrow, SCalculateBorrow memory parameters) public view returns(int256 interests) {
-        int256 newUtilization = (parameters.totalStableDebt + parameters.totalVariableDebt + borrow) * BASE_RAY / (parameters.totalDeposits + borrow);
-
-        int256 uprime = (parameters.totalDeposits - parameters.totalStableDebt - parameters.totalVariableDebt) * BASE_RAY / (parameters.totalDeposits + borrow);
+        int256 uprime = computeUprime(borrow, parameters);
         uprime = uprime * BASE_RAY / (parameters.totalDeposits + borrow);
-        if (newUtilization < parameters.uOptimal) {
+        if (computeUtilization(borrow, parameters) < parameters.uOptimal) {
             interests = parameters.slope1 * uprime / parameters.uOptimal;
         } else {
             interests = parameters.slope2 * uprime / (BASE_RAY - parameters.uOptimal);
@@ -51,12 +57,10 @@ contract ComputeProfitability {
 
     // return value "interests" in BASE ray
     function calculateInterestPrime2(int256 borrow, SCalculateBorrow memory parameters) public view returns(int256 interests) {
-        int256 newUtilization = (parameters.totalStableDebt + parameters.totalVariableDebt + borrow) * BASE_RAY / (parameters.totalDeposits + borrow);
-
-        int256 uprime = -2 * (parameters.totalDeposits - parameters.totalStableDebt - parameters.totalVariableDebt) * (BASE_RAY) / (parameters.totalDeposits + borrow); // BASE ray
+        int256 uprime = -2 * computeUprime(borrow, parameters); // BASE ray
         uprime = uprime * BASE_RAY / (parameters.totalDeposits + borrow);
         uprime = uprime * BASE_RAY / (parameters.totalDeposits + borrow);
-        if (newUtilization < parameters.uOptimal) {
+        if (computeUtilization(borrow, parameters) < parameters.uOptimal) {
             interests = parameters.slope1 * uprime / parameters.uOptimal;
         } else {
             interests = parameters.slope2 * uprime / (BASE_RAY - parameters.uOptimal);
@@ -88,6 +92,10 @@ contract ComputeProfitability {
         int256 newCompDeposit;
         int256 newCompBorrowVariable;
         int256 newCompBorrow;
+        int256 f1;
+        int256 f2;
+        int256 f1prime;
+        int256 f2prime;
     }
     function revenuePrimeVars(int256 borrow, SCalculateBorrow memory parameters) public view returns(SRevenuePrimeVars memory) {
         int256 newRate = calculateInterest(borrow, parameters);
@@ -97,7 +105,14 @@ contract ComputeProfitability {
         int256 newPoolDeposit = borrow + poolManagerFund;
         int256 newCompDeposit = borrow + parameters.totalDeposits;
         int256 newCompBorrowVariable = borrow + parameters.totalVariableDebt;
-        int256 newCompBorrow = newCompBorrowVariable + parameters.totalStableDebt;
+
+        int256 f1 = newPoolDeposit * (BASE_RAY - parameters.reserveFactor) / newCompDeposit;
+        int256 f2 = (parameters.totalStableDebt * parameters.stableBorrowRate + newCompBorrowVariable * newRate) / BASE_RAY;
+
+        int256 f1prime = (parameters.totalDeposits - poolManagerFund) * (BASE_RAY - parameters.reserveFactor) / newCompDeposit;
+        f1prime = f1prime * BASE_RAY / newCompDeposit;
+        int256 f2prime = (newRate * BASE_RAY + newCompBorrowVariable * newRatePrime) / BASE_RAY;
+
         return SRevenuePrimeVars({
             newRate: newRate,
             newRatePrime: newRatePrime,
@@ -105,19 +120,17 @@ contract ComputeProfitability {
             newPoolDeposit: newPoolDeposit,
             newCompDeposit: newCompDeposit,
             newCompBorrowVariable: newCompBorrowVariable,
-            newCompBorrow: newCompBorrow
+            newCompBorrow: newCompBorrowVariable + parameters.totalStableDebt,
+            f1: f1,
+            f2: f2,
+            f1prime: f1prime,
+            f2prime: f2prime
         });
     }
 
     function revenuePrime(int256 borrow, SCalculateBorrow memory parameters) public view returns(int256) {
         SRevenuePrimeVars memory vars = revenuePrimeVars(borrow, parameters);
 
-        int256 f1 = vars.newPoolDeposit * (BASE_RAY - parameters.reserveFactor) / vars.newCompDeposit;
-        int256 f2 = (parameters.totalStableDebt * parameters.stableBorrowRate + vars.newCompBorrowVariable * vars.newRate) / BASE_RAY;
-
-        int256 f1prime = (parameters.totalDeposits - vars.poolManagerFund) * (BASE_RAY - parameters.reserveFactor) / vars.newCompDeposit;
-        f1prime = f1prime * BASE_RAY / vars.newCompDeposit;
-        int256 f2prime = (vars.newRate * BASE_RAY + vars.newCompBorrowVariable * vars.newRatePrime) / BASE_RAY;
         int256 f3prime = (vars.newRate * BASE_RAY + borrow * vars.newRatePrime) / BASE_RAY;
         
         int256 f4prime = parameters.rewardBorrow * (parameters.totalStableDebt + parameters.totalVariableDebt) / vars.newCompBorrow;
@@ -125,7 +138,7 @@ contract ComputeProfitability {
         int256 f5prime = parameters.rewardDeposit * (parameters.totalDeposits - vars.poolManagerFund) / vars.newCompDeposit;
         f5prime = f5prime * BASE_RAY / vars.newCompDeposit;
         
-        return ((f1prime*f2 + f2prime*f1) / BASE_RAY) - f3prime + f4prime + f5prime;
+        return ((vars.f1prime * vars.f2 + vars.f2prime * vars.f1) / BASE_RAY) - f3prime + f4prime + f5prime;
     }
 
     function revenuePrime2(int256 borrow, SCalculateBorrow memory parameters) public view returns(int256) {
@@ -134,12 +147,6 @@ contract ComputeProfitability {
 
         int256 derivate;
         {
-            int256 f1 = vars.newPoolDeposit * (BASE_RAY - parameters.reserveFactor) / vars.newCompDeposit;
-            int256 f2 = (parameters.totalStableDebt * parameters.stableBorrowRate + vars.newCompBorrowVariable * vars.newRate) / BASE_RAY;
-            int256 f1prime = (parameters.totalDeposits - vars.poolManagerFund) * (BASE_RAY - parameters.reserveFactor) / vars.newCompDeposit;
-            f1prime = f1prime * BASE_RAY / vars.newCompDeposit;
-            int256 f2prime = (vars.newRate * BASE_RAY + vars.newCompBorrowVariable * vars.newRatePrime) / BASE_RAY;
-
             int256 f1prime2nd = - (parameters.totalDeposits - vars.poolManagerFund) * (BASE_RAY - parameters.reserveFactor) * 2 / (vars.newCompDeposit);
             f1prime2nd = f1prime2nd * (BASE_RAY) / (vars.newCompDeposit);
             f1prime2nd = f1prime2nd * (BASE_RAY) / (vars.newCompDeposit);
@@ -154,23 +161,10 @@ contract ComputeProfitability {
             f5prime2nd = f5prime2nd * (BASE_RAY) / (vars.newCompDeposit);
             f5prime2nd = f5prime2nd * (BASE_RAY) / (vars.newCompDeposit);
             
-            derivate = f1prime2nd * f2 + f1prime * f2prime + f2prime * f1prime + f2prime2nd*f1 - f3prime2nd * (BASE_RAY) + (f4prime2nd + f5prime2nd) * (BASE_RAY);
+            derivate = f1prime2nd * vars.f2 + vars.f1prime * vars.f2prime + vars.f2prime * vars.f1prime + f2prime2nd*vars.f1 - f3prime2nd * (BASE_RAY) + (f4prime2nd + f5prime2nd) * (BASE_RAY);
         }
 
         return derivate / (BASE_RAY);
-    }
-
-    function revenue3D(int256 borrow, int256 rewards, SCalculateBorrow memory parameters) public view returns(int256) {
-        int256 newRate = calculateInterest(borrow, parameters);
-        int256 poolManagerFund = parameters.poolManagerAssets;
-        int256 newPoolDeposit = borrow + poolManagerFund;
-        int256 newCompDeposit = borrow + parameters.totalDeposits;
-        int256 newCompBorrowVariable = borrow + parameters.totalVariableDebt;
-
-        int256 earnings = newPoolDeposit * (BASE_RAY - parameters.reserveFactor) * (parameters.totalStableDebt * parameters.stableBorrowRate  + newCompBorrowVariable * newRate) / newCompDeposit;
-        int256 cost = (borrow * newRate) / BASE_RAY;
-        rewards = borrow * rewards / BASE_RAY;
-        return  earnings + rewards - cost;
     }
 
     function abs(int256 x) private pure returns (int256) {
@@ -209,77 +203,77 @@ contract ComputeProfitability {
     }
 
     function computeProfitability(SCalculateBorrow memory parameters) public view {
-        // console.log("interests");
-        // console.logInt(calculateInterest(BASE_RAY * 0, parameters));
-        // console.logInt(calculateInterest(BASE_RAY * 1, parameters));
-        // console.logInt(calculateInterest(BASE_RAY * 5, parameters));
-        // console.logInt(calculateInterest(BASE_RAY * 10, parameters));
-        // console.logInt(calculateInterest(BASE_RAY * 100, parameters));
-        // console.logInt(calculateInterest(BASE_RAY * 1000, parameters));
-        // console.logInt(calculateInterest(BASE_RAY * 58749, parameters));
-        // console.logInt(calculateInterest(BASE_RAY * 100000, parameters));
-        // console.logInt(calculateInterest(BASE_RAY * 3089873, parameters));
-        // console.logInt(calculateInterest(BASE_RAY * 28746827, parameters));
+        console.log("interests");
+        console.logInt(calculateInterest(BASE_RAY * 0, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 1, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 5, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 10, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 100, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 1000, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 58749, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 100000, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 3089873, parameters));
+        console.logInt(calculateInterest(BASE_RAY * 28746827, parameters));
 
-        // console.log("interests prime");
-        // console.logInt(calculateInterestPrime(BASE_RAY * 0, parameters));
-        // console.logInt(calculateInterestPrime(BASE_RAY * 1, parameters));
-        // console.logInt(calculateInterestPrime(BASE_RAY * 5, parameters));
-        // console.logInt(calculateInterestPrime(BASE_RAY * 10, parameters));
-        // console.logInt(calculateInterestPrime(BASE_RAY * 100, parameters));
-        // console.logInt(calculateInterestPrime(BASE_RAY * 1000, parameters));
-        // console.logInt(calculateInterestPrime(BASE_RAY * 58749, parameters));
-        // console.logInt(calculateInterestPrime(BASE_RAY * 100000, parameters));
-        // console.logInt(calculateInterestPrime(BASE_RAY * 3089873, parameters));
-        // console.logInt(calculateInterestPrime(BASE_RAY * 28746827, parameters));
+        console.log("interests prime");
+        console.logInt(calculateInterestPrime(BASE_RAY * 0, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 1, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 5, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 10, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 100, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 1000, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 58749, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 100000, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 3089873, parameters));
+        console.logInt(calculateInterestPrime(BASE_RAY * 28746827, parameters));
         
-        // console.log("interests prime 2");
-        // console.logInt(calculateInterestPrime2(BASE_RAY * 0, parameters));
-        // console.logInt(calculateInterestPrime2(BASE_RAY * 1, parameters));
-        // console.logInt(calculateInterestPrime2(BASE_RAY * 5, parameters));
-        // console.logInt(calculateInterestPrime2(BASE_RAY * 10, parameters));
-        // console.logInt(calculateInterestPrime2(BASE_RAY * 100, parameters));
-        // console.logInt(calculateInterestPrime2(BASE_RAY * 1000, parameters));
-        // console.logInt(calculateInterestPrime2(BASE_RAY * 58749, parameters));
-        // console.logInt(calculateInterestPrime2(BASE_RAY * 100000, parameters));
-        // console.logInt(calculateInterestPrime2(BASE_RAY * 3089873, parameters));
-        // console.logInt(calculateInterestPrime2(BASE_RAY * 28746827, parameters));
+        console.log("interests prime 2");
+        console.logInt(calculateInterestPrime2(BASE_RAY * 0, parameters));
+        console.logInt(calculateInterestPrime2(BASE_RAY * 1, parameters));
+        console.logInt(calculateInterestPrime2(BASE_RAY * 5, parameters));
+        console.logInt(calculateInterestPrime2(BASE_RAY * 10, parameters));
+        console.logInt(calculateInterestPrime2(BASE_RAY * 100, parameters));
+        console.logInt(calculateInterestPrime2(BASE_RAY * 1000, parameters));
+        console.logInt(calculateInterestPrime2(BASE_RAY * 58749, parameters));
+        console.logInt(calculateInterestPrime2(BASE_RAY * 100000, parameters));
+        console.logInt(calculateInterestPrime2(BASE_RAY * 3089873, parameters));
+        console.logInt(calculateInterestPrime2(BASE_RAY * 28746827, parameters));
 
-        // console.log("revenue");
-        // console.logInt(revenue(BASE_RAY * 0, parameters));
-        // console.logInt(revenue(BASE_RAY * 1, parameters));
-        // console.logInt(revenue(BASE_RAY * 5, parameters));
-        // console.logInt(revenue(BASE_RAY * 10, parameters));
-        // console.logInt(revenue(BASE_RAY * 100, parameters));
-        // console.logInt(revenue(BASE_RAY * 1000, parameters));
-        // console.logInt(revenue(BASE_RAY * 58749, parameters));
-        // console.logInt(revenue(BASE_RAY * 100000, parameters));
-        // console.logInt(revenue(BASE_RAY * 3089873, parameters));
-        // console.logInt(revenue(BASE_RAY * 28746827, parameters));
+        console.log("revenue");
+        console.logInt(revenue(BASE_RAY * 0, parameters));
+        console.logInt(revenue(BASE_RAY * 1, parameters));
+        console.logInt(revenue(BASE_RAY * 5, parameters));
+        console.logInt(revenue(BASE_RAY * 10, parameters));
+        console.logInt(revenue(BASE_RAY * 100, parameters));
+        console.logInt(revenue(BASE_RAY * 1000, parameters));
+        console.logInt(revenue(BASE_RAY * 58749, parameters));
+        console.logInt(revenue(BASE_RAY * 100000, parameters));
+        console.logInt(revenue(BASE_RAY * 3089873, parameters));
+        console.logInt(revenue(BASE_RAY * 28746827, parameters));
 
-        // console.log("revenuePrime");
-        // console.logInt(revenuePrime(BASE_RAY * 0, parameters));
-        // console.logInt(revenuePrime(BASE_RAY * 1, parameters));
-        // console.logInt(revenuePrime(BASE_RAY * 5, parameters));
-        // console.logInt(revenuePrime(BASE_RAY * 10, parameters));
-        // console.logInt(revenuePrime(BASE_RAY * 100, parameters));
-        // console.logInt(revenuePrime(BASE_RAY * 1000, parameters));
-        // console.logInt(revenuePrime(BASE_RAY * 58749, parameters));
-        // console.logInt(revenuePrime(BASE_RAY * 100000, parameters));
-        // console.logInt(revenuePrime(BASE_RAY * 3089873, parameters));
-        // console.logInt(revenuePrime(BASE_RAY * 28746827, parameters));
+        console.log("revenuePrime");
+        console.logInt(revenuePrime(BASE_RAY * 0, parameters));
+        console.logInt(revenuePrime(BASE_RAY * 1, parameters));
+        console.logInt(revenuePrime(BASE_RAY * 5, parameters));
+        console.logInt(revenuePrime(BASE_RAY * 10, parameters));
+        console.logInt(revenuePrime(BASE_RAY * 100, parameters));
+        console.logInt(revenuePrime(BASE_RAY * 1000, parameters));
+        console.logInt(revenuePrime(BASE_RAY * 58749, parameters));
+        console.logInt(revenuePrime(BASE_RAY * 100000, parameters));
+        console.logInt(revenuePrime(BASE_RAY * 3089873, parameters));
+        console.logInt(revenuePrime(BASE_RAY * 28746827, parameters));
 
-        // console.log("revenue prime 2");
-        // console.logInt(revenuePrime2(BASE_RAY * 0, parameters));
-        // console.logInt(revenuePrime2(BASE_RAY * 1, parameters));
-        // console.logInt(revenuePrime2(BASE_RAY * 5, parameters));
-        // console.logInt(revenuePrime2(BASE_RAY * 10, parameters));
-        // console.logInt(revenuePrime2(BASE_RAY * 100, parameters));
-        // console.logInt(revenuePrime2(BASE_RAY * 1000, parameters));
-        // console.logInt(revenuePrime2(BASE_RAY * 58749, parameters));
-        // console.logInt(revenuePrime2(BASE_RAY * 100000, parameters));
-        // console.logInt(revenuePrime2(BASE_RAY * 3089873, parameters));
-        // console.logInt(revenuePrime2(BASE_RAY * 28746827, parameters));
+        console.log("revenue prime 2");
+        console.logInt(revenuePrime2(BASE_RAY * 0, parameters));
+        console.logInt(revenuePrime2(BASE_RAY * 1, parameters));
+        console.logInt(revenuePrime2(BASE_RAY * 5, parameters));
+        console.logInt(revenuePrime2(BASE_RAY * 10, parameters));
+        console.logInt(revenuePrime2(BASE_RAY * 100, parameters));
+        console.logInt(revenuePrime2(BASE_RAY * 1000, parameters));
+        console.logInt(revenuePrime2(BASE_RAY * 58749, parameters));
+        console.logInt(revenuePrime2(BASE_RAY * 100000, parameters));
+        console.logInt(revenuePrime2(BASE_RAY * 3089873, parameters));
+        console.logInt(revenuePrime2(BASE_RAY * 28746827, parameters));
 
         int256 epsilon = 10**(27-12);
         int256 tolerance = 10**(27-1);
