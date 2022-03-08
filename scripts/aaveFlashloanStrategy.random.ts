@@ -2,6 +2,7 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ethers, deployments, network } from 'hardhat';
 import { utils, Wallet, constants, Contract, BigNumber } from 'ethers';
+import { impersonate } from '../test/test-utils';
 import {
   AaveFlashloanStrategy,
   ERC20,
@@ -11,7 +12,30 @@ import {
   Strategy__factory,
   FlashMintLib__factory,
   FlashMintLib,
+  MockLendingPool__factory,
+  MockLendingPool,
 } from '../typechain';
+
+async function randomDeposit(_lendingPool: string, _user: string, _asset: string) {
+  const lendingPool = (await ethers.getContractAt(MockLendingPool__factory.abi, _lendingPool)) as MockLendingPool;
+
+  const min = 100_000;
+  const max = 100_000_000;
+  const amount = utils.parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), 6);
+  await impersonate(_user, async user => {
+    await lendingPool.connect(user).deposit(_asset, amount, _user, 0);
+  });
+}
+async function randomWithdraw(_lendingPool: string, _user: string, _asset: string) {
+  const lendingPool = (await ethers.getContractAt(MockLendingPool__factory.abi, _lendingPool)) as MockLendingPool;
+
+  const min = 100_000;
+  const max = 100_000_000;
+  const amount = utils.parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), 6);
+  await impersonate(_user, async user => {
+    await lendingPool.connect(user).withdraw(_asset, amount, _user);
+  });
+}
 
 async function main() {
   const [deployer, guardian, governor, user] = await ethers.getSigners();
@@ -66,12 +90,6 @@ async function main() {
     ANGLE,
     [governor.address],
     guardian.address,
-    protocolDataProvider,
-    incentivesController,
-    lendingPool,
-    [dai, aave, stkAave, weth],
-    [uniV2Router, uniV3Router, sushiV2Router],
-    // { lender: '0x1EB4CF3A948E7D72A198fe073cCb8C7a948cD853', adai: '0x028171bCA77440897B824Ca71D1c56caC55b68A3' },
   )) as AaveFlashloanStrategy;
 
   //   const flashMintLib = (await ethers.getContractAt(

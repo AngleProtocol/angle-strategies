@@ -2,7 +2,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ethers } from 'hardhat';
 import { utils, Wallet, constants, Contract, BigNumber } from 'ethers';
 import { expect } from '../test-utils/chai-setup';
-import { deploy, randomAddress } from '../test-utils';
+import { deploy, randomAddress, impersonate } from '../test-utils';
 import { inReceipt, inIndirectReceipt } from '../test-utils/expectEvent';
 import {
   AaveFlashloanStrategy,
@@ -18,6 +18,12 @@ import {
   MockAToken,
   MockLendingPool,
   FlashMintLib__factory,
+  MockLendingPool__factory,
+  IAaveIncentivesController__factory,
+  MockProtocolDataProvider__factory,
+  MockUniswapV2Router__factory,
+  MockUniswapV3Pool__factory,
+  MockToken__factory,
 } from '../../typechain';
 
 describe('AaveFlashloan Strat', () => {
@@ -52,29 +58,63 @@ describe('AaveFlashloan Strat', () => {
     debtToken = (await deploy('MockAToken', ['debt token', 'debtToken', 18])) as MockAToken;
     aDai = (await deploy('MockAToken', ['adai token', 'aDai', 18])) as MockAToken;
 
-    wantToken = (await deploy('MockToken', ['usdc token', 'USDC', 6])) as MockToken;
-    dai = (await deploy('MockToken', ['dai token', 'DAI', 18])) as MockToken;
-    aave = (await deploy('MockToken', ['aave token', 'AAVE', 18])) as MockToken;
-    stkAave = (await deploy('MockToken', ['stkAave token', 'stkAAVE', 18])) as MockToken;
-    weth = (await deploy('MockToken', ['weth token', 'WETH', 18])) as MockToken;
-    rewardToken = (await deploy('MockToken', ['reward token', 'rewardToken', 18])) as MockToken;
+    wantToken = (await ethers.getContractAt(
+      MockToken__factory.abi,
+      '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+    )) as MockToken;
+    dai = (await ethers.getContractAt(
+      MockToken__factory.abi,
+      '0x6B175474E89094C44Da98b954EedeAC495271d0F',
+    )) as MockToken;
+    aave = (await ethers.getContractAt(
+      MockToken__factory.abi,
+      '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9',
+    )) as MockToken;
+    stkAave = (await ethers.getContractAt(
+      MockToken__factory.abi,
+      '0x4da27a545c0c5B758a6BA100e3a049001de870f5',
+    )) as MockToken;
+    weth = (await ethers.getContractAt(
+      MockToken__factory.abi,
+      '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+    )) as MockToken;
+    rewardToken = (await ethers.getContractAt(
+      MockToken__factory.abi,
+      '0x31429d1856aD1377A8A0079410B297e1a9e214c2',
+    )) as MockToken;
     mockAAVE = (await deploy('MockToken', ['mock aave token', 'mockAAVE', 18])) as MockToken;
 
     [governor, guardian, user] = await ethers.getSigners();
 
-    uniV2Router = (await deploy('MockUniswapV2Router', [10])) as MockUniswapV2Router;
-    sushiV2Router = (await deploy('MockUniswapV2Router', [10])) as MockUniswapV2Router;
-    uniV3Router = (await deploy('MockUniswapV3Router', [wantToken.address, aave.address])) as MockUniswapV3Router;
+    uniV2Router = (await ethers.getContractAt(
+      MockUniswapV2Router__factory.abi,
+      '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
+    )) as MockUniswapV2Router;
+    sushiV2Router = (await ethers.getContractAt(
+      MockUniswapV2Router__factory.abi,
+      '0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F',
+    )) as MockUniswapV2Router;
+    uniV3Router = (await ethers.getContractAt(
+      MockUniswapV3Pool__factory.abi,
+      '0xE592427A0AEce92De3Edee1F18E0157C05861564',
+    )) as MockUniswapV3Router;
 
     poolManager = (await deploy('MockPoolManager', [wantToken.address, 0])) as MockPoolManager;
-    protocolDataProvider = (await deploy('MockProtocolDataProvider', [
-      aToken.address,
-      debtToken.address,
-      (await deploy('MockAave')).address,
-    ])) as MockProtocolDataProvider;
-    incentivesController = (await deploy('MockAave')) as MockAave;
-    lendingPool = (await deploy('MockLendingPool', [aToken.address, debtToken.address])) as MockLendingPool;
-    await lendingPool.connect(user).deployNewUnderlying(wantToken.address);
+
+    protocolDataProvider = (await ethers.getContractAt(
+      MockProtocolDataProvider__factory.abi,
+      '0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d',
+    )) as MockProtocolDataProvider;
+
+    incentivesController = (await ethers.getContractAt(
+      IAaveIncentivesController__factory.abi,
+      '0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5',
+    )) as MockAave;
+
+    lendingPool = (await ethers.getContractAt(
+      MockLendingPool__factory.abi,
+      '0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9',
+    )) as MockLendingPool;
 
     const daiLender = await deploy('MockMKRLender', [dai.address, constants.MaxUint256]);
 
@@ -104,6 +144,10 @@ describe('AaveFlashloan Strat', () => {
         },
       },
     )) as AaveFlashloanStrategy;
+
+    aToken = (await ethers.getContractAt(MockToken__factory.abi, await strategy.aToken())) as MockAToken;
+    debtToken = (await ethers.getContractAt(MockToken__factory.abi, await strategy.debtToken())) as MockAToken;
+    aDai = (await deploy('MockAToken', ['adai token', 'aDai', 18])) as MockAToken;
   });
 
   it('basic test', async () => {
@@ -118,20 +162,23 @@ describe('AaveFlashloan Strat', () => {
     // console.log(await strategy.isActive());
 
     const amount = utils.parseUnits('10000', 6);
-    await wantToken.connect(user).mint(user.address, amount);
-    await wantToken.connect(user).mint(user.address, amount);
+
+    await impersonate('0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3', async acc => {
+      await wantToken.connect(acc).transfer(user.address, amount);
+      await wantToken.connect(acc).transfer(user.address, amount);
+    });
     console.log('balance', utils.formatUnits(await wantToken.balanceOf(user.address), 6));
 
     await wantToken.connect(user).transfer(poolManager.address, amount);
-    // await wantToken.connect(user).transfer(strategy.address, amount);
+    await wantToken.connect(user).transfer(strategy.address, amount);
 
     console.log('\ntotal2', await strategy.estimatedTotalAssets());
     console.log('total2', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
     console.log('total2', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
 
-    // console.log('emergencyExit', await strategy.emergencyExit());
-    // console.log('getCurrentCollatRatio', await strategy.getCurrentCollatRatio());
-    // console.log('isFlashMintActive', await strategy.isFlashMintActive());
+    console.log('emergencyExit', await strategy.emergencyExit());
+    console.log('getCurrentCollatRatio', await strategy.getCurrentCollatRatio());
+    console.log('isFlashMintActive', await strategy.isFlashMintActive());
 
     await strategy.harvest();
     console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
@@ -143,14 +190,20 @@ describe('AaveFlashloan Strat', () => {
     await strategy.harvest();
     console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
     console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
+    console.log('balance aToken', utils.formatUnits(await aToken.balanceOf(strategy.address), 6), '\n');
+    console.log('balance debtToken', utils.formatUnits(await debtToken.balanceOf(strategy.address), 6), '\n');
 
     await strategy.harvest();
     console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
     console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
+    console.log('balance aToken', utils.formatUnits(await aToken.balanceOf(strategy.address), 6), '\n');
+    console.log('balance debtToken', utils.formatUnits(await debtToken.balanceOf(strategy.address), 6), '\n');
 
     await strategy.harvest();
     console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
     console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
+    console.log('balance aToken', utils.formatUnits(await aToken.balanceOf(strategy.address), 6), '\n');
+    console.log('balance debtToken', utils.formatUnits(await debtToken.balanceOf(strategy.address), 6), '\n');
 
     console.log('\ntotal3', await strategy.estimatedTotalAssets());
     console.log('total3', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));

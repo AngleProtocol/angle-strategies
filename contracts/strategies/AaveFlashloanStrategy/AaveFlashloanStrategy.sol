@@ -21,15 +21,15 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     using Address for address;
 
     // AAVE protocol address
-    IProtocolDataProvider private _protocolDataProvider; // 0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d
-    IAaveIncentivesController private _incentivesController; // 0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5
-    ILendingPool private _lendingPool; // 0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9
+    IProtocolDataProvider private constant _protocolDataProvider = IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
+    IAaveIncentivesController private constant _incentivesController = IAaveIncentivesController(0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5);
+    ILendingPool private constant _lendingPool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
 
     // Token addresses
-    address private _aave; // 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9
-    IStakedAave private _stkAave; // 0x4da27a545c0c5B758a6BA100e3a049001de870f5
-    address private immutable _weth; // 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
-    address private _dai; // 0x6B175474E89094C44Da98b954EedeAC495271d0F
+    address private _aave = 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9;
+    IStakedAave private _stkAave = IStakedAave(0x4da27a545c0c5B758a6BA100e3a049001de870f5);
+    address private immutable _weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address private _dai = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
 
     // struct FlashMintLibParams {
     //     address lender;
@@ -48,9 +48,9 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     enum CooldownStatus {None, Claim, Initiated}
 
     // SWAP routers
-    IUni private _UNI_V2_ROUTER; // 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
-    IUni private _SUSHI_V2_ROUTER; // 0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F
-    ISwapRouter private _UNI_V3_ROUTER; // 0xE592427A0AEce92De3Edee1F18E0157C05861564
+    IUni private constant _UNI_V2_ROUTER = IUni(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+    IUni private constant _SUSHI_V2_ROUTER = IUni(0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F);
+    ISwapRouter private constant _UNI_V3_ROUTER = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
 
     // OPS State Variables
     uint256 private constant _DEFAULT_COLLAT_TARGET_MARGIN = 0.02 ether;
@@ -102,29 +102,9 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         address _poolManager,
         IERC20 _rewards,
         address[] memory governorList,
-        address guardian,
-        address protocolDataProvider_,
-        address incentivesController_,
-        address lendingPool_,
-        address[] memory _tokens, // dai, aave, stkAave, weth
-        address[] memory _routers // uniV2Router, univ3Router, sushiV2Router,
-        // FlashMintLibParams memory _flashMintLibParams
+        address guardian
     ) BaseStrategy(_poolManager, _rewards, governorList, guardian) {
         require(address(aToken) == address(0));
-        require(protocolDataProvider_ != address(0));
-
-        _protocolDataProvider = IProtocolDataProvider(protocolDataProvider_);
-        _incentivesController = IAaveIncentivesController(incentivesController_);
-        _lendingPool = ILendingPool(lendingPool_);
-
-        _UNI_V2_ROUTER = IUni(_routers[0]);
-        _SUSHI_V2_ROUTER = IUni(_routers[2]);
-        _UNI_V3_ROUTER = ISwapRouter(_routers[1]);
-
-        _dai = _tokens[0];
-        _aave = _tokens[1];
-        _stkAave = IStakedAave(_tokens[2]);
-        _weth = _tokens[3];
 
         // initialize operational state
         maxIterations = 6;
@@ -148,10 +128,8 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
 
         _alreadyAdjusted = false;
 
-        // flashMintlib = new FlashMintLib(_flashMintLibParams.lender, _tokens[3], _tokens[0], _flashMintLibParams.adai, protocolDataProvider_, lendingPool_);
-
         // Set aave tokens
-        (address _aToken, , address _debtToken) = IProtocolDataProvider(protocolDataProvider_).getReserveTokensAddresses(address(want));
+        (address _aToken, , address _debtToken) = IProtocolDataProvider(_protocolDataProvider).getReserveTokensAddresses(address(want));
         aToken = IAToken(_aToken);
         debtToken = IVariableDebtToken(_debtToken);
 
@@ -160,27 +138,26 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         targetCollatRatio = liquidationThreshold - _DEFAULT_COLLAT_TARGET_MARGIN;
         maxCollatRatio = liquidationThreshold - _DEFAULT_COLLAT_MAX_MARGIN;
         maxBorrowCollatRatio = ltv - _DEFAULT_COLLAT_MAX_MARGIN;
-        (uint256 daiLtv, ) = _getProtocolCollatRatios(_tokens[0]);
+        (uint256 daiLtv, ) = _getProtocolCollatRatios(_dai);
         daiBorrowCollatRatio = daiLtv - _DEFAULT_COLLAT_MAX_MARGIN;
 
         _DECIMALS = wantBase;
 
         // approve spend aave spend
-        _approveMaxSpend(address(want), lendingPool_);
-        _approveMaxSpend(address(aToken), lendingPool_);
+        _approveMaxSpend(address(want), address(_lendingPool));
+        _approveMaxSpend(address(aToken), address(_lendingPool));
 
         // approve flashloan spend
-        if (address(want) != _tokens[0]) {
-            _approveMaxSpend(_tokens[0], lendingPool_);
+        if (address(want) != _dai) {
+            _approveMaxSpend(_dai, address(_lendingPool));
         }
-        // _approveMaxSpend(_tokens[0], _flashMintLibParams.lender);
-        _approveMaxSpend(_tokens[0], FlashMintLib.LENDER);
+        _approveMaxSpend(_dai, FlashMintLib.LENDER);
 
         // approve swap router spend
-        _approveMaxSpend(_tokens[2], _routers[1]);
-        _approveMaxSpend(_tokens[1], _routers[0]);
-        _approveMaxSpend(_tokens[1], _routers[2]);
-        _approveMaxSpend(_tokens[1], _routers[1]);
+        _approveMaxSpend(address(_stkAave), address(_UNI_V3_ROUTER));
+        _approveMaxSpend(_aave, address(_UNI_V2_ROUTER));
+        _approveMaxSpend(_aave, address(_SUSHI_V2_ROUTER));
+        _approveMaxSpend(_aave, address(_UNI_V3_ROUTER));
     }
 
     // SETTERS
@@ -190,8 +167,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         uint256 _maxBorrowCollatRatio,
         uint256 _daiBorrowCollatRatio
     ) external onlyRole(GUARDIAN_ROLE) {
-        (uint256 ltv, uint256 liquidationThreshold) =
-            _getProtocolCollatRatios(address(want));
+        (uint256 ltv, uint256 liquidationThreshold) = _getProtocolCollatRatios(address(want));
         (uint256 daiLtv, ) = _getProtocolCollatRatios(_dai);
         require(_targetCollatRatio < liquidationThreshold);
         require(_maxCollatRatio < liquidationThreshold);
@@ -944,6 +920,10 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         return (borrow * _COLLATERAL_RATIO_PRECISION) / collatRatio;
     }
 
+    function _getCollatRatioFromBorrowAndDeposit(uint256 deposit, uint256 borrow) internal pure returns(uint256) {
+        return (borrow * _COLLATERAL_RATIO_PRECISION) / deposit;
+    }
+
     function _getBorrowFromSupply(uint256 supply, uint256 collatRatio)
         internal
         pure
@@ -1018,34 +998,35 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         (uint256 emissionPerSecondAToken,,) = (aToken.getIncentivesController()).assets(address(aToken));
         (uint256 emissionPerSecondDebtToken,,) = (debtToken.getIncentivesController()).assets(address(debtToken));
 
-        // SCalculateBorrow memory parameters = SCalculateBorrow({
-        //     slope1: interestRateStrategyAddress.variableRateSlope1(), // ray
-        //     slope2: interestRateStrategyAddress.variableRateSlope2(), // ray
-        //     r0: interestRateStrategyAddress.baseVariableBorrowRate(), // ray
-        //     totalStableDebt: totalStableDebt * 10**21, // ray / base USDC: 6 
-        //     totalVariableDebt: totalVariableDebt * 10**21, // ray / base USDC: 6 
-        //     uOptimal: interestRateStrategyAddress.OPTIMAL_UTILIZATION_RATE(), // ray
-        //     totalDeposits: aToken.totalSupply() * 10**21, // ray / base USDC: 6 
-        //     reserveFactor: reserveFactor * 10**23, // ray / reserveFactor: base 4
-        //     stableBorrowRate: stableBorrowRate, // ray
-        //     rewardDeposit: emissionPerSecondAToken * 10**9, // ray / emissionPerSecondAToken: base 18 (stkAave)
-        //     rewardBorrow: emissionPerSecondDebtToken * 10**9, // ray / emissionPerSecondDebtToken: base 18 (stkAave)
-        //      poolManagerAssets: poolManager.getTotalAsset() * 10**21
-        // });
         ComputeProfitability.SCalculateBorrow memory parameters = ComputeProfitability.SCalculateBorrow({
-            slope1: 40000000000000000000000000,
-            slope2: 600000000000000000000000000,
-            r0: 0,
-            totalStableDebt: 12952786073367000000000000000000000,
-            totalVariableDebt: 1350219982386577000000000000000000000,
-            uOptimal: 900000000000000000000000000,
-            totalDeposits: 2327880275443382000000000000000000000,
-            reserveFactor: 100000000000000000000000000,
-            stableBorrowRate: 103013007441955644227054734,
-            rewardDeposit: 1903258773510960000000000 * 60 * 60 * 24 * 365,
-            rewardBorrow: 10*3806517547021920000000000 * 60 * 60 * 24 * 365,
-            poolManagerAssets: 168439706352281000000000000000000000
+            slope1: int256(interestRateStrategyAddress.variableRateSlope1()), // ray
+            slope2: int256(interestRateStrategyAddress.variableRateSlope2()), // ray
+            r0: int256(interestRateStrategyAddress.baseVariableBorrowRate()), // ray
+            totalStableDebt: int256(totalStableDebt * (10**27 / _DECIMALS)), // base 6 to ray
+            totalVariableDebt: int256(totalVariableDebt * (10**27 / _DECIMALS)), // base 6 to ray
+            uOptimal: int256(interestRateStrategyAddress.OPTIMAL_UTILIZATION_RATE()), // ray
+            totalDeposits: int256(aToken.totalSupply() * (10**27 / _DECIMALS)), // base 6 to ray
+            reserveFactor: int256(reserveFactor * 10**23), // ray / reserveFactor: base 4
+            stableBorrowRate: int256(stableBorrowRate), // ray
+            rewardDeposit: int256(emissionPerSecondAToken * 10**9), // ray / emissionPerSecondAToken: base 18 (stkAave)
+            rewardBorrow: int256(emissionPerSecondDebtToken * 10**9), // ray / emissionPerSecondDebtToken: base 18 (stkAave)
+             poolManagerAssets: int256(poolManager.getTotalAsset() * (10**27 / _DECIMALS)) // base 6 to ray
         });
+
+        // ComputeProfitability.SCalculateBorrow memory parameters = ComputeProfitability.SCalculateBorrow({
+        //     slope1: 40000000000000000000000000,
+        //     slope2: 600000000000000000000000000,
+        //     r0: 0,
+        //     totalStableDebt: 12952786073367000000000000000000000,
+        //     totalVariableDebt: 1350219982386577000000000000000000000,
+        //     uOptimal: 900000000000000000000000000,
+        //     totalDeposits: 2327880275443382000000000000000000000,
+        //     reserveFactor: 100000000000000000000000000,
+        //     stableBorrowRate: 103013007441955644227054734,
+        //     rewardDeposit: 1903258773510960000000000 * 60 * 60 * 24 * 365,
+        //     rewardBorrow: 100*3806517547021920000000000 * 60 * 60 * 24 * 365,
+        //     poolManagerAssets: 168439706352281000000000000000000000
+        // });
         
         // console.log("%s", interestRateStrategyAddress.variableRateSlope1());
         // console.log("%s", interestRateStrategyAddress.variableRateSlope2());
@@ -1059,6 +1040,13 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         // console.log("%s", emissionPerSecondAToken * 10**9);
         // console.log("%s", emissionPerSecondDebtToken * 10**9);
         
-        _computeProfitability.computeProfitability(parameters);
+        int256 _borrow = _computeProfitability.computeProfitability(parameters);
+        console.log("===== BORROW ======");
+        console.logInt(_borrow);
+        // _borrow is return in BASE ray so we set it in the correct base
+        uint256 borrow = uint256(_borrow) / (10**27 / _DECIMALS);
+        (uint256 deposits, ) = getCurrentPosition();
+        uint256 collatRatio = _getCollatRatioFromBorrowAndDeposit(deposits, borrow);
+        console.log("collat ratio: %s", collatRatio);
     }
 }

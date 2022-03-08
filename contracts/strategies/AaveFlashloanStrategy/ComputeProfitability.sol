@@ -167,42 +167,58 @@ contract ComputeProfitability {
         return derivate / (BASE_RAY);
     }
 
-    function abs(int256 x) private pure returns (int256) {
+    function _abs(int256 x) private pure returns (int256) {
         return x >= 0 ? x : -x;
     }
 
-    function computeAlpha(int256 count) private view returns(int256) {
-        return 0.5 * 10**10;
-    }
+    // function computeAlpha(int256 count) private view returns(int256) {
+    //     return 0.5 * 10**10;
+    // }
 
-    function gradientDescent(int256 _borrow, int256 tolerance, SCalculateBorrow memory parameters) public view returns(int256 borrow, int256 count) {
-        int256 grad = tolerance + 1;
-        count = 0;
-        borrow = _borrow;
-        while (abs(grad) > tolerance) {
-            grad = - revenuePrime(borrow, parameters);
-            int256 alpha = computeAlpha(count);
-            borrow = borrow - alpha * grad;
-            count +=1;
-        }
-    }
+    // function gradientDescent(int256 _borrow, int256 tolerance, SCalculateBorrow memory parameters) public view returns(int256 borrow, int256 count) {
+    //     int256 grad = tolerance + 1;
+    //     count = 0;
+    //     borrow = _borrow;
+    //     while (abs(grad) > tolerance) {
+    //         grad = - revenuePrime(borrow, parameters);
+    //         int256 alpha = computeAlpha(count);
+    //         borrow = borrow - alpha * grad;
+    //         count +=1;
+    //     }
+    // }
 
-    function newtonRaphson(int256 _borrow, int256 epsilon, int256 tolerance, SCalculateBorrow memory parameters) public view returns(int256 borrow, int256 count) {
-        int256 grad = tolerance + 1;
-        int256 grad2nd = grad;
+    function newtonRaphson(int256 _borrow, int256 tolerance, SCalculateBorrow memory parameters) public view returns(int256 borrow, int256 count) {
+        int256 grad;
+        int256 grad2nd;
+
+        int maxCount = 30;
         count = 0;
         int256 borrowInit = _borrow;
         borrow = _borrow;
-        while (abs(grad2nd) > tolerance && (count == 0 || abs(borrowInit - borrow) > tolerance)) {
+        
+        
+        int y = revenue(0, parameters);
+
+        if (revenue(1, parameters) <= y) {
+            return (0, 1);
+        }
+
+        while (count < maxCount && (count == 0 || _abs((borrowInit - borrow) / borrowInit) > tolerance)) {
             grad = - revenuePrime(borrow, parameters);
             grad2nd = - revenuePrime2(borrow, parameters);
             borrowInit = borrow;
             borrow = borrowInit - grad * BASE_RAY / grad2nd;
             count +=1;
         }
+        console.log("borrow newton");
+        console.logInt(borrow);
+        int x = revenue(borrow, parameters);
+        if (x <= y) {
+            borrow = 0;
+        }
     }
 
-    function computeProfitability(SCalculateBorrow memory parameters) public view {
+    function computeProfitability(SCalculateBorrow memory parameters) public view returns(int256 borrow) {
         console.log("interests");
         console.logInt(calculateInterest(BASE_RAY * 0, parameters));
         console.logInt(calculateInterest(BASE_RAY * 1, parameters));
@@ -275,12 +291,11 @@ contract ComputeProfitability {
         console.logInt(revenuePrime2(BASE_RAY * 3089873, parameters));
         console.logInt(revenuePrime2(BASE_RAY * 28746827, parameters));
 
-        int256 epsilon = 10**(27-12);
-        int256 tolerance = 10**(27-1);
+        int256 tolerance = 10**(27-2); // 1%
         // gradientDescent(BASE_RAY * 100, epsilon, parameters);
-        (int b, int count) = newtonRaphson(168439706352281000000000000000000000, epsilon, tolerance, parameters);
+        (int borrow, int count) = newtonRaphson(parameters.poolManagerAssets, tolerance, parameters);
         console.log("newtonRaphson");
-        console.logInt(b);
+        console.logInt(borrow);
         console.logInt(count);
 
         // uint256 borrow = BASE_RAY * 0;
@@ -295,12 +310,4 @@ contract ComputeProfitability {
         // console.log("revenuePrime %s", revenuePrime(borrow, parameters));
         // console.logInt(revenuePrime2(0, parameters));
     }
-
-    // function test() public {
-    //     console.log("balance before %s", want.balanceOf(address(this)));
-    //     console.log("balance before %s", aToken.balanceOf(address(this)));
-    //     _depositCollateral(99*1e6);
-    //     console.log("balance after %s", want.balanceOf(address(this)));
-    //     console.log("balance after %s", aToken.balanceOf(address(this)));
-    // }
 }
