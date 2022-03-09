@@ -26,10 +26,10 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     ILendingPool private constant _lendingPool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
 
     // Token addresses
-    address private _aave = 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9;
-    IStakedAave private _stkAave = IStakedAave(0x4da27a545c0c5B758a6BA100e3a049001de870f5);
-    address private immutable _weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address private _dai = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
+    address private constant _aave = 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9;
+    IStakedAave private constant _stkAave = IStakedAave(0x4da27a545c0c5B758a6BA100e3a049001de870f5);
+    address private constant _weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address private constant _dai = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
 
     // struct FlashMintLibParams {
     //     address lender;
@@ -93,6 +93,8 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     uint256 private constant _PESSIMISM_FACTOR = 1000;
     uint256 private _DECIMALS;
 
+    ComputeProfitability public immutable computeProfitability;
+
     /// @notice Constructor of the `Strategy`
     /// @param _poolManager Address of the `PoolManager` lending to this strategy
     /// @param _rewards  The token given to reward keepers.
@@ -102,9 +104,12 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         address _poolManager,
         IERC20 _rewards,
         address[] memory governorList,
-        address guardian
+        address guardian,
+        ComputeProfitability _computeProfitability
     ) BaseStrategy(_poolManager, _rewards, governorList, guardian) {
         require(address(aToken) == address(0));
+
+        computeProfitability = _computeProfitability;
 
         // initialize operational state
         maxIterations = 6;
@@ -275,7 +280,6 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         // Assets immediately convertable to want only
         uint256 supply = getCurrentSupply();
         uint256 totalAssets = _balanceOfWant() + supply;
-        console.log("supply: %s / totalAssets: %s", supply, totalAssets);
 
         if (totalDebt > totalAssets) {
             // we have losses
@@ -326,10 +330,6 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
                 _profit = amountRequired - _debtPayment;
             }
         }
-        
-        console.log("*_prepareReturn* supply %s / totalAssets %s", supply, totalAssets);
-        console.log("*_prepareReturn* _profit %s / _loss %s", _profit , _loss );
-        console.log("*_prepareReturn* _debtPayment %s / _debtOutstanding %s", _debtPayment, _debtOutstanding);
     }
 
     function _adjustPosition() internal override {
@@ -341,7 +341,6 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         }
 
         uint256 wantBalance = _balanceOfWant();
-        console.log("*_adjustPosition* wantBalance %s / _debtOutstanding %s", wantBalance, _debtOutstanding);
         // deposit available want as collateral
         if (
             wantBalance > _debtOutstanding &&
@@ -351,11 +350,14 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
             // we update the value
             wantBalance = _balanceOfWant();
         }
-        console.log("wantBalance2 %s", wantBalance);
+
+        _computeOptimalCollatRatio();
+
         // check current position
         uint256 currentCollatRatio = getCurrentCollatRatio();
 
-        console.log("currentCollatRatio %s < targetCollatRatio %s", currentCollatRatio, targetCollatRatio);
+        console.log("TARGET %s", targetCollatRatio);
+        console.log("CURRENT %s", currentCollatRatio);
 
         // Either we need to free some funds OR we want to be max levered
         if (_debtOutstanding > wantBalance) {
@@ -415,25 +417,6 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
             require(_amountNeeded == _liquidatedAmount + _loss); // dev: withdraw safety check
         }
     }
-
-    // harvestTrigger is external, therefore this function cannot exist
-    // function tendTrigger() public view override returns (bool) {
-    //     if (harvestTrigger()) {
-    //         //harvest takes priority
-    //         return false;
-    //     }
-    //     // pull the liquidation liquidationThreshold from aave to be extra safu
-    //     (, uint256 liquidationThreshold) =
-    //         _getProtocolCollatRatios(address(want));
-
-    //     uint256 currentCollatRatio = getCurrentCollatRatio();
-
-    //     if (currentCollatRatio >= liquidationThreshold) {
-    //         return true;
-    //     }
-
-    //     return (liquidationThreshold - currentCollatRatio <= _LIQUIDATION_WARNING_THRESHOLD);
-    // }
 
     function _liquidateAllPositions()
         internal
@@ -920,8 +903,19 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         return (borrow * _COLLATERAL_RATIO_PRECISION) / collatRatio;
     }
 
-    function _getCollatRatioFromBorrowAndDeposit(uint256 deposit, uint256 borrow) internal pure returns(uint256) {
-        return (borrow * _COLLATERAL_RATIO_PRECISION) / deposit;
+    function _computeOptimalCollatRatio() internal returns(uint256) {
+        uint256 borrow = computeMostProfitableBorrow();
+        console.log("BORROW %s", borrow);
+        (uint256 deposits, ) = getCurrentPosition();
+        console.log("DEPOSITS %s", deposits);
+        uint256 _collatRatio = (borrow * _COLLATERAL_RATIO_PRECISION) / deposits;
+        console.log("COLLAT %s", _collatRatio);
+        uint256 _maxCollatRatio = maxCollatRatio;
+        if (_collatRatio > _maxCollatRatio) {
+            _collatRatio = _maxCollatRatio;
+        }
+        targetCollatRatio = _collatRatio;
+        return _collatRatio;
     }
 
     function _getBorrowFromSupply(uint256 supply, uint256 collatRatio)
@@ -960,37 +954,18 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         uint256 yearlyRewardsDebtTokenInUSDC;
         {
             uint256 stkAavePriceToUSDC = oracle.quoteUniswap(1 ether, 60);
-            console.log("prix %s", stkAavePriceToUSDC);
             (uint256 emissionPerSecondAToken,,) = (aToken.getIncentivesController()).assets(address(aToken));
             (uint256 emissionPerSecondDebtToken,,) = (debtToken.getIncentivesController()).assets(address(debtToken));
             uint256 yearlyEmissionsAToken = emissionPerSecondAToken * 60 * 60 * 24 * 365; // BASE: 18
             uint256 yearlyEmissionsDebtToken = emissionPerSecondDebtToken * 60 * 60 * 24 * 365; // BASE: 18
             yearlyRewardsATokenInUSDC = (deposits * yearlyEmissionsAToken * stkAavePriceToUSDC / aToken.totalSupply()); // BASE 24
             yearlyRewardsDebtTokenInUSDC = (borrows * yearlyEmissionsDebtToken * stkAavePriceToUSDC / debtTokenTotalSupply); // BASE 24
-            console.log("yearlyEmissions A %s", yearlyEmissionsAToken);
-            console.log("yearlyEmissions Debt %s", yearlyEmissionsDebtToken);
-            console.log("rewards A %s", yearlyRewardsATokenInUSDC);
-            console.log("rewards Debt %s", yearlyRewardsDebtTokenInUSDC);
         }
 
-        console.log("deposits %s / borrows %s", deposits, borrows);
-        console.log("liquidityRate %s", liquidityRate);
-        console.log("variableBorrowRate %s", variableBorrowRate);
-
-        console.log("%s", liquidityRate * deposits);
-        console.log("%s", variableBorrowRate * borrows);
-        console.log("%s", yearlyRewardsATokenInUSDC + yearlyRewardsDebtTokenInUSDC);
-        console.log("%s", (yearlyRewardsATokenInUSDC + yearlyRewardsDebtTokenInUSDC) * 10**3);
-        // liquidityRate: BASE 27 (ray)
-        // variableBorrowRate BASE 27 (ray)
         uint256 totalRewardsinUSDC = (liquidityRate * deposits) + ((yearlyRewardsATokenInUSDC + yearlyRewardsDebtTokenInUSDC) * 10**(27+6-24)) - (variableBorrowRate * borrows);
-        console.log("totalRewardsinUSDC %s %s", totalRewardsinUSDC, totalRewardsinUSDC / 10**27);
-
-        // console.log("allowance %s", IERC20(address(_stkAave)).allowance(address(this), address(_UNI_V3_ROUTER)));
-        // console.log("balance %s", IERC20(address(_stkAave)).balanceOf(address(this)));
     }
 
-    function computeProfitability(ComputeProfitability _computeProfitability) public view {
+    function computeMostProfitableBorrow() public view returns(uint256 borrow) {
         (, uint256 totalStableDebt, uint256 totalVariableDebt, uint256 liquidityRate, uint256 variableBorrowRate, uint256 stableBorrowRate,,,,) = _protocolDataProvider.getReserveData(address(want));
         (,,,, uint256 reserveFactor,,,,,) = _protocolDataProvider.getReserveConfigurationData(address(want));
         IReserveInterestRateStrategy interestRateStrategyAddress = IReserveInterestRateStrategy((_lendingPool.getReserveData(address(want))).interestRateStrategyAddress);
@@ -1040,13 +1015,8 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         // console.log("%s", emissionPerSecondAToken * 10**9);
         // console.log("%s", emissionPerSecondDebtToken * 10**9);
         
-        int256 _borrow = _computeProfitability.computeProfitability(parameters);
-        console.log("===== BORROW ======");
-        console.logInt(_borrow);
+        int256 _borrow = computeProfitability.computeProfitability(parameters);
         // _borrow is return in BASE ray so we set it in the correct base
-        uint256 borrow = uint256(_borrow) / (10**27 / _DECIMALS);
-        (uint256 deposits, ) = getCurrentPosition();
-        uint256 collatRatio = _getCollatRatioFromBorrowAndDeposit(deposits, borrow);
-        console.log("collat ratio: %s", collatRatio);
+        borrow = uint256(_borrow) / (10**27 / _DECIMALS);
     }
 }

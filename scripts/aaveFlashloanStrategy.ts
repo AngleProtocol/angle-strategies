@@ -2,6 +2,7 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ethers, deployments, network } from 'hardhat';
 import { utils, Wallet, constants, Contract, BigNumber } from 'ethers';
+import { impersonate } from '../test/test-utils';
 import {
   AaveFlashloanStrategy,
   ERC20,
@@ -11,7 +12,30 @@ import {
   Strategy__factory,
   FlashMintLib__factory,
   FlashMintLib,
+  MockLendingPool__factory,
+  MockLendingPool,
 } from '../typechain';
+
+async function randomDeposit(_lendingPool: string, _user: string, _asset: string) {
+  const lendingPool = (await ethers.getContractAt(MockLendingPool__factory.abi, _lendingPool)) as MockLendingPool;
+
+  const min = 100_000;
+  const max = 100_000_000;
+  const amount = utils.parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), 6);
+  await impersonate(_user, async user => {
+    await lendingPool.connect(user).deposit(_asset, amount, _user, 0);
+  });
+}
+async function randomWithdraw(_lendingPool: string, _user: string, _asset: string) {
+  const lendingPool = (await ethers.getContractAt(MockLendingPool__factory.abi, _lendingPool)) as MockLendingPool;
+
+  const min = 100_000;
+  const max = 100_000_000;
+  const amount = utils.parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), 6);
+  await impersonate(_user, async user => {
+    await lendingPool.connect(user).withdraw(_asset, amount, _user);
+  });
+}
 
 async function main() {
   const [deployer, guardian, governor, user] = await ethers.getSigners();
@@ -21,21 +45,21 @@ async function main() {
     '0xe9f183FC656656f1F17af1F2b0dF79b8fF9ad8eD',
   );
 
-  const protocolDataProvider = '0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d';
-  const incentivesController = '0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5';
-  const lendingPool = '0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9';
+  // const protocolDataProvider = '0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d';
+  // const incentivesController = '0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5';
+  // const lendingPool = '0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9';
 
-  // Tokens
+  // // Tokens
   const ANGLE = '0x31429d1856aD1377A8A0079410B297e1a9e214c2';
-  const dai = '0x6B175474E89094C44Da98b954EedeAC495271d0F';
-  const weth = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
-  const aave = '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9';
+  // const dai = '0x6B175474E89094C44Da98b954EedeAC495271d0F';
+  // const weth = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
+  // const aave = '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9';
   const stkAave = '0x4da27a545c0c5B758a6BA100e3a049001de870f5';
 
-  // Routers
-  const uniV2Router = '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D';
-  const uniV3Router = '0xE592427A0AEce92De3Edee1F18E0157C05861564';
-  const sushiV2Router = '0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F';
+  // // Routers
+  // const uniV2Router = '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D';
+  // const uniV3Router = '0xE592427A0AEce92De3Edee1F18E0157C05861564';
+  // const sushiV2Router = '0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F';
 
   const flashMintLib = await (await ethers.getContractFactory('FlashMintLib')).deploy();
 
@@ -61,24 +85,15 @@ async function main() {
     },
   });
 
+  const computeProfitabilityContract = await (await ethers.getContractFactory('ComputeProfitability')).deploy();
+
   const strategy = (await strategyFactory.deploy(
     poolManager.address,
     ANGLE,
     [governor.address],
     guardian.address,
-    protocolDataProvider,
-    incentivesController,
-    lendingPool,
-    [dai, aave, stkAave, weth],
-    [uniV2Router, uniV3Router, sushiV2Router],
-    // { lender: '0x1EB4CF3A948E7D72A198fe073cCb8C7a948cD853', adai: '0x028171bCA77440897B824Ca71D1c56caC55b68A3' },
+    computeProfitabilityContract.address,
   )) as AaveFlashloanStrategy;
-
-  //   const flashMintLib = (await ethers.getContractAt(
-  //     FlashMintLib__factory.abi,
-  //     await strategy.flashMintlib(),
-  //   )) as FlashMintLib;
-  //   console.log('flashMintLib', flashMintLib.address, await flashMintLib.LENDER());
 
   // TO DELETE
   // await network.provider.request({
@@ -94,8 +109,6 @@ async function main() {
   //   method: 'hardhat_stopImpersonatingAccount',
   //   params: ['0x7E0188b0312A26ffE64B7e43a7a91d430fB20673'],
   // });
-
-  const computeProfitabilityContract = await (await ethers.getContractFactory('ComputeProfitability')).deploy();
 
   const oldStrategy = (await ethers.getContractAt(
     Strategy__factory.abi,
@@ -136,7 +149,7 @@ async function main() {
   ]);
   console.log('balance stkAave', await stkAaveContract.balanceOf(strategy.address));
 
-  await strategy.computeProfitability(computeProfitabilityContract.address);
+  await strategy.computeProfitability();
   // await strategy.estimatedAPR(oracle.address);
 }
 

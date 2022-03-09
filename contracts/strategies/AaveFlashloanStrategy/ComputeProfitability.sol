@@ -2,8 +2,6 @@
 
 pragma solidity 0.8.7;
 
-import "hardhat/console.sol";
-
 contract ComputeProfitability {
     struct SCalculateBorrow {
         int256 slope1;
@@ -171,22 +169,6 @@ contract ComputeProfitability {
         return x >= 0 ? x : -x;
     }
 
-    // function computeAlpha(int256 count) private view returns(int256) {
-    //     return 0.5 * 10**10;
-    // }
-
-    // function gradientDescent(int256 _borrow, int256 tolerance, SCalculateBorrow memory parameters) public view returns(int256 borrow, int256 count) {
-    //     int256 grad = tolerance + 1;
-    //     count = 0;
-    //     borrow = _borrow;
-    //     while (abs(grad) > tolerance) {
-    //         grad = - revenuePrime(borrow, parameters);
-    //         int256 alpha = computeAlpha(count);
-    //         borrow = borrow - alpha * grad;
-    //         count +=1;
-    //     }
-    // }
-
     function newtonRaphson(int256 _borrow, int256 tolerance, SCalculateBorrow memory parameters) public view returns(int256 borrow, int256 count) {
         int256 grad;
         int256 grad2nd;
@@ -210,8 +192,7 @@ contract ComputeProfitability {
             borrow = borrowInit - grad * BASE_RAY / grad2nd;
             count +=1;
         }
-        console.log("borrow newton");
-        console.logInt(borrow);
+
         int x = revenue(borrow, parameters);
         if (x <= y) {
             borrow = 0;
@@ -219,95 +200,7 @@ contract ComputeProfitability {
     }
 
     function computeProfitability(SCalculateBorrow memory parameters) public view returns(int256 borrow) {
-        console.log("interests");
-        console.logInt(calculateInterest(BASE_RAY * 0, parameters));
-        console.logInt(calculateInterest(BASE_RAY * 1, parameters));
-        console.logInt(calculateInterest(BASE_RAY * 5, parameters));
-        console.logInt(calculateInterest(BASE_RAY * 10, parameters));
-        console.logInt(calculateInterest(BASE_RAY * 100, parameters));
-        console.logInt(calculateInterest(BASE_RAY * 1000, parameters));
-        console.logInt(calculateInterest(BASE_RAY * 58749, parameters));
-        console.logInt(calculateInterest(BASE_RAY * 100000, parameters));
-        console.logInt(calculateInterest(BASE_RAY * 3089873, parameters));
-        console.logInt(calculateInterest(BASE_RAY * 28746827, parameters));
-
-        console.log("interests prime");
-        console.logInt(calculateInterestPrime(BASE_RAY * 0, parameters));
-        console.logInt(calculateInterestPrime(BASE_RAY * 1, parameters));
-        console.logInt(calculateInterestPrime(BASE_RAY * 5, parameters));
-        console.logInt(calculateInterestPrime(BASE_RAY * 10, parameters));
-        console.logInt(calculateInterestPrime(BASE_RAY * 100, parameters));
-        console.logInt(calculateInterestPrime(BASE_RAY * 1000, parameters));
-        console.logInt(calculateInterestPrime(BASE_RAY * 58749, parameters));
-        console.logInt(calculateInterestPrime(BASE_RAY * 100000, parameters));
-        console.logInt(calculateInterestPrime(BASE_RAY * 3089873, parameters));
-        console.logInt(calculateInterestPrime(BASE_RAY * 28746827, parameters));
-        
-        console.log("interests prime 2");
-        console.logInt(calculateInterestPrime2(BASE_RAY * 0, parameters));
-        console.logInt(calculateInterestPrime2(BASE_RAY * 1, parameters));
-        console.logInt(calculateInterestPrime2(BASE_RAY * 5, parameters));
-        console.logInt(calculateInterestPrime2(BASE_RAY * 10, parameters));
-        console.logInt(calculateInterestPrime2(BASE_RAY * 100, parameters));
-        console.logInt(calculateInterestPrime2(BASE_RAY * 1000, parameters));
-        console.logInt(calculateInterestPrime2(BASE_RAY * 58749, parameters));
-        console.logInt(calculateInterestPrime2(BASE_RAY * 100000, parameters));
-        console.logInt(calculateInterestPrime2(BASE_RAY * 3089873, parameters));
-        console.logInt(calculateInterestPrime2(BASE_RAY * 28746827, parameters));
-
-        console.log("revenue");
-        console.logInt(revenue(BASE_RAY * 0, parameters));
-        console.logInt(revenue(BASE_RAY * 1, parameters));
-        console.logInt(revenue(BASE_RAY * 5, parameters));
-        console.logInt(revenue(BASE_RAY * 10, parameters));
-        console.logInt(revenue(BASE_RAY * 100, parameters));
-        console.logInt(revenue(BASE_RAY * 1000, parameters));
-        console.logInt(revenue(BASE_RAY * 58749, parameters));
-        console.logInt(revenue(BASE_RAY * 100000, parameters));
-        console.logInt(revenue(BASE_RAY * 3089873, parameters));
-        console.logInt(revenue(BASE_RAY * 28746827, parameters));
-
-        console.log("revenuePrime");
-        console.logInt(revenuePrime(BASE_RAY * 0, parameters));
-        console.logInt(revenuePrime(BASE_RAY * 1, parameters));
-        console.logInt(revenuePrime(BASE_RAY * 5, parameters));
-        console.logInt(revenuePrime(BASE_RAY * 10, parameters));
-        console.logInt(revenuePrime(BASE_RAY * 100, parameters));
-        console.logInt(revenuePrime(BASE_RAY * 1000, parameters));
-        console.logInt(revenuePrime(BASE_RAY * 58749, parameters));
-        console.logInt(revenuePrime(BASE_RAY * 100000, parameters));
-        console.logInt(revenuePrime(BASE_RAY * 3089873, parameters));
-        console.logInt(revenuePrime(BASE_RAY * 28746827, parameters));
-
-        console.log("revenue prime 2");
-        console.logInt(revenuePrime2(BASE_RAY * 0, parameters));
-        console.logInt(revenuePrime2(BASE_RAY * 1, parameters));
-        console.logInt(revenuePrime2(BASE_RAY * 5, parameters));
-        console.logInt(revenuePrime2(BASE_RAY * 10, parameters));
-        console.logInt(revenuePrime2(BASE_RAY * 100, parameters));
-        console.logInt(revenuePrime2(BASE_RAY * 1000, parameters));
-        console.logInt(revenuePrime2(BASE_RAY * 58749, parameters));
-        console.logInt(revenuePrime2(BASE_RAY * 100000, parameters));
-        console.logInt(revenuePrime2(BASE_RAY * 3089873, parameters));
-        console.logInt(revenuePrime2(BASE_RAY * 28746827, parameters));
-
         int256 tolerance = 10**(27-2); // 1%
-        // gradientDescent(BASE_RAY * 100, epsilon, parameters);
-        (int borrow, int count) = newtonRaphson(parameters.poolManagerAssets, tolerance, parameters);
-        console.log("newtonRaphson");
-        console.logInt(borrow);
-        console.logInt(count);
-
-        // uint256 borrow = BASE_RAY * 0;
-        // computeInterestRate
-        // uint256 interests = calculateInterest(borrow, parameters);
-        // uint256 interests2 = calculateInterestPrime(borrow, parameters);
-        // uint256 interests3 = calculateInterestPrime2(borrow, parameters);
-        // console.log("interests %s %s", interests, variableBorrowRate);
-        // console.log("interests2 %s", interests2);
-        // console.log("interests3 %s", interests3);
-        // console.log("revenue %s", revenue(borrow, parameters));
-        // console.log("revenuePrime %s", revenuePrime(borrow, parameters));
-        // console.logInt(revenuePrime2(0, parameters));
+        (borrow, ) = newtonRaphson(parameters.poolManagerAssets, tolerance, parameters);
     }
 }
