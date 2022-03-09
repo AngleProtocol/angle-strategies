@@ -178,10 +178,9 @@ contract ComputeProfitability {
         int256 borrowInit = _borrow;
         borrow = _borrow;
         
-        
         int y = revenue(0, parameters);
 
-        if (revenue(1, parameters) <= y) {
+        if (revenue(BASE_RAY, parameters) <= y) {
             return (0, 1);
         }
 
