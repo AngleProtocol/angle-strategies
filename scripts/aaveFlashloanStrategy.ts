@@ -93,6 +93,7 @@ async function main() {
     [governor.address],
     guardian.address,
     computeProfitabilityContract.address,
+    oracle.address,
   )) as AaveFlashloanStrategy;
 
   // TO DELETE
@@ -149,8 +150,9 @@ async function main() {
   ]);
   console.log('balance stkAave', await stkAaveContract.balanceOf(strategy.address));
 
-  await strategy.computeProfitability();
-  // await strategy.estimatedAPR(oracle.address);
+  console.log('done');
+  // await strategy.computeProfitability();
+  // await strategy.estimatedAPR();
 }
 
 main();

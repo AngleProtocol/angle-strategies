@@ -94,6 +94,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     uint256 private _DECIMALS;
 
     ComputeProfitability public immutable computeProfitability;
+    UniswapOracle public immutable oracle;
 
     /// @notice Constructor of the `Strategy`
     /// @param _poolManager Address of the `PoolManager` lending to this strategy
@@ -105,11 +106,13 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         IERC20 _rewards,
         address[] memory governorList,
         address guardian,
-        ComputeProfitability _computeProfitability
+        ComputeProfitability _computeProfitability,
+        UniswapOracle _oracle
     ) BaseStrategy(_poolManager, _rewards, governorList, guardian) {
         require(address(aToken) == address(0));
 
         computeProfitability = _computeProfitability;
+        oracle = _oracle;
 
         // initialize operational state
         maxIterations = 6;
@@ -947,7 +950,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         _revokeRole(GUARDIAN_ROLE, guardian);
     }
 
-    function estimatedAPR(UniswapOracle oracle) public view {
+    function estimatedAPR() public view {
         (,,uint256 debtTokenTotalSupply, uint256 liquidityRate, uint256 variableBorrowRate,,,,,) = _protocolDataProvider.getReserveData(address(want));
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
         uint256 yearlyRewardsATokenInUSDC;
@@ -973,6 +976,8 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         (uint256 emissionPerSecondAToken,,) = (aToken.getIncentivesController()).assets(address(aToken));
         (uint256 emissionPerSecondDebtToken,,) = (debtToken.getIncentivesController()).assets(address(debtToken));
 
+        uint256 stkAavePriceToUSDC = oracle.quoteUniswap(1 ether, 60);
+
         ComputeProfitability.SCalculateBorrow memory parameters = ComputeProfitability.SCalculateBorrow({
             slope1: int256(interestRateStrategyAddress.variableRateSlope1()), // ray
             slope2: int256(interestRateStrategyAddress.variableRateSlope2()), // ray
@@ -983,9 +988,9 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
             totalDeposits: int256(aToken.totalSupply() * (10**27 / _DECIMALS)), // base 6 to ray
             reserveFactor: int256(reserveFactor * 10**23), // ray / reserveFactor: base 4
             stableBorrowRate: int256(stableBorrowRate), // ray
-            rewardDeposit: int256(emissionPerSecondAToken * 10**9), // ray / emissionPerSecondAToken: base 18 (stkAave)
-            rewardBorrow: int256(emissionPerSecondDebtToken * 10**9), // ray / emissionPerSecondDebtToken: base 18 (stkAave)
-             poolManagerAssets: int256(poolManager.getTotalAsset() * (10**27 / _DECIMALS)) // base 6 to ray
+            rewardDeposit: int256(emissionPerSecondAToken * 10**9 * 60 * 60 * 24 * 365 * stkAavePriceToUSDC / 10**6), // ray / emissionPerSecondAToken: base 18 (stkAave)
+            rewardBorrow: int256(emissionPerSecondDebtToken * 10**9 * 60 * 60 * 24 * 365 * stkAavePriceToUSDC / 10**6), // ray / emissionPerSecondDebtToken: base 18 (stkAave)
+            poolManagerAssets: int256(poolManager.getTotalAsset() * (10**27 / _DECIMALS)) // base 6 to ray
         });
 
         // ComputeProfitability.SCalculateBorrow memory parameters = ComputeProfitability.SCalculateBorrow({
@@ -1002,6 +1007,19 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         //     rewardBorrow: 100*3806517547021920000000000 * 60 * 60 * 24 * 365,
         //     poolManagerAssets: 168439706352281000000000000000000000
         // });
+        
+        console.log("slope1: %s", interestRateStrategyAddress.variableRateSlope1());
+        console.log("slope2: %s", interestRateStrategyAddress.variableRateSlope2());
+        console.log("r0: %s", interestRateStrategyAddress.baseVariableBorrowRate());
+        console.log("totalStableDebt: %s", totalStableDebt * (10**27 / _DECIMALS));
+        console.log("totalVariableDebt: %s", totalVariableDebt * (10**27 / _DECIMALS));
+        console.log("uOptimal: %s", interestRateStrategyAddress.OPTIMAL_UTILIZATION_RATE());
+        console.log("totalDeposits: %s", aToken.totalSupply() * (10**27 / _DECIMALS));
+        console.log("reserveFactor: %s", reserveFactor * 10**23);
+        console.log("stableBorrowRate: %s", stableBorrowRate);
+        console.log("rewardDeposit: %s", emissionPerSecondAToken * 10**9 * 60 * 60 * 24 * 365 * stkAavePriceToUSDC / 10**6);
+        console.log("rewardBorrow: %s", emissionPerSecondDebtToken * 10**9 * 60 * 60 * 24 * 365 * stkAavePriceToUSDC / 10**6);
+        console.log("poolManagerAssets: %s", poolManager.getTotalAsset() * (10**27 / _DECIMALS));
         
         // console.log("%s", interestRateStrategyAddress.variableRateSlope1());
         // console.log("%s", interestRateStrategyAddress.variableRateSlope2());
