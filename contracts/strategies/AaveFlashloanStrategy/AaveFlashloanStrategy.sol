@@ -7,11 +7,13 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+
 import "./AaveLibraries.sol";
 import "./AaveInterfaces.sol";
 import "./UniswapInterfaces.sol";
 import "../BaseStrategy.sol";
-import "./UniswapOracle.sol";
 import "./ComputeProfitability.sol";
 
 import "hardhat/console.sol";
@@ -31,12 +33,6 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     IStakedAave private constant _stkAave = IStakedAave(0x4da27a545c0c5B758a6BA100e3a049001de870f5);
     address private constant _weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address private constant _dai = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-
-    // struct FlashMintLibParams {
-    //     address lender;
-    //     address adai;
-    // }
-    // FlashMintLib public flashMintlib;
 
     // Supply and borrow tokens
     IAToken public aToken;
@@ -84,9 +80,8 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
 
     bool private _alreadyAdjusted; // Signal whether a position adjust was done in prepareReturn
 
-    // TODO: get a referral code from AAVE
-    // https://docs.aave.com/developers/v/1.0/integrating-aave/referral-program
-    uint16 private constant _referral = 7; // Yearn's aave referral code
+    // TODO: get a referral code from AAVE https://docs.aave.com/developers/v/1.0/integrating-aave/referral-program
+    uint16 private constant _referral = 0;
 
     uint256 private constant _MAX_BPS = 1e4;
     uint256 private constant _BPS_WAD_RATIO = 1e14;
@@ -95,7 +90,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     uint256 private _DECIMALS;
 
     ComputeProfitability public immutable computeProfitability;
-    UniswapOracle public immutable oracle;
+    AggregatorV3Interface public constant chainlinkOracle = AggregatorV3Interface(0x547a514d5e3769680Ce22B2361c10Ea13619e8a9);
 
     /// @notice Constructor of the `Strategy`
     /// @param _poolManager Address of the `PoolManager` lending to this strategy
@@ -107,13 +102,11 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         IERC20 _rewards,
         address[] memory governorList,
         address guardian,
-        ComputeProfitability _computeProfitability,
-        UniswapOracle _oracle
+        ComputeProfitability _computeProfitability
     ) BaseStrategy(_poolManager, _rewards, governorList, guardian) {
         require(address(aToken) == address(0));
 
         computeProfitability = _computeProfitability;
-        oracle = _oracle;
 
         // initialize operational state
         maxIterations = 6;
@@ -828,6 +821,12 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         }
     }
 
+    // in amount: base of AAVE, out: base want
+    function _AAVEToWant(uint256 amount) internal view returns(uint256) {
+        (, int256 stkAavePriceUSD,,,) = chainlinkOracle.latestRoundData();
+        return uint256(stkAavePriceUSD) * amount * _DECIMALS / 1e26;
+    }
+
     function _sellAAVEForWant(uint256 amountIn, uint256 minOut) internal {
         if (amountIn == 0) {
             return;
@@ -954,7 +953,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         uint256 yearlyRewardsATokenInUSDC;
         uint256 yearlyRewardsDebtTokenInUSDC;
         {
-            uint256 stkAavePriceToUSDC = oracle.quoteUniswap(1 ether, 60);
+            uint256 stkAavePriceToUSDC = _AAVEToWant(1 ether);
             (uint256 emissionPerSecondAToken,,) = (aToken.getIncentivesController()).assets(address(aToken));
             (uint256 emissionPerSecondDebtToken,,) = (debtToken.getIncentivesController()).assets(address(debtToken));
             uint256 yearlyEmissionsAToken = emissionPerSecondAToken * 60 * 60 * 24 * 365; // BASE: 18
@@ -974,8 +973,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         (uint256 emissionPerSecondAToken,,) = _incentiveController.assets(address(aToken));
         (uint256 emissionPerSecondDebtToken,,) = _incentiveController.assets(address(debtToken));
 
-        uint256 stkAavePriceToUSDC = oracle.quoteUniswap(1 ether, 60);
-        console.log("stkAavePriceToUSDC %s", stkAavePriceToUSDC / 10**6);
+        uint256 stkAavePriceToUSDC = _AAVEToWant(1 ether);
 
         ComputeProfitability.SCalculateBorrow memory parameters = ComputeProfitability.SCalculateBorrow({
             slope1: int256(interestRateStrategyAddress.variableRateSlope1()), // ray

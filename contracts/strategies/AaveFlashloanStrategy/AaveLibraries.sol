@@ -74,8 +74,7 @@ library FlashMintLib {
 
     bytes32 public constant CALLBACK_SUCCESS = keccak256("ERC3156FlashBorrower.onFlashLoan");
 
-    // TODO: get our own referral code
-    uint16 private constant _referral = 7; // Yearn's aave referral code
+    uint16 private constant _referral = 0; // TODO: get our own referral code
 
     function doFlashMint(
         bool deficit,
