@@ -12,12 +12,12 @@ import {
   Strategy__factory,
   FlashMintLib__factory,
   FlashMintLib,
-  MockLendingPool__factory,
-  MockLendingPool,
+  ILendingPool__factory,
+  ILendingPool,
 } from '../typechain';
 
 async function randomDeposit(_lendingPool: string, _user: string, _asset: string) {
-  const lendingPool = (await ethers.getContractAt(MockLendingPool__factory.abi, _lendingPool)) as MockLendingPool;
+  const lendingPool = (await ethers.getContractAt(ILendingPool__factory.abi, _lendingPool)) as ILendingPool;
 
   const min = 100_000;
   const max = 100_000_000;
@@ -27,7 +27,7 @@ async function randomDeposit(_lendingPool: string, _user: string, _asset: string
   });
 }
 async function randomWithdraw(_lendingPool: string, _user: string, _asset: string) {
-  const lendingPool = (await ethers.getContractAt(MockLendingPool__factory.abi, _lendingPool)) as MockLendingPool;
+  const lendingPool = (await ethers.getContractAt(ILendingPool__factory.abi, _lendingPool)) as ILendingPool;
 
   const min = 100_000;
   const max = 100_000_000;
