@@ -2,6 +2,10 @@
 
 pragma solidity 0.8.7;
 
+import { IAToken, IProtocolDataProvider, IProtocolDataProvider, ILendingPool, IPriceOracle, IOptionalERC20 } from "./AaveInterfaces.sol";
+import "@openzeppelin/contracts/interfaces/IERC3156FlashLender.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 library DataTypes {
     // refer to the whitepaper, section 1.1 basic concepts for a formal description of these properties.
     struct ReserveData {
@@ -50,7 +54,6 @@ library DataTypes {
 }
 
 library FlashMintLib {
-    using SafeMath for uint256;
     event Leverage(
         uint256 amountRequested,
         uint256 amountUsed,
@@ -61,21 +64,17 @@ library FlashMintLib {
     );
 
     address public constant LENDER = 0x1EB4CF3A948E7D72A198fe073cCb8C7a948cD853;
-    uint256 private constant DAI_DECIMALS = 1e18;
-    uint256 private constant COLLAT_RATIO_PRECISION = 1 ether;
-    address private constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address private constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-    IAToken public constant ADAI =
-        IAToken(0x028171bCA77440897B824Ca71D1c56caC55b68A3);
-    IProtocolDataProvider private constant protocolDataProvider =
-        IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
-    ILendingPool private constant lendingPool =
-        ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
+    uint256 private constant _DAI_DECIMALS = 1e18;
+    uint256 private constant _COLLAT_RATIO_PRECISION = 1 ether;
+    address private constant _WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address private constant _DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
+    IAToken public constant ADAI = IAToken(0x028171bCA77440897B824Ca71D1c56caC55b68A3);
+    IProtocolDataProvider private constant _protocolDataProvider = IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
+    ILendingPool private constant _lendingPool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
 
-    bytes32 public constant CALLBACK_SUCCESS =
-        keccak256("ERC3156FlashBorrower.onFlashLoan");
+    bytes32 public constant CALLBACK_SUCCESS = keccak256("ERC3156FlashBorrower.onFlashLoan");
 
-    uint16 private constant referral = 7; // Yearn's aave referral code
+    uint16 private constant _referral = 0; // TODO: get our own referral code
 
     function doFlashMint(
         bool deficit,
@@ -88,31 +87,24 @@ library FlashMintLib {
             return 0;
         }
         amount = amountDesired;
-        address dai = DAI;
+        address dai = _DAI;
 
         // calculate amount of dai we need
         uint256 requiredDAI;
         {
-            requiredDAI = _toDAI(amount, token).mul(COLLAT_RATIO_PRECISION).div(
-                collatRatioDAI
-            );
+            requiredDAI = (toDAI(amount, token) * _COLLAT_RATIO_PRECISION) / collatRatioDAI;
 
             uint256 requiredDAIToCloseLTVGap = 0;
             if (depositToCloseLTVGap > 0) {
-                requiredDAIToCloseLTVGap = _toDAI(depositToCloseLTVGap, token);
-                requiredDAI = requiredDAI.add(requiredDAIToCloseLTVGap);
+                requiredDAIToCloseLTVGap = toDAI(depositToCloseLTVGap, token);
+                requiredDAI = requiredDAI + requiredDAIToCloseLTVGap;
             }
 
             uint256 _maxLiquidity = maxLiquidity();
             if (requiredDAI > _maxLiquidity) {
                 requiredDAI = _maxLiquidity;
                 // NOTE: if we cap amountDAI, we reduce amountToken we are taking too
-                amount = _fromDAI(
-                    requiredDAI.sub(requiredDAIToCloseLTVGap),
-                    token
-                )
-                    .mul(collatRatioDAI)
-                    .div(COLLAT_RATIO_PRECISION);
+                amount = (fromDAI(requiredDAI - requiredDAIToCloseLTVGap, token) * collatRatioDAI) / _COLLAT_RATIO_PRECISION;
             }
         }
 
@@ -151,18 +143,18 @@ library FlashMintLib {
         uint256 amountFlashmint,
         address want
     ) public returns (bytes32) {
-        address dai = DAI;
+        address dai = _DAI;
         bool isDai = (want == dai);
 
-        ILendingPool lp = lendingPool;
+        ILendingPool lp = _lendingPool;
 
         if (isDai) {
             if (deficit) {
                 lp.deposit(
                     dai,
-                    amountFlashmint.sub(amount),
+                    amountFlashmint - amount,
                     address(this),
-                    referral
+                    _referral
                 );
                 lp.repay(
                     dai,
@@ -176,14 +168,14 @@ library FlashMintLib {
                     dai,
                     IERC20(dai).balanceOf(address(this)),
                     address(this),
-                    referral
+                    _referral
                 );
-                lp.borrow(dai, amount, 2, referral, address(this));
-                lp.withdraw(dai, amountFlashmint.sub(amount), address(this));
+                lp.borrow(dai, amount, 2, _referral, address(this));
+                lp.withdraw(dai, amountFlashmint - amount, address(this));
             }
         } else {
             // 1. Deposit DAI in Aave as collateral
-            lp.deposit(dai, amountFlashmint, address(this), referral);
+            lp.deposit(dai, amountFlashmint, address(this), _referral);
 
             if (deficit) {
                 // 2a. if in deficit withdraw amount and repay it
@@ -196,12 +188,12 @@ library FlashMintLib {
                 );
             } else {
                 // 2b. if levering up borrow and deposit
-                lp.borrow(want, amount, 2, referral, address(this));
+                lp.borrow(want, amount, 2, _referral, address(this));
                 lp.deposit(
                     want,
                     IERC20(want).balanceOf(address(this)),
                     address(this),
-                    referral
+                    _referral
                 );
             }
             // 3. Withdraw DAI
@@ -211,77 +203,65 @@ library FlashMintLib {
         return CALLBACK_SUCCESS;
     }
 
-    function _priceOracle() internal view returns (IPriceOracle) {
+    function priceOracle() internal view returns (IPriceOracle) {
         return
             IPriceOracle(
-                protocolDataProvider.ADDRESSES_PROVIDER().getPriceOracle()
+                _protocolDataProvider.ADDRESSES_PROVIDER().getPriceOracle()
             );
     }
 
-    function _toDAI(uint256 _amount, address asset)
+    function toDAI(uint256 _amount, address asset)
         internal
         view
         returns (uint256)
     {
-        address dai = DAI;
+        address dai = _DAI;
         if (
             _amount == 0 || _amount == type(uint256).max || asset == dai // 1:1 change
         ) {
             return _amount;
         }
 
-        if (asset == WETH) {
-            return
-                _amount
-                    .mul(uint256(10)**uint256(IOptionalERC20(dai).decimals()))
-                    .div(_priceOracle().getAssetPrice(dai));
+        if (asset == _WETH) {
+            return (_amount * (uint256(10)**uint256(IOptionalERC20(dai).decimals()))) / priceOracle().getAssetPrice(dai);
         }
 
         address[] memory tokens = new address[](2);
         tokens[0] = asset;
         tokens[1] = dai;
-        uint256[] memory prices = _priceOracle().getAssetsPrices(tokens);
+        uint256[] memory prices = priceOracle().getAssetsPrices(tokens);
 
-        uint256 ethPrice =
-            _amount.mul(prices[0]).div(
-                uint256(10)**uint256(IOptionalERC20(asset).decimals())
-            );
-        return ethPrice.mul(DAI_DECIMALS).div(prices[1]);
+        uint256 ethPrice = (_amount * prices[0]) / (uint256(10)**uint256(IOptionalERC20(asset).decimals()));
+        return (ethPrice * _DAI_DECIMALS) / prices[1];
     }
 
-    function _fromDAI(uint256 _amount, address asset)
+    function fromDAI(uint256 _amount, address asset)
         internal
         view
         returns (uint256)
     {
-        address dai = DAI;
+        address dai = _DAI;
         if (
             _amount == 0 || _amount == type(uint256).max || asset == dai // 1:1 change
         ) {
             return _amount;
         }
 
-        if (asset == WETH) {
-            return
-                _amount.mul(_priceOracle().getAssetPrice(dai)).div(
-                    uint256(10)**uint256(IOptionalERC20(dai).decimals())
-                );
+        if (asset == _WETH) {
+            return (_amount * priceOracle().getAssetPrice(dai)) / (uint256(10)**uint256(IOptionalERC20(dai).decimals()));
         }
 
         address[] memory tokens = new address[](2);
         tokens[0] = asset;
         tokens[1] = dai;
-        uint256[] memory prices = _priceOracle().getAssetsPrices(tokens);
+        uint256[] memory prices = priceOracle().getAssetsPrices(tokens);
 
-        uint256 ethPrice = _amount.mul(prices[1]).div(DAI_DECIMALS);
+        uint256 ethPrice = (_amount * prices[1]) / _DAI_DECIMALS;
 
-        return
-            ethPrice
-                .mul(uint256(10)**uint256(IOptionalERC20(asset).decimals()))
-                .div(prices[0]);
+        return (ethPrice * (uint256(10)**uint256(IOptionalERC20(asset).decimals()))) / prices[0];
     }
 
     function maxLiquidity() public view returns (uint256) {
-        return IERC3156FlashLender(LENDER).maxFlashLoan(DAI);
+        return IERC3156FlashLender(LENDER).maxFlashLoan(_DAI);
     }
 }
