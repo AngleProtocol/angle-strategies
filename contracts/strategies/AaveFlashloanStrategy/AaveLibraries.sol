@@ -112,37 +112,20 @@ library FlashMintLib {
         uint256 _fee = IERC3156FlashLender(LENDER).flashFee(dai, requiredDAI);
         // Check that fees have not been increased without us knowing
         require(_fee == 0);
-        uint256 _allowance =
-            IERC20(dai).allowance(address(this), address(LENDER));
+        uint256 _allowance = IERC20(dai).allowance(address(this), address(LENDER));
         if (_allowance < requiredDAI) {
             IERC20(dai).approve(address(LENDER), 0);
             IERC20(dai).approve(address(LENDER), type(uint256).max);
         }
-        IERC3156FlashLender(LENDER).flashLoan(
-            IERC3156FlashBorrower(address(this)),
-            dai,
-            requiredDAI,
-            data
-        );
+        
+        IERC3156FlashLender(LENDER).flashLoan(IERC3156FlashBorrower(address(this)), dai, requiredDAI, data);
 
-        emit Leverage(
-            amountDesired,
-            amount,
-            requiredDAI,
-            depositToCloseLTVGap,
-            deficit,
-            LENDER
-        );
+        emit Leverage(amountDesired, amount, requiredDAI, depositToCloseLTVGap, deficit, LENDER);
 
         return amount; // we need to return the amount of Token we have changed our position in
     }
 
-    function loanLogic(
-        bool deficit,
-        uint256 amount,
-        uint256 amountFlashmint,
-        address want
-    ) public returns (bytes32) {
+    function loanLogic(bool deficit, uint256 amount, uint256 amountFlashmint, address want) public returns (bytes32) {
         address dai = _DAI;
         bool isDai = (want == dai);
 
@@ -204,21 +187,12 @@ library FlashMintLib {
     }
 
     function priceOracle() internal view returns (IPriceOracle) {
-        return
-            IPriceOracle(
-                _protocolDataProvider.ADDRESSES_PROVIDER().getPriceOracle()
-            );
+        return IPriceOracle(_protocolDataProvider.ADDRESSES_PROVIDER().getPriceOracle());
     }
 
-    function toDAI(uint256 _amount, address asset)
-        internal
-        view
-        returns (uint256)
-    {
+    function toDAI(uint256 _amount, address asset) internal view returns (uint256) {
         address dai = _DAI;
-        if (
-            _amount == 0 || _amount == type(uint256).max || asset == dai // 1:1 change
-        ) {
+        if (_amount == 0 || _amount == type(uint256).max || asset == dai) {
             return _amount;
         }
 
@@ -235,15 +209,9 @@ library FlashMintLib {
         return (ethPrice * _DAI_DECIMALS) / prices[1];
     }
 
-    function fromDAI(uint256 _amount, address asset)
-        internal
-        view
-        returns (uint256)
-    {
+    function fromDAI(uint256 _amount, address asset) internal view returns (uint256) {
         address dai = _DAI;
-        if (
-            _amount == 0 || _amount == type(uint256).max || asset == dai // 1:1 change
-        ) {
+        if (_amount == 0 || _amount == type(uint256).max || asset == dai) {
             return _amount;
         }
 

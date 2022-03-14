@@ -99,6 +99,10 @@ contract MockPoolManager is AccessControl {
         return token.balanceOf(address(this));
     }
 
+    function getTotalAsset() external view returns (uint256) {
+        return _getTotalAsset();
+    }
+
     function _getTotalAsset() internal view returns (uint256) {
         return _getBalance() + totalDebt;
     }

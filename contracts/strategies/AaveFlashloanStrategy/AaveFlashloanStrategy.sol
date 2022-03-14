@@ -183,10 +183,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         daiBorrowCollatRatio = _daiBorrowCollatRatio;
     }
 
-    function setIsFlashMintActive(bool _isFlashMintActive)
-        external
-        onlyRole(GUARDIAN_ROLE)
-    {
+    function setIsFlashMintActive(bool _isFlashMintActive) external onlyRole(GUARDIAN_ROLE) {
         isFlashMintActive = _isFlashMintActive;
     }
 
@@ -194,11 +191,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         withdrawCheck = _withdrawCheck;
     }
 
-    function setMinsAndMaxs(
-        uint256 _minWant,
-        uint256 _minRatio,
-        uint8 _maxIterations
-    ) external onlyRole(GUARDIAN_ROLE) {
+    function setMinsAndMaxs(uint256 _minWant, uint256 _minRatio, uint8 _maxIterations) external onlyRole(GUARDIAN_ROLE) {
         require(_minRatio < maxBorrowCollatRatio);
         require(_maxIterations > 0 && _maxIterations < 16);
         minWant = _minWant;
@@ -218,8 +211,8 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     ) external onlyRole(GUARDIAN_ROLE) {
         require(
             _swapRouter == SwapRouter.UniV2 ||
-                _swapRouter == SwapRouter.SushiV2 ||
-                _swapRouter == SwapRouter.UniV3
+            _swapRouter == SwapRouter.SushiV2 ||
+            _swapRouter == SwapRouter.UniV3
         );
         require(_maxStkAavePriceImpactBps <= _MAX_BPS);
         swapRouter = _swapRouter;
@@ -248,26 +241,20 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         uint256 aaveBalance = _balanceOfAave();
         uint256 stkAaveBalance = _balanceOfStkAave();
 
-        uint256 pendingRewards =
-            _incentivesController.getRewardsBalance(
-                _getAaveAssets(),
-                address(this)
-            );
+        uint256 pendingRewards = _incentivesController.getRewardsBalance(_getAaveAssets(), address(this));
         uint256 stkAaveDiscountFactor = _MAX_BPS - maxStkAavePriceImpactBps;
         uint256 combinedStkAave = ((pendingRewards + stkAaveBalance) * stkAaveDiscountFactor) / _MAX_BPS;
 
         return _tokenToWant(_aave, aaveBalance + combinedStkAave);
     }
 
-    function _prepareReturn(uint256 _debtOutstanding)
-        internal
-        override
-        returns (
-            uint256 _profit,
-            uint256 _loss,
-            uint256 _debtPayment
-        )
-    {
+    /// @notice Frees up profit plus `_debtOutstanding`.
+    /// @param _debtOutstanding Amount to withdraw
+    /// @return _profit Profit freed by the call
+    /// @return _loss Loss discovered by the call
+    /// @return _debtPayment Amount freed to reimburse the debt
+    /// @dev If `_debtOutstanding` is more than we can free we get as much as possible.
+    function _prepareReturn(uint256 _debtOutstanding) internal override returns (uint256 _profit, uint256 _loss, uint256 _debtPayment) {
         // claim & sell rewards
         _claimAndSellRewards();
 
@@ -329,6 +316,8 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         }
     }
 
+    /// @notice Function called by harvest() to adjust the position
+    /// @dev It computes the optimal collateral ratio and adjusts deposits/borrows accordingly
     function _adjustPosition() internal override {
         uint256 _debtOutstanding = poolManager.debtOutstanding();
 
@@ -352,9 +341,6 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
 
         // check current position
         uint256 currentCollatRatio = getCurrentCollatRatio();
-
-        console.log("TARGET %s", targetCollatRatio);
-        console.log("CURRENT %s", currentCollatRatio);
 
         // Either we need to free some funds OR we want to be max levered
         if (_debtOutstanding > wantBalance) {
@@ -382,11 +368,11 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         }
     }
 
-    function _liquidatePosition(uint256 _amountNeeded)
-        internal
-        override
-        returns (uint256 _liquidatedAmount, uint256 _loss)
-    {
+    /// @notice Withdraws `_amountNeeded` of `want` from Aave
+    /// @param _amountNeeded Amount of `want` to free
+    /// @return _liquidatedAmount Amount of `want` available
+    /// @return _loss Difference between `_amountNeeded` and what is actually available
+    function _liquidatePosition(uint256 _amountNeeded) internal override returns (uint256 _liquidatedAmount, uint256 _loss) {
         // NOTE: Maintain invariant `want.balanceOf(this) >= _liquidatedAmount`
         // NOTE: Maintain invariant `_liquidatedAmount + _loss <= _amountNeeded`
         uint256 wantBalance = _balanceOfWant();
@@ -415,20 +401,13 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         }
     }
 
-    function _liquidateAllPositions()
-        internal
-        override
-        returns (uint256 _amountFreed)
-    {
+    /// @notice Withdraw as much as we can from Aave
+    /// @return _amountFreed Amount successfully freed
+    function _liquidateAllPositions() internal override returns (uint256 _amountFreed) {
         (_amountFreed, ) = _liquidatePosition(type(uint256).max);
     }
 
-    function _protectedTokens()
-        internal
-        view
-        override
-        returns (address[] memory)
-    {}
+    function _protectedTokens() internal view override returns (address[] memory) {}
 
     //emergency function that we can use to deleverage manually if something is broken
     function manualDeleverage(uint256 amount) external onlyRole(GUARDIAN_ROLE) {
@@ -448,7 +427,9 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
 
     // INTERNAL ACTIONS
 
-    function _claimAndSellRewards() internal returns (uint256) {
+    /// @notice Claim earned stkAAVE and swap them for `want`
+    /// @dev stkAAVE require a "cooldown" period of 10 days before being claimed
+    function _claimAndSellRewards() internal {
         uint256 stkAaveBalance = _balanceOfStkAave();
         CooldownStatus cooldownStatus;
         if (stkAaveBalance > 0) {
@@ -472,11 +453,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         stkAaveBalance = _balanceOfStkAave();
 
         // request start of cooldown period, if there's no cooldown in progress
-        if (
-            cooldownStkAave &&
-            stkAaveBalance > 0 &&
-            cooldownStatus == CooldownStatus.None
-        ) {
+        if (cooldownStkAave && stkAaveBalance > 0 && cooldownStatus == CooldownStatus.None) {
             _stkAave.cooldown();
         }
 
@@ -493,6 +470,9 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         }
     }
 
+    /// @notice Reduce exposure by withdrawing funds and repaying debt
+    /// @param amountToFree Amount of `want` to withdraw/repay
+    /// @return balance Current balance of `want`
     function _freeFunds(uint256 amountToFree) internal returns (uint256) {
         if (amountToFree == 0) return 0;
 
@@ -509,10 +489,10 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         return _balanceOfWant();
     }
 
+    /// @notice Get exposure up to `targetCollatRatio`
     function _leverMax() internal {
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
 
-        // NOTE: decimals should cancel out
         uint256 realSupply = deposits - borrows;
         uint256 newBorrow = _getBorrowFromSupply(realSupply, targetCollatRatio);
         uint256 totalAmountToBorrow = newBorrow - borrows;
@@ -525,34 +505,29 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
                 totalAmountToBorrow = totalAmountToBorrow - _leverUpFlashLoan(totalAmountToBorrow);
             }
         } else {
-            for (
-                uint8 i = 0;
-                i < maxIterations && totalAmountToBorrow > minWant;
-                i++
-            ) {
+            for (uint8 i = 0; i < maxIterations && totalAmountToBorrow > minWant; i++) {
                 totalAmountToBorrow = totalAmountToBorrow - _leverUpStep(totalAmountToBorrow);
             }
         }
     }
 
+    /// @notice Use a flashloan to increase our exposure in `want` on Aave
+    /// @param amount Amount we will deposit and borrow on Aave
+    /// @return amount Actual amount deposited/borrowed
+    /// @dev Amount returned should equal `amount` but can be lower if we try to flashloan more than `maxFlashLoan` authorized
     function _leverUpFlashLoan(uint256 amount) internal returns (uint256) {
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
-        uint256 depositsToMeetLtv =
-            _getDepositFromBorrow(borrows, maxBorrowCollatRatio);
+        uint256 depositsToMeetLtv = _getDepositFromBorrow(borrows, maxBorrowCollatRatio);
         uint256 depositsDeficitToMeetLtv = 0;
         if (depositsToMeetLtv > deposits) {
             depositsDeficitToMeetLtv = depositsToMeetLtv - deposits;
         }
-        return
-            FlashMintLib.doFlashMint(
-                false,
-                amount,
-                address(want),
-                daiBorrowCollatRatio,
-                depositsDeficitToMeetLtv
-            );
+        return FlashMintLib.doFlashMint(false, amount, address(want), daiBorrowCollatRatio, depositsDeficitToMeetLtv);
     }
 
+    /// @notice Increase exposure in `want`
+    /// @param amount Amount of `want` to borrow
+    /// @return amount Amount of `want` that was borrowed
     function _leverUpStep(uint256 amount) internal returns (uint256) {
         if (amount == 0) {
             return 0;
@@ -560,7 +535,6 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
 
         uint256 wantBalance = _balanceOfWant();
 
-        // calculate how much borrow can I take
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
         uint256 canBorrow = _getBorrowFromDeposit(deposits + wantBalance, maxBorrowCollatRatio);
 
@@ -573,20 +547,18 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
             amount = canBorrow;
         }
 
-        // deposit available want as collateral
         _depositCollateral(wantBalance);
-
-        // borrow available amount
         _borrowWant(amount);
 
         return amount;
     }
 
-    function _leverDownTo(uint256 newAmountBorrowed, uint256 currentBorrowed)
-        internal
-    {
+    /// @notice Reduce our exposure to `want` on Aave
+    /// @param newAmountBorrowed Total amount we want to be borrowing
+    /// @param currentBorrowed Amount currently borrowed
+    function _leverDownTo(uint256 newAmountBorrowed, uint256 currentBorrowed) internal {
         if (currentBorrowed > newAmountBorrowed) {
-            uint256 totalRepayAmount = currentBorrowed- newAmountBorrowed;
+            uint256 totalRepayAmount = currentBorrowed - newAmountBorrowed;
 
             if (isFlashMintActive) {
                 totalRepayAmount = totalRepayAmount - _leverDownFlashLoan(totalRepayAmount);
@@ -594,11 +566,9 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
 
             uint256 _maxCollatRatio = maxCollatRatio;
 
-            for (
-                uint8 i = 0;
-                i < maxIterations && totalRepayAmount > minWant;
-                i++
-            ) {
+            // in case the flashloan didn't repay the entire amount we have to repay it "manually"
+            // by withdrawing a bit of collateral and then repaying the debt with it
+            for (uint8 i = 0; i < maxIterations && totalRepayAmount > minWant; i++) {
                 _withdrawExcessCollateral(_maxCollatRatio);
                 uint256 toRepay = totalRepayAmount;
                 uint256 wantBalance = _balanceOfWant();
@@ -613,8 +583,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         // deposit back to get targetCollatRatio (we always need to leave this in this ratio)
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
         uint256 _targetCollatRatio = targetCollatRatio;
-        uint256 targetDeposit =
-            _getDepositFromBorrow(borrows, _targetCollatRatio);
+        uint256 targetDeposit = _getDepositFromBorrow(borrows, _targetCollatRatio);
         if (targetDeposit > deposits) {
             uint256 toDeposit = targetDeposit - deposits;
             if (toDeposit > minWant) {
@@ -625,26 +594,23 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         }
     }
 
+    /// @notice Use a flashloan to reduce our exposure in `want` on Aave
+    /// @param amount Amount we will need to withdraw and repay to Aave
+    /// @return amount Actual amount repaid
+    /// @dev Amount returned should equal `amount` but can be lower if we try to flashloan more than `maxFlashLoan` authorized
+    /// @dev `amount` will be withdrawn from deposits and then used to repay borrows
     function _leverDownFlashLoan(uint256 amount) internal returns (uint256) {
         if (amount <= minWant) return 0;
         (, uint256 borrows) = getCurrentPosition();
         if (amount > borrows) {
             amount = borrows;
         }
-        return
-            FlashMintLib.doFlashMint(
-                true,
-                amount,
-                address(want),
-                daiBorrowCollatRatio,
-                0
-            );
+        return FlashMintLib.doFlashMint(true, amount, address(want), daiBorrowCollatRatio, 0);
     }
 
-    function _withdrawExcessCollateral(uint256 collatRatio)
-        internal
-        returns (uint256 amount)
-    {
+    /// @notice Adjusts the deposits based on the wanted collateral ratio (does not touch the borrow)
+    /// @param collatRatio Collateral ratio to target
+    function _withdrawExcessCollateral(uint256 collatRatio) internal returns (uint256 amount) {
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
         uint256 theoDeposits = _getDepositFromBorrow(borrows, collatRatio);
         if (deposits > theoDeposits) {
@@ -653,23 +619,38 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         }
     }
 
+    /// @notice Deposit `want` tokens in Aave and start earning interests
+    /// @param amount Amount to be deposited
+    /// @return amount The amount deposited
     function _depositCollateral(uint256 amount) internal returns (uint256) {
         if (amount == 0) return 0;
         _lendingPool.deposit(address(want), amount, address(this), _referral);
         return amount;
     }
 
+    /// @notice Withdraw `want` tokens from Aave
+    /// @param amount Amount to be withdrawn
+    /// @return amount The amount withdrawn
     function _withdrawCollateral(uint256 amount) internal returns (uint256) {
         if (amount == 0) return 0;
         _lendingPool.withdraw(address(want), amount, address(this));
         return amount;
     }
 
+    /// @notice Repay what we borrowed of `want` from Aave
+    /// @param amount Amount to repay
+    /// @return amount The amount repaid
+    /// @dev `interestRateMode` is set to variable rate (2)
     function _repayWant(uint256 amount) internal returns (uint256) {
         if (amount == 0) return 0;
         return _lendingPool.repay(address(want), amount, 2, address(this));
     }
 
+    /// @notice Borrow `want` from Aave
+    /// @param amount Amount of `want` we are borrowing
+    /// @return amount The amount borrowed
+    /// @dev The third variable is the `interestRateMode`
+    /// @dev set at 2 which means we will get a variable interest rate on our borrowed tokens
     function _borrowWant(uint256 amount) internal returns (uint256) {
         if (amount == 0) return 0;
         _lendingPool.borrow(address(want), amount, 2, _referral, address(this));
@@ -697,35 +678,25 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         return IERC20(address(_stkAave)).balanceOf(address(this));
     }
 
-    function onFlashLoan(
-        address initiator,
-        address token,
-        uint256 amount,
-        uint256 fee,
-        bytes calldata data
-    ) external override returns (bytes32) {
+    /// @notice Flashload callback, as defined by EIP-3156
+    /// @notice We check that the call is coming from the DAI lender and then execute the load logic
+    /// @dev If everything went smoothly, will return `keccak256("ERC3156FlashBorrower.onFlashLoan")`
+    function onFlashLoan(address initiator, address, uint256 amount, uint256, bytes calldata data) external override returns (bytes32) {
         require(msg.sender == FlashMintLib.LENDER);
         require(initiator == address(this));
         (bool deficit, uint256 amountWant) = abi.decode(data, (bool, uint256));
 
-        return
-            FlashMintLib.loanLogic(deficit, amountWant, amount, address(want));
+        return FlashMintLib.loanLogic(deficit, amountWant, amount, address(want));
     }
 
-    function getCurrentPosition()
-        public
-        view
-        returns (uint256 deposits, uint256 borrows)
-    {
+    /// @notice Get the current position we are in: amount deposited and borrowed
+    function getCurrentPosition() public view returns (uint256 deposits, uint256 borrows) {
         deposits = _balanceOfAToken();
         borrows = _balanceOfDebtToken();
     }
 
-    function getCurrentCollatRatio()
-        public
-        view
-        returns (uint256 currentCollatRatio)
-    {
+    /// @notice Gets the current collateral ratio based on deposits and borrows
+    function getCurrentCollatRatio() public view returns (uint256 currentCollatRatio) {
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
 
         if (deposits > 0) {
@@ -733,36 +704,30 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         }
     }
 
+    /// @notice Gets the current supply deposited in Aave
     function getCurrentSupply() public view returns (uint256) {
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
         return deposits - borrows;
     }
 
-    // conversions
-    function _tokenToWant(address token, uint256 amount)
-        internal
-        view
-        returns (uint256)
-    {
+    /// @notice Estimate the amount of `want` we will get out by swapping it for `token`
+    /// @param token Token we are selling
+    /// @param amount Amount of `token` we want to sell
+    function _tokenToWant(address token, uint256 amount) internal view returns (uint256) {
         if (amount == 0 || address(want) == token) {
             return amount;
         }
 
         // KISS: just use a v2 router for quotes which aren't used in critical logic
-        IUni router =
-            swapRouter == SwapRouter.SushiV2 ? _SUSHI_V2_ROUTER : _UNI_V2_ROUTER;
-        uint256[] memory amounts =
-            router.getAmountsOut(
-                amount,
-                _getTokenOutPathV2(token, address(want))
-            );
+        IUni router = swapRouter == SwapRouter.SushiV2 ? _SUSHI_V2_ROUTER : _UNI_V2_ROUTER;
+        uint256[] memory amounts = router.getAmountsOut(amount, _getTokenOutPathV2(token, address(want)));
 
         return amounts[amounts.length - 1];
     }
 
+    /// @notice Verifies the cooldown status for earned stkAAVE
     function _checkCooldown() internal view returns (CooldownStatus) {
-        uint256 cooldownStartTimestamp =
-            IStakedAave(_stkAave).stakersCooldowns(address(this));
+        uint256 cooldownStartTimestamp = IStakedAave(_stkAave).stakersCooldowns(address(this));
         uint256 COOLDOWN_SECONDS = IStakedAave(_stkAave).COOLDOWN_SECONDS();
         uint256 UNSTAKE_WINDOW = IStakedAave(_stkAave).UNSTAKE_WINDOW();
         uint256 nextClaimStartTimestamp = cooldownStartTimestamp + COOLDOWN_SECONDS;
@@ -781,13 +746,11 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         }
     }
 
-    function _getTokenOutPathV2(address _token_in, address _token_out)
-        internal
-        view
-        returns (address[] memory _path)
-    {
-        bool is_weth =
-            _token_in == address(_weth) || _token_out == address(_weth);
+    /// @notice Get swap path for UniswapV2/Sushiswap router
+    /// @param _token_in Token we are selling
+    /// @param _token_out Token we are buying
+    function _getTokenOutPathV2(address _token_in, address _token_out) internal pure returns (address[] memory _path) {
+        bool is_weth = _token_in == address(_weth) || _token_out == address(_weth);
         _path = new address[](is_weth ? 2 : 3);
         _path[0] = _token_in;
 
@@ -799,42 +762,42 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         }
     }
 
-    function _getTokenOutPathV3(address _token_in, address _token_out)
-        internal
-        view
-        returns (bytes memory _path)
-    {
-        if (address(want) == _weth) {
-            _path = abi.encodePacked(
-                address(_aave),
-                aaveToWethSwapFee,
-                address(_weth)
-            );
-        } else {
-            _path = abi.encodePacked(
-                address(_aave),
-                aaveToWethSwapFee,
-                address(_weth),
-                wethToWantSwapFee,
-                address(want)
-            );
-        }
-    }
-
-    // in amount: base of AAVE, out: base want
-    function _AAVEToWant(uint256 amount) internal view returns(uint256) {
+    /// @notice Estimate the amount of `want` we will get out by swapping it for AAVE
+    /// @param amount Amount of AAVE we want to exchange (in base 18)
+    /// @dev Uses Chainlink spot price. Return value will be in base of `want` (6 for USDC)
+    function AAVEToWant(uint256 amount) public view returns(uint256) {
         (, int256 stkAavePriceUSD,,,) = chainlinkOracle.latestRoundData();
         return uint256(stkAavePriceUSD) * amount * _DECIMALS / 1e26;
     }
 
+    /// @notice Swap AAVE (previously swapped from stkAAVE) to `want` token on `swapRouter` (UniswapV2, UniswapV3 or Sushiswap)
+    /// @param amountIn Amount of AAVE to sell
+    /// @param minOut Minimum amount of `want` we expect to get out
     function _sellAAVEForWant(uint256 amountIn, uint256 minOut) internal {
         if (amountIn == 0) {
             return;
         }
         if (swapRouter == SwapRouter.UniV3) {
+            bytes memory _path;
+            if (address(want) == _weth) {
+                _path = abi.encodePacked(
+                    address(_aave),
+                    aaveToWethSwapFee,
+                    address(_weth)
+                );
+            } else {
+                _path = abi.encodePacked(
+                    address(_aave),
+                    aaveToWethSwapFee,
+                    address(_weth),
+                    wethToWantSwapFee,
+                    address(want)
+                );
+            }
+
             _UNI_V3_ROUTER.exactInput(
                 ISwapRouter.ExactInputParams(
-                    _getTokenOutPathV3(address(_aave), address(want)),
+                    _path,
                     address(this),
                     block.timestamp,
                     amountIn,
@@ -842,10 +805,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
                 )
             );
         } else {
-            IUni router =
-                swapRouter == SwapRouter.UniV2
-                    ? _UNI_V2_ROUTER
-                    : _SUSHI_V2_ROUTER;
+            IUni router = swapRouter == SwapRouter.UniV2 ? _UNI_V2_ROUTER : _SUSHI_V2_ROUTER;
             router.swapExactTokensForTokens(
                 amountIn,
                 minOut,
@@ -856,8 +816,10 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         }
     }
 
+    /// @notice Swap incentive rewards (stkAAVE) to AAVE on UniswapV3
+    /// @param amountIn Amount of stkAAVE to sell
+    /// @param minOut Minimum amount of AAVE we expect to get out
     function _sellSTKAAVEToAAVE(uint256 amountIn, uint256 minOut) internal {
-        // Swap Rewards in UNIV3
         // NOTE: Unoptimized, can be frontrun and most importantly this pool is low liquidity
         _UNI_V3_ROUTER.exactInputSingle(
             ISwapRouter.ExactInputSingleParams(
@@ -873,39 +835,39 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         );
     }
 
+    /// @notice Get the deposit and debt token for our `want` token
     function _getAaveAssets() internal view returns (address[] memory assets) {
         assets = new address[](2);
         assets[0] = address(aToken);
         assets[1] = address(debtToken);
     }
 
-    function _getProtocolCollatRatios(address token)
-        internal
-        view
-        returns (uint256 ltv, uint256 liquidationThreshold)
-    {
+    /// @notice Get Aave ratios for a token in order to compute later our collateral ratio
+    /// @param token Address of the token for which to check the ratios (usually `want` token)
+    /// @dev `getReserveConfigurationData` returns values in base 4. So here `ltv` and `liquidationThreshold` are returned in base 18
+    function _getProtocolCollatRatios(address token) internal view returns (uint256 ltv, uint256 liquidationThreshold) {
         (, ltv, liquidationThreshold, , , , , , , ) = _protocolDataProvider.getReserveConfigurationData(token);
         // convert bps to wad
         ltv = ltv * _BPS_WAD_RATIO;
         liquidationThreshold = liquidationThreshold * _BPS_WAD_RATIO;
     }
 
-    function _getBorrowFromDeposit(uint256 deposit, uint256 collatRatio)
-        internal
-        pure
-        returns (uint256)
-    {
+    /// @notice Get target borrow amount based on deposit and collateral ratio
+    /// @param deposit Current total deposited on Aave
+    /// @param collatRatio Collateral ratio to target
+    function _getBorrowFromDeposit(uint256 deposit, uint256 collatRatio) internal pure returns (uint256) {
         return (deposit * collatRatio) / _COLLATERAL_RATIO_PRECISION;
     }
 
-    function _getDepositFromBorrow(uint256 borrow, uint256 collatRatio)
-        internal
-        pure
-        returns (uint256)
-    {
+    /// @notice Get target deposit amount based on borrow and collateral ratio
+    /// @param borrow Current total borrowed on Aave
+    /// @param collatRatio Collateral ratio to target
+    function _getDepositFromBorrow(uint256 borrow, uint256 collatRatio) internal pure returns (uint256) {
         return (borrow * _COLLATERAL_RATIO_PRECISION) / collatRatio;
     }
 
+    /// @notice Computes the optimal collateral ratio based on current interests and incentives on Aave
+    /// @notice It modifies the state by updating the `targetCollatRatio`
     function _computeOptimalCollatRatio() internal returns(uint256) {
         uint256 borrow = computeMostProfitableBorrow();
         (uint256 deposits, ) = getCurrentPosition();
@@ -918,14 +880,16 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         return _collatRatio;
     }
 
-    function _getBorrowFromSupply(uint256 supply, uint256 collatRatio)
-        internal
-        pure
-        returns (uint256)
-    {
+    /// @notice Get target borrow amount based on supply (deposits - borrow) and collateral ratio
+    /// @param supply = deposits - borrows. The supply is what is "actually" deposited in Aave
+    /// @param collatRatio Collateral ratio to target
+    function _getBorrowFromSupply(uint256 supply, uint256 collatRatio) internal pure returns (uint256) {
         return (supply * collatRatio) / (_COLLATERAL_RATIO_PRECISION - collatRatio);
     }
 
+    /// @notice Approve `spender` maxuint of `token`
+    /// @param token Address of token to approve
+    /// @param spender Address of spender to approve
     function _approveMaxSpend(address token, address spender) internal {
         IERC20(token).safeApprove(spender, type(uint256).max);
     }
@@ -947,24 +911,8 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         _revokeRole(GUARDIAN_ROLE, guardian);
     }
 
-    function estimatedAPR() public view {
-        (,,uint256 debtTokenTotalSupply, uint256 liquidityRate, uint256 variableBorrowRate,,,,,) = _protocolDataProvider.getReserveData(address(want));
-        (uint256 deposits, uint256 borrows) = getCurrentPosition();
-        uint256 yearlyRewardsATokenInUSDC;
-        uint256 yearlyRewardsDebtTokenInUSDC;
-        {
-            uint256 stkAavePriceToUSDC = _AAVEToWant(1 ether);
-            (uint256 emissionPerSecondAToken,,) = (aToken.getIncentivesController()).assets(address(aToken));
-            (uint256 emissionPerSecondDebtToken,,) = (debtToken.getIncentivesController()).assets(address(debtToken));
-            uint256 yearlyEmissionsAToken = emissionPerSecondAToken * 60 * 60 * 24 * 365; // BASE: 18
-            uint256 yearlyEmissionsDebtToken = emissionPerSecondDebtToken * 60 * 60 * 24 * 365; // BASE: 18
-            yearlyRewardsATokenInUSDC = (deposits * yearlyEmissionsAToken * stkAavePriceToUSDC / aToken.totalSupply()); // BASE 24
-            yearlyRewardsDebtTokenInUSDC = (borrows * yearlyEmissionsDebtToken * stkAavePriceToUSDC / debtTokenTotalSupply); // BASE 24
-        }
-
-        uint256 totalRewardsinUSDC = (liquidityRate * deposits) + ((yearlyRewardsATokenInUSDC + yearlyRewardsDebtTokenInUSDC) * 10**(27+6-24)) - (variableBorrowRate * borrows);
-    }
-
+    /// @notice Computes the optimal amounts to borrow based on current interest rates and incentives
+    /// @dev Returns optimal `borrow` amount in base of `want`
     function computeMostProfitableBorrow() public view returns(uint256 borrow) {
         (uint256 availableLiquidity, uint256 totalStableDebt, uint256 totalVariableDebt,,,, uint256 averageStableBorrowRate,,,) = _protocolDataProvider.getReserveData(address(want));
         (,,,, uint256 reserveFactor,,,,,) = _protocolDataProvider.getReserveConfigurationData(address(want));
@@ -973,7 +921,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         (uint256 emissionPerSecondAToken,,) = _incentiveController.assets(address(aToken));
         (uint256 emissionPerSecondDebtToken,,) = _incentiveController.assets(address(debtToken));
 
-        uint256 stkAavePriceToUSDC = _AAVEToWant(1 ether);
+        uint256 stkAavePriceToUSDC = AAVEToWant(1 ether);
 
         ComputeProfitability.SCalculateBorrow memory parameters = ComputeProfitability.SCalculateBorrow({
             slope1: int256(interestRateStrategyAddress.variableRateSlope1()), // ray
@@ -989,49 +937,8 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
             rewardBorrow: int256(emissionPerSecondDebtToken * 10**9 * 60 * 60 * 24 * 365 * stkAavePriceToUSDC / 10**6), // ray / emissionPerSecondDebtToken: base 18 (stkAave)
             poolManagerAssets: int256(poolManager.getTotalAsset() * (10**27 / _DECIMALS)) // base 6 to ray
         });
-
-        // ComputeProfitability.SCalculateBorrow memory parameters = ComputeProfitability.SCalculateBorrow({
-        //     slope1: 40000000000000000000000000,
-        //     slope2: 600000000000000000000000000,
-        //     r0: 0,
-        //     totalStableDebt: 12952786073367000000000000000000000,
-        //     totalVariableDebt: 1350219982386577000000000000000000000,
-        //     uOptimal: 900000000000000000000000000,
-        //     totalDeposits: 2327880275443382000000000000000000000,
-        //     reserveFactor: 100000000000000000000000000,
-        //     stableBorrowRate: 103013007441955644227054734,
-        //     rewardDeposit: int256(1903258773510960000000000 * 60 * 60 * 24 * 365 * 127),
-        //     rewardBorrow: int256(3806517547021920000000000 * 60 * 60 * 24 * 365 * 127),
-        //     poolManagerAssets: 168439706352281000000000000000000000
-        // });
-        
-        // console.log("slope1: %s", (interestRateStrategyAddress.variableRateSlope1()) / 10**24);
-        // console.log("slope2: %s", (interestRateStrategyAddress.variableRateSlope2()) / 10**24);
-        // console.log("r0: %s", (interestRateStrategyAddress.baseVariableBorrowRate()) / 10**24);
-        // console.log("totalStableDebt: %s", (totalStableDebt * (10**27 / _DECIMALS)) / 10**24);
-        // console.log("totalVariableDebt: %s", (totalVariableDebt * (10**27 / _DECIMALS)) / 10**24);
-        // console.log("uOptimal: %s", (interestRateStrategyAddress.OPTIMAL_UTILIZATION_RATE()) / 10**24);
-        // console.log("totalDeposits: %s", ((availableLiquidity + totalStableDebt + totalVariableDebt) * (10**27 / _DECIMALS)) / 10**24);
-        // console.log("reserveFactor: %s", (reserveFactor * 10**23) / 10**24);
-        // console.log("stableBorrowRate: %s", (averageStableBorrowRate) / 10**24);
-        // console.log("rewardDeposit: %s", (emissionPerSecondAToken * 10**9 * 60 * 60 * 24 * 365 * stkAavePriceToUSDC / 10**6) / 10**24);
-        // console.log("rewardBorrow: %s", (emissionPerSecondDebtToken * 10**9 * 60 * 60 * 24 * 365 * stkAavePriceToUSDC / 10**6) / 10**24);
-        // console.log("poolManagerAssets: %s", (poolManager.getTotalAsset() * (10**27 / _DECIMALS)) / 10**24);
-        
-        // console.log("%s", interestRateStrategyAddress.variableRateSlope1());
-        // console.log("%s", interestRateStrategyAddress.variableRateSlope2());
-        // console.log("%s", interestRateStrategyAddress.baseVariableBorrowRate());
-        // console.log("%s", totalStableDebt * (10**27 / _DECIMALS));
-        // console.log("%s", totalVariableDebt * (10**27 / _DECIMALS));
-        // console.log("%s", interestRateStrategyAddress.OPTIMAL_UTILIZATION_RATE());
-        // console.log("%s", aToken.totalSupply() * (10**27 / _DECIMALS));
-        // console.log("%s", reserveFactor * 10**23);
-        // console.log("%s", stableBorrowRate);
-        // console.log("%s", emissionPerSecondAToken * 10**9);
-        // console.log("%s", emissionPerSecondDebtToken * 10**9);
         
         int256 _borrow = computeProfitability.computeProfitability(parameters);
-        // _borrow is return in BASE ray so we set it in the correct base
         borrow = uint256(_borrow) / (10**27 / _DECIMALS);
     }
 }
