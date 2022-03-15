@@ -71,7 +71,7 @@ const config: HardhatUserConfig = {
         enabled: argv.fork || false,
         url: nodeUrl('fork'),
         // This is the last block before the deployer role is removed
-        blockNumber: 14390430,
+        blockNumber: 14391700,
       },
       mining: argv.disableAutoMining
         ? {

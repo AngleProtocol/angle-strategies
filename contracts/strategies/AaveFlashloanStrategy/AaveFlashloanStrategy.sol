@@ -374,9 +374,6 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         // check current position
         uint256 currentCollatRatio = getCurrentCollatRatio();
 
-        console.log("CURRENT", currentCollatRatio);
-        console.log("TARGET", targetCollatRatio);
-
         // Either we need to free some funds OR we want to be max levered
         if (_debtOutstanding > wantBalance) {
             // we should free funds
@@ -391,7 +388,6 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
                 _leverMax();
             }
         } else if (currentCollatRatio > targetCollatRatio) {
-            console.log("DOWN1");
             if (currentCollatRatio - targetCollatRatio > minRatio) {
                 (uint256 deposits, uint256 borrows) = getCurrentPosition();
                 uint256 newBorrow =
@@ -399,7 +395,6 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
                         deposits - borrows,
                         targetCollatRatio
                     );
-            console.log("DOWN2");
                 _leverDownTo(newBorrow, borrows);
             }
         }
