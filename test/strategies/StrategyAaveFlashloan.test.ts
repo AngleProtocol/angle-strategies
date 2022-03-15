@@ -1,6 +1,6 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ethers, network } from 'hardhat';
-import { utils, Wallet, constants, Contract, BigNumber } from 'ethers';
+import { utils, constants, BigNumber } from 'ethers';
 import { expect } from '../test-utils/chai-setup';
 import { deploy, randomAddress, impersonate } from '../test-utils';
 import { inReceipt, inIndirectReceipt } from '../test-utils/expectEvent';
@@ -17,7 +17,6 @@ import {
   ERC20__factory,
   MockAToken,
   MockLendingPool,
-  FlashMintLib__factory,
   MockLendingPool__factory,
   IAaveIncentivesController__factory,
   MockProtocolDataProvider__factory,
@@ -25,6 +24,8 @@ import {
   MockUniswapV3Pool__factory,
   MockToken__factory,
   ComputeProfitability,
+  IStakedAave,
+  IStakedAave__factory,
 } from '../../typechain';
 
 // HELPER for console.log, to delete
@@ -38,7 +39,7 @@ describe('AaveFlashloan Strat', () => {
   let wantToken: MockToken,
     dai: MockToken,
     aave: MockToken,
-    stkAave: MockToken,
+    stkAave: IStakedAave,
     weth: MockToken,
     rewardToken: MockToken,
     mockAAVE: MockToken;
@@ -76,9 +77,9 @@ describe('AaveFlashloan Strat', () => {
       '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9',
     )) as MockToken;
     stkAave = (await ethers.getContractAt(
-      MockToken__factory.abi,
+      IStakedAave__factory.abi,
       '0x4da27a545c0c5B758a6BA100e3a049001de870f5',
-    )) as MockToken;
+    )) as IStakedAave;
     weth = (await ethers.getContractAt(
       MockToken__factory.abi,
       '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
@@ -142,66 +143,6 @@ describe('AaveFlashloan Strat', () => {
     debtToken = (await ethers.getContractAt(MockToken__factory.abi, await strategy.debtToken())) as MockAToken;
     // aDai = (await deploy('MockAToken', ['adai token', 'aDai', 18])) as MockAToken;
   });
-
-  // it('basic test', async () => {
-  //   await (await poolManager.addStrategy(strategy.address, utils.parseUnits('0.75', 9))).wait();
-  //   // await strategy.connect(guardian).setIsFlashMintActive(false);
-  //   // expect(await poolManager.strategyList(0)).to.equal(strategy.address);
-
-  //   // console.log('strategy', strategy.address);
-  //   // const total = await strategy.estimatedTotalAssets();
-  //   // console.log('total', total, total.toString());
-  //   // console.log(await strategy.harvestTrigger());
-  //   // console.log(await strategy.isActive());
-
-  //   const amount = utils.parseUnits('10000', 6);
-
-  //   await impersonate('0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3', async acc => {
-  //     await wantToken.connect(acc).transfer(user.address, amount);
-  //     await wantToken.connect(acc).transfer(user.address, amount);
-  //   });
-  //   console.log('balance', utils.formatUnits(await wantToken.balanceOf(user.address), 6));
-
-  //   await wantToken.connect(user).transfer(poolManager.address, amount);
-  //   await wantToken.connect(user).transfer(strategy.address, amount);
-
-  //   console.log('\ntotal2', await strategy.estimatedTotalAssets());
-  //   console.log('total2', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
-  //   console.log('total2', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
-
-  //   console.log('emergencyExit', await strategy.emergencyExit());
-  //   console.log('getCurrentCollatRatio', await strategy.getCurrentCollatRatio());
-  //   console.log('isFlashMintActive', await strategy.isFlashMintActive());
-
-  //   await strategy.harvest();
-  //   console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
-  //   console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
-
-  //   console.log('\nLENDING BALANCE', (await wantToken.balanceOf(lendingPool.address)).toString());
-  //   console.log('BALANCE aToken\n', (await aToken.balanceOf(strategy.address)).toString());
-
-  //   await strategy.harvest();
-  //   console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
-  //   console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
-  //   console.log('balance aToken', utils.formatUnits(await aToken.balanceOf(strategy.address), 6), '\n');
-  //   console.log('balance debtToken', utils.formatUnits(await debtToken.balanceOf(strategy.address), 6), '\n');
-
-  //   await strategy.harvest();
-  //   console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
-  //   console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
-  //   console.log('balance aToken', utils.formatUnits(await aToken.balanceOf(strategy.address), 6), '\n');
-  //   console.log('balance debtToken', utils.formatUnits(await debtToken.balanceOf(strategy.address), 6), '\n');
-
-  //   await strategy.harvest();
-  //   console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
-  //   console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
-  //   console.log('balance aToken', utils.formatUnits(await aToken.balanceOf(strategy.address), 6), '\n');
-  //   console.log('balance debtToken', utils.formatUnits(await debtToken.balanceOf(strategy.address), 6), '\n');
-
-  //   console.log('\ntotal3', await strategy.estimatedTotalAssets());
-  //   console.log('total3', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
-  //   console.log('total3', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6));
-  // });
 
   describe('Constructor', () => {
     it('tokens', async () => {
@@ -273,9 +214,6 @@ describe('AaveFlashloan Strat', () => {
 
   describe('setters', () => {
     it('setCollateralTargets', async () => {
-      // const ratiosUsdc = await protocolDataProvider.getReserveConfigurationData(wantToken.address);
-      // const ratiosDai = await protocolDataProvider.getReserveConfigurationData(dai.address);
-
       expect(
         strategy
           .connect(user)
@@ -388,26 +326,42 @@ describe('AaveFlashloan Strat', () => {
       expect(await strategy.maxStkAavePriceImpactBps()).to.equal(utils.parseUnits('0.2', 4));
       expect(await strategy.stkAaveToAaveSwapFee()).to.equal(uniswapPoolFee);
     });
+
+    it('setAavePoolVariables', async () => {
+      const lendingPoolVariableRateSlope1 = await strategy.lendingPoolVariableRateSlope1();
+      const lendingPoolVariableRateSlope2 = await strategy.lendingPoolVariableRateSlope2();
+      const lendingPoolBaseVariableBorrowRate = await strategy.lendingPoolBaseVariableBorrowRate();
+      const lendingPoolOptimalUtilizationRate = await strategy.lendingPoolOptimalUtilizationRate();
+      const aaveReserveFactor = await strategy.aaveReserveFactor();
+
+      await strategy.setAavePoolVariables();
+
+      expect(await strategy.lendingPoolVariableRateSlope1()).to.equal(lendingPoolVariableRateSlope1);
+      expect(await strategy.lendingPoolVariableRateSlope2()).to.equal(lendingPoolVariableRateSlope2);
+      expect(await strategy.lendingPoolBaseVariableBorrowRate()).to.equal(lendingPoolBaseVariableBorrowRate);
+      expect(await strategy.lendingPoolOptimalUtilizationRate()).to.equal(lendingPoolOptimalUtilizationRate);
+      expect(await strategy.aaveReserveFactor()).to.equal(aaveReserveFactor);
+    });
   });
 
-  describe('View functions', () => {
-    const amount = utils.parseUnits((1e6).toString(), 6);
+  describe('Strategy', () => {
+    const _startAmountUSDC = utils.parseUnits((1_000_000).toString(), 6);
 
     beforeEach(async () => {
       await (await poolManager.addStrategy(strategy.address, utils.parseUnits('0.75', 9))).wait();
 
       await impersonate('0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3', async acc => {
-        await wantToken.connect(acc).transfer(user.address, amount);
-        await wantToken.connect(acc).transfer(user.address, amount);
+        await wantToken.connect(acc).transfer(user.address, _startAmountUSDC);
+        await wantToken.connect(acc).transfer(user.address, _startAmountUSDC);
       });
-      console.log('balance', utils.formatUnits(await wantToken.balanceOf(user.address), 6));
+      // console.log('balance', utils.formatUnits(await wantToken.balanceOf(user.address), 6));
 
-      await wantToken.connect(user).transfer(poolManager.address, amount);
-      await wantToken.connect(user).transfer(strategy.address, amount);
+      await wantToken.connect(user).transfer(poolManager.address, _startAmountUSDC);
+      await wantToken.connect(user).transfer(strategy.address, _startAmountUSDC);
     });
 
     it('estimatedTotalAssets', async () => {
-      expect(await strategy.estimatedTotalAssets()).to.equal(amount);
+      expect(await strategy.estimatedTotalAssets()).to.equal(_startAmountUSDC);
       await strategy.harvest();
 
       const { deposits, borrows } = await strategy.getCurrentPosition();
@@ -415,32 +369,221 @@ describe('AaveFlashloan Strat', () => {
       expect(await strategy.estimatedTotalAssets()).to.equal(totalAssets);
     });
 
-    // it.only('estimatedRewardsInWant', async () => {
-    //   console.log('estimatedRewardsInWant', logUSDC(await strategy.estimatedRewardsInWant()));
-    //   await strategy.harvest();
+    it('estimatedTotalAssets - balanceExcludingRewards < minWant', async () => {
+      await impersonate(strategy.address, async acc => {
+        await network.provider.send('hardhat_setBalance', [
+          strategy.address,
+          utils.parseEther('1').toHexString().replace('0x0', '0x'),
+        ]);
 
-    //   const rewards = await incentivesController.getRewardsBalance(
-    //     [aToken.address, debtToken.address],
-    //     strategy.address,
-    //   );
-    //   console.log('rewards before', rewards);
+        const balance = await wantToken.balanceOf(acc.address);
+        await wantToken.connect(acc).transfer(user.address, balance);
+      });
 
-    //   console.log('stkaave balance', await stkAave.balanceOf(strategy.address));
-    //   await network.provider.send('evm_increaseTime', [3600 * 24 * 10]);
-    //   await network.provider.send('evm_mine');
+      expect(await strategy.estimatedTotalAssets()).to.equal(0);
+    });
 
-    //   console.log('stkaave balance', await stkAave.balanceOf(strategy.address));
-    //   console.log('aave balance', await aave.balanceOf(strategy.address));
+    it('estimatedRewardsInWant', async () => {
+      expect(await strategy.estimatedRewardsInWant()).to.equal(0);
+      await strategy.harvest();
 
-    //   console.log(
-    //     'rewards after',
-    //     await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
-    //   );
-    //   console.log('estimatedRewardsInWant', logUSDC(await strategy.estimatedRewardsInWant()));
-    //   console.log('_AAVEToWant', logUSDC(await strategy.AAVEToWant(utils.parseEther('1'))));
-    //   console.log('_tokenToWant', logUSDC(await strategy._tokenToWant(aave.address, utils.parseEther('1'))));
-    // });
+      const rewardsBefore = await incentivesController.getRewardsBalance(
+        [aToken.address, debtToken.address],
+        strategy.address,
+      );
+      expect(rewardsBefore).to.equal(0);
+      expect(await stkAave.balanceOf(strategy.address)).to.equal(0);
 
+      await network.provider.send('evm_increaseTime', [3600 * 24 * 5]); // forward 5 days
+      await network.provider.send('evm_mine');
+
+      const maxStkAavePriceImpactBps = await strategy.maxStkAavePriceImpactBps();
+      const rewardsAfter = (
+        await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address)
+      )
+        .mul(BigNumber.from(10_000).sub(maxStkAavePriceImpactBps))
+        .div(BigNumber.from(10_000));
+
+      const _PESSIMISM_FACTOR = 1000;
+      const estimatedRewards = (await strategy.estimatedAAVEToWant(rewardsAfter))
+        .mul(BigNumber.from(10_000).sub(_PESSIMISM_FACTOR))
+        .div(BigNumber.from(10_000));
+      expect(await strategy.estimatedRewardsInWant()).to.equal(estimatedRewards);
+    });
+
+    it('manualClaimAndSellRewards', async () => {
+      expect(await stkAave.balanceOf(strategy.address)).to.equal(0);
+      expect(await aave.balanceOf(strategy.address)).to.equal(0);
+
+      await strategy.harvest();
+
+      await network.provider.send('evm_increaseTime', [3600 * 24 * 5]); // forward 5 days
+      await network.provider.send('evm_mine');
+
+      const rewards = await incentivesController.getRewardsBalance(
+        [aToken.address, debtToken.address],
+        strategy.address,
+      );
+
+      expect(await wantToken.balanceOf(strategy.address)).to.equal(0);
+
+      await strategy.connect(guardian).manualClaimAndSellRewards();
+
+      const estimatedUSDC = await strategy.estimatedAAVEToWant(rewards);
+
+      // we allow a 5% delta, due to slippage on Uniswap
+      expect(await wantToken.balanceOf(strategy.address))
+        .to.be.at.most(estimatedUSDC)
+        .least(estimatedUSDC.mul(95).div(100));
+
+      expect(
+        await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
+      ).to.equal(0);
+    });
+
+    it('manualClaimAndSellRewards (with cooldown)', async () => {
+      expect(await stkAave.balanceOf(strategy.address)).to.equal(0);
+      expect(await aave.balanceOf(strategy.address)).to.equal(0);
+
+      const tx = await (await strategy.harvest()).wait();
+      await strategy.setRewardBehavior(
+        await strategy.swapRouter(),
+        await strategy.sellStkAave(),
+        true,
+        await strategy.minRewardToSell(),
+        await strategy.maxStkAavePriceImpactBps(),
+        await strategy.stkAaveToAaveSwapFee(),
+        await strategy.aaveToWethSwapFee(),
+        await strategy.wethToWantSwapFee(),
+      );
+
+      const timestamp = (await ethers.provider.getBlock(tx.blockNumber)).timestamp;
+
+      await network.provider.send('evm_increaseTime', [3600 * 24 * 1]); // forward 1 day
+      await network.provider.send('evm_mine');
+
+      expect(await stkAave.stakersCooldowns(strategy.address)).to.equal(0);
+      expect(await wantToken.balanceOf(strategy.address)).to.equal(0);
+
+      await strategy.connect(guardian).manualClaimAndSellRewards();
+
+      const timestampPlus1Day = timestamp + 3600 * 24 + 30;
+      expect(await stkAave.stakersCooldowns(strategy.address))
+        .to.be.at.most(timestampPlus1Day)
+        .least(timestamp);
+
+      expect(
+        await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
+      ).to.equal(0);
+
+      await network.provider.send('evm_increaseTime', [3600 * 24 * 11]); // forward 12 days
+      await network.provider.send('evm_mine');
+
+      await strategy.connect(guardian).manualClaimAndSellRewards();
+
+      expect(
+        await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
+      ).to.equal(0);
+    });
+
+    it('_prepareReturn', async () => {
+      const balance = (await wantToken.balanceOf(strategy.address))
+        .add(await wantToken.balanceOf(poolManager.address))
+        .mul((await poolManager.strategies(strategy.address)).debtRatio)
+        .div(BigNumber.from(1e9));
+
+      await strategy.harvest();
+
+      const targetCollatRatio = await strategy.targetCollatRatio();
+      const expectedBorrows = balance.mul(targetCollatRatio).div(utils.parseEther('1').sub(targetCollatRatio));
+      const expectedDeposits = expectedBorrows.mul(utils.parseEther('1')).div(targetCollatRatio);
+
+      const deposits = await aToken.balanceOf(strategy.address);
+      const borrows = await debtToken.balanceOf(strategy.address);
+
+      expect(deposits).to.be.closeTo(expectedDeposits, 5);
+      expect(borrows).to.be.closeTo(expectedBorrows, 5);
+    });
+
+    it('_prepareReturn 2', async () => {
+      await strategy.harvest();
+      expect(await strategy.estimatedTotalAssets()).to.be.closeTo(_startAmountUSDC.mul(3).div(2), 10);
+
+      await poolManager.updateStrategyDebtRatio(strategy.address, utils.parseUnits('0.5', 9));
+      await strategy.harvest();
+      expect(await strategy.estimatedTotalAssets()).to.be.closeTo(_startAmountUSDC, 15000);
+    });
+
+    it('_prepareReturn 3', async () => {
+      await strategy.harvest();
+
+      // fake profit for strategy
+      await impersonate('0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3', async acc => {
+        await wantToken.connect(acc).transfer(strategy.address, _startAmountUSDC);
+      });
+
+      await strategy.harvest();
+
+      const balance = (await poolManager.strategies(strategy.address)).totalStrategyDebt;
+
+      const targetCollatRatio = await strategy.targetCollatRatio();
+      const expectedBorrows = balance.mul(targetCollatRatio).div(utils.parseEther('1').sub(targetCollatRatio));
+      const expectedDeposits = expectedBorrows.mul(utils.parseEther('1')).div(targetCollatRatio);
+
+      const deposits = await aToken.balanceOf(strategy.address);
+      const borrows = await debtToken.balanceOf(strategy.address);
+
+      expect(deposits).to.be.closeTo(expectedDeposits, 10);
+      expect(borrows).to.be.closeTo(expectedBorrows, 10);
+    });
+
+    it('manualDeleverage', async () => {
+      const _amount = 10_000;
+      const amount = utils.parseUnits(_amount.toString(), 6);
+      await strategy.manualDeleverage(0);
+      expect(strategy.manualDeleverage(amount)).to.be.revertedWith('5');
+
+      await strategy.harvest();
+
+      const aBefore = await aToken.balanceOf(strategy.address);
+      const debtBefore = await debtToken.balanceOf(strategy.address);
+
+      expect(await wantToken.balanceOf(strategy.address)).to.equal(0);
+      await strategy.manualDeleverage(amount);
+
+      expect(await wantToken.balanceOf(strategy.address)).to.equal(0);
+      expect(_amount).to.be.closeTo(aBefore.sub(await aToken.balanceOf(strategy.address)).div(1e6), 2);
+      expect(_amount).to.be.closeTo(debtBefore.sub(await debtToken.balanceOf(strategy.address)).div(1e6), 2);
+    });
+
+    it('manualReleaseWant', async () => {
+      await strategy.harvest();
+      await strategy.manualReleaseWant(0);
+
+      const _amount = 10_000;
+      const amount = utils.parseUnits(_amount.toString(), 6);
+
+      const aBefore = await aToken.balanceOf(strategy.address);
+      const debtBefore = await debtToken.balanceOf(strategy.address);
+      expect(await wantToken.balanceOf(strategy.address)).to.equal(0);
+
+      await strategy.manualReleaseWant(amount);
+
+      expect(await wantToken.balanceOf(strategy.address)).to.equal(amount);
+      expect(_amount).to.be.closeTo(aBefore.sub(await aToken.balanceOf(strategy.address)).div(1e6), 2);
+      expect((await debtToken.balanceOf(strategy.address)).div(1e6)).to.equal(debtBefore.div(1e6));
+    });
+
+    it.only('isFlashMintActive', async () => {
+      await strategy.setIsFlashMintActive(false);
+      console.log(await wantToken.balanceOf(strategy.address));
+      await strategy.harvest();
+      console.log(await poolManager.strategies(strategy.address));
+      console.log(await aToken.balanceOf(strategy.address));
+      console.log(await debtToken.balanceOf(strategy.address));
+      console.log(await wantToken.balanceOf(strategy.address));
+      console.log(await strategy.targetCollatRatio());
+    });
     // it.only('', async () => {});
   });
 
@@ -448,25 +591,63 @@ describe('AaveFlashloan Strat', () => {
   // it.only('', async () => {});
   // })
 
-  describe('computeMostProfitableBorrow', () => {
-    beforeEach(async () => {
-      await (await poolManager.addStrategy(strategy.address, utils.parseUnits('0.75', 9))).wait();
-      const amount = utils.parseUnits('10000', 6);
+  // it('basic test', async () => {
+  //   await (await poolManager.addStrategy(strategy.address, utils.parseUnits('0.75', 9))).wait();
+  //   // await strategy.connect(guardian).setIsFlashMintActive(false);
+  //   // expect(await poolManager.strategyList(0)).to.equal(strategy.address);
 
-      await impersonate('0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3', async acc => {
-        await wantToken.connect(acc).transfer(user.address, amount);
-        await wantToken.connect(acc).transfer(user.address, amount);
-      });
-      console.log('balance', utils.formatUnits(await wantToken.balanceOf(user.address), 6));
+  //   // console.log('strategy', strategy.address);
+  //   // const total = await strategy.estimatedTotalAssets();
+  //   // console.log('total', total, total.toString());
+  //   // console.log(await strategy.harvestTrigger());
+  //   // console.log(await strategy.isActive());
 
-      await wantToken.connect(user).transfer(poolManager.address, amount);
-      await wantToken.connect(user).transfer(strategy.address, amount);
-    });
+  //   const amount = utils.parseUnits('10000', 6);
 
-    it('', async () => {
-      console.log('balance strat', await wantToken.balanceOf(strategy.address));
-    });
+  //   await impersonate('0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3', async acc => {
+  //     await wantToken.connect(acc).transfer(user.address, amount);
+  //     await wantToken.connect(acc).transfer(user.address, amount);
+  //   });
+  //   console.log('balance', utils.formatUnits(await wantToken.balanceOf(user.address), 6));
 
-    // it.only('', async () => {});
-  });
+  //   await wantToken.connect(user).transfer(poolManager.address, amount);
+  //   await wantToken.connect(user).transfer(strategy.address, amount);
+
+  //   console.log('\ntotal2', await strategy.estimatedTotalAssets());
+  //   console.log('total2', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
+  //   console.log('total2', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
+
+  //   console.log('emergencyExit', await strategy.emergencyExit());
+  //   console.log('getCurrentCollatRatio', await strategy.getCurrentCollatRatio());
+  //   console.log('isFlashMintActive', await strategy.isFlashMintActive());
+
+  //   await strategy.harvest();
+  //   console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
+  //   console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
+
+  //   console.log('\nLENDING BALANCE', (await wantToken.balanceOf(lendingPool.address)).toString());
+  //   console.log('BALANCE aToken\n', (await aToken.balanceOf(strategy.address)).toString());
+
+  //   await strategy.harvest();
+  //   console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
+  //   console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
+  //   console.log('balance aToken', utils.formatUnits(await aToken.balanceOf(strategy.address), 6), '\n');
+  //   console.log('balance debtToken', utils.formatUnits(await debtToken.balanceOf(strategy.address), 6), '\n');
+
+  //   await strategy.harvest();
+  //   console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
+  //   console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
+  //   console.log('balance aToken', utils.formatUnits(await aToken.balanceOf(strategy.address), 6), '\n');
+  //   console.log('balance debtToken', utils.formatUnits(await debtToken.balanceOf(strategy.address), 6), '\n');
+
+  //   await strategy.harvest();
+  //   console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
+  //   console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
+  //   console.log('balance aToken', utils.formatUnits(await aToken.balanceOf(strategy.address), 6), '\n');
+  //   console.log('balance debtToken', utils.formatUnits(await debtToken.balanceOf(strategy.address), 6), '\n');
+
+  //   console.log('\ntotal3', await strategy.estimatedTotalAssets());
+  //   console.log('total3', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
+  //   console.log('total3', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6));
+  // });
 });

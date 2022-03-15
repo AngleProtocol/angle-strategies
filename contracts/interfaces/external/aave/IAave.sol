@@ -105,7 +105,7 @@ interface IReserveInterestRateStrategy {
         );
 }
 
-interface IStakedAave {
+interface IStakedAave is IERC20 {
     function stake(address to, uint256 amount) external;
 
     function redeem(address to, uint256 amount) external;

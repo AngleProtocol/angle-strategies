@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
 // import { IAToken, IVariableDebtToken } from "../strategies/AaveFlashloanStrategy/AaveInterfaces.sol";
 import "../interfaces/external/aave/IAave.sol";
 
-contract MockAave is
+abstract contract MockAave is
     IAaveIncentivesController,
     ILendingPoolAddressesProvider,
     IReserveInterestRateStrategy,
