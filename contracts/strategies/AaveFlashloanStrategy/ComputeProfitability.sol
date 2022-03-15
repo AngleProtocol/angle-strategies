@@ -16,6 +16,7 @@ contract ComputeProfitability {
         int256 rewardDeposit;
         int256 rewardBorrow;
         int256 poolManagerAssets;
+        int256 maxCollatRatio;
     }
 
     int256 private constant _BASE_RAY = 10 ** 27;
@@ -194,6 +195,11 @@ contract ComputeProfitability {
         int x = revenue(borrow, parameters);
         if (x <= y) {
             borrow = 0;
+        }
+
+        int256 collatRatio = (borrow * _BASE_RAY) / (parameters.poolManagerAssets + borrow);
+        if (collatRatio > parameters.maxCollatRatio) {
+            borrow = parameters.maxCollatRatio * parameters.poolManagerAssets / (_BASE_RAY - parameters.maxCollatRatio);
         }
     }
 

@@ -45,7 +45,7 @@ describe('AaveFlashloan Strat', () => {
     mockAAVE: MockToken;
 
   // Guardians
-  let governor: SignerWithAddress, guardian: SignerWithAddress, user: SignerWithAddress;
+  let deployer: SignerWithAddress, governor: SignerWithAddress, guardian: SignerWithAddress, user: SignerWithAddress;
 
   // Routers
   let uniV2Router: MockUniswapV2Router, uniV3Router: MockUniswapV3Router, sushiV2Router: MockUniswapV2Router;
@@ -90,7 +90,7 @@ describe('AaveFlashloan Strat', () => {
     )) as MockToken;
     mockAAVE = (await deploy('MockToken', ['mock aave token', 'mockAAVE', 18])) as MockToken;
 
-    [governor, guardian, user] = await ethers.getSigners();
+    [deployer, governor, guardian, user] = await ethers.getSigners();
 
     uniV2Router = (await ethers.getContractAt(
       MockUniswapV2Router__factory.abi,
@@ -244,6 +244,11 @@ describe('AaveFlashloan Strat', () => {
           utils.parseUnits('0.6', 18),
           utils.parseUnits('0.7', 18),
         );
+
+      expect(await strategy.targetCollatRatio()).to.equal(utils.parseUnits('0.75', 18));
+      expect(await strategy.maxCollatRatio()).to.equal(utils.parseUnits('0.8', 18));
+      expect(await strategy.maxBorrowCollatRatio()).to.equal(utils.parseUnits('0.6', 18));
+      expect(await strategy.daiBorrowCollatRatio()).to.equal(utils.parseUnits('0.7', 18));
     });
 
     it('setIsFlashMintActive', async () => {
@@ -341,6 +346,15 @@ describe('AaveFlashloan Strat', () => {
       expect(await strategy.lendingPoolBaseVariableBorrowRate()).to.equal(lendingPoolBaseVariableBorrowRate);
       expect(await strategy.lendingPoolOptimalUtilizationRate()).to.equal(lendingPoolOptimalUtilizationRate);
       expect(await strategy.aaveReserveFactor()).to.equal(aaveReserveFactor);
+    });
+
+    it('setAutomaticallyComputeCollatRatio', async () => {
+      await expect(await strategy.automaticallyComputeCollatRatio()).to.be.true;
+      expect(strategy.setAutomaticallyComputeCollatRatio(false)).to.be.revertedWith(
+        `AccessControl: account ${deployer.address.toLowerCase()} is missing role ${await strategy.GUARDIAN_ROLE()}`,
+      );
+      await strategy.connect(guardian).setAutomaticallyComputeCollatRatio(false);
+      await expect(await strategy.automaticallyComputeCollatRatio()).to.be.false;
     });
   });
 
@@ -575,15 +589,28 @@ describe('AaveFlashloan Strat', () => {
     });
 
     it.only('isFlashMintActive', async () => {
-      await strategy.setIsFlashMintActive(false);
+      // await strategy.connect(guardian).setIsFlashMintActive(false);
       console.log(await wantToken.balanceOf(strategy.address));
+
+      // await strategy.connect(guardian).setAutomaticallyComputeCollatRatio(false);
+      // await strategy
+      //   .connect(guardian)
+      //   .setCollateralTargets(
+      //     utils.parseUnits('0.7', 18),
+      //     await strategy.maxCollatRatio(),
+      //     await strategy.maxBorrowCollatRatio(),
+      //     await strategy.daiBorrowCollatRatio(),
+      //   );
+
       await strategy.harvest();
+
       console.log(await poolManager.strategies(strategy.address));
       console.log(await aToken.balanceOf(strategy.address));
       console.log(await debtToken.balanceOf(strategy.address));
       console.log(await wantToken.balanceOf(strategy.address));
       console.log(await strategy.targetCollatRatio());
     });
+
     // it.only('', async () => {});
   });
 

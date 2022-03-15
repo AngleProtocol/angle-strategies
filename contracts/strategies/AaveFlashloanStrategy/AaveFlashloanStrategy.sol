@@ -59,6 +59,8 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     uint256 public maxCollatRatio; // Closest to liquidation we'll risk
     uint256 public daiBorrowCollatRatio; // Used for flashmint
 
+    bool public automaticallyComputeCollatRatio = true;
+
     uint8 public maxIterations;
     bool public isFlashMintActive;
     bool public withdrawCheck;
@@ -252,6 +254,11 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         aaveReserveFactor = int256(reserveFactor * 10**23);
     }
 
+    /// @notice Decide whether `targetCollatRatio` should be computed automatically or manually
+    function setAutomaticallyComputeCollatRatio(bool _automaticallyComputeCollatRatio) external onlyRole(GUARDIAN_ROLE) {
+        automaticallyComputeCollatRatio = _automaticallyComputeCollatRatio;
+    }
+
     function estimatedTotalAssets() public view override returns (uint256) {
         uint256 balanceExcludingRewards = _balanceOfWant() + getCurrentSupply();
 
@@ -360,10 +367,15 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
             wantBalance = _balanceOfWant();
         }
 
-        _computeOptimalCollatRatio();
+        if (automaticallyComputeCollatRatio) {
+            _computeOptimalCollatRatio();
+        }
 
         // check current position
         uint256 currentCollatRatio = getCurrentCollatRatio();
+
+        console.log("CURRENT", currentCollatRatio);
+        console.log("TARGET", targetCollatRatio);
 
         // Either we need to free some funds OR we want to be max levered
         if (_debtOutstanding > wantBalance) {
@@ -379,6 +391,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
                 _leverMax();
             }
         } else if (currentCollatRatio > targetCollatRatio) {
+            console.log("DOWN1");
             if (currentCollatRatio - targetCollatRatio > minRatio) {
                 (uint256 deposits, uint256 borrows) = getCurrentPosition();
                 uint256 newBorrow =
@@ -386,6 +399,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
                         deposits - borrows,
                         targetCollatRatio
                     );
+            console.log("DOWN2");
                 _leverDownTo(newBorrow, borrows);
             }
         }
@@ -873,11 +887,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     /// @notice It modifies the state by updating the `targetCollatRatio`
     function _computeOptimalCollatRatio() internal returns(uint256) {
         uint256 borrow = computeMostProfitableBorrow();
-        (uint256 deposits, ) = getCurrentPosition();
-        uint256 _collatRatio = (borrow * _COLLATERAL_RATIO_PRECISION) / deposits;
-        console.log("BORROW %s", borrow);
-        console.log("DEPOSITS %s", deposits);
-        console.log("TARGET COLLAT %s", _collatRatio);
+        uint256 _collatRatio = (borrow * _COLLATERAL_RATIO_PRECISION) / (estimatedTotalAssets() + borrow);
         uint256 _maxCollatRatio = maxCollatRatio;
         if (_collatRatio > _maxCollatRatio) {
             _collatRatio = _maxCollatRatio;
@@ -927,26 +937,23 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
 
         uint256 stkAavePriceToUSDC = estimatedAAVEToWant(1 ether) * (_MAX_BPS - _PESSIMISM_FACTOR) / _MAX_BPS;
 
-        console.log("POOL total %s", poolManager.getTotalAsset());
-
         ComputeProfitability.SCalculateBorrow memory parameters = ComputeProfitability.SCalculateBorrow({
             slope1: lendingPoolVariableRateSlope1,
             slope2: lendingPoolVariableRateSlope2,
             r0: lendingPoolBaseVariableBorrowRate,
-            totalStableDebt: int256(totalStableDebt * (10**27 / _DECIMALS)), // base 6 to ray
-            totalVariableDebt: int256(totalVariableDebt * (10**27 / _DECIMALS)), // base 6 to ray
+            totalStableDebt: int256(totalStableDebt * (10**27 / _DECIMALS)),
+            totalVariableDebt: int256(totalVariableDebt * (10**27 / _DECIMALS)),
             uOptimal: lendingPoolOptimalUtilizationRate,
-            totalDeposits: int256((availableLiquidity + totalStableDebt + totalVariableDebt) * (10**27 / _DECIMALS)), // base 6 to ray
+            totalDeposits: int256((availableLiquidity + totalStableDebt + totalVariableDebt) * (10**27 / _DECIMALS)),
             reserveFactor: aaveReserveFactor,
-            stableBorrowRate: int256(averageStableBorrowRate), // ray
-            rewardDeposit: int256(emissionPerSecondAToken * 10**9 * 60 * 60 * 24 * 365 * stkAavePriceToUSDC / 10**6), // ray / emissionPerSecondAToken: base 18 (stkAave)
-            rewardBorrow: int256(emissionPerSecondDebtToken * 10**9 * 60 * 60 * 24 * 365 * stkAavePriceToUSDC / 10**6), // ray / emissionPerSecondDebtToken: base 18 (stkAave)
-            poolManagerAssets: int256(poolManager.getTotalAsset() * (10**27 / _DECIMALS)) // base 6 to ray
+            stableBorrowRate: int256(averageStableBorrowRate),
+            rewardDeposit: int256(emissionPerSecondAToken * 10**9 * 60 * 60 * 24 * 365 * stkAavePriceToUSDC / 10**6),
+            rewardBorrow: int256(emissionPerSecondDebtToken * 10**9 * 60 * 60 * 24 * 365 * stkAavePriceToUSDC / 10**6),
+            poolManagerAssets: int256(poolManager.getTotalAsset() * (10**27 / _DECIMALS)),
+            maxCollatRatio: int256(maxCollatRatio * 10**9)
         });
         
         int256 _borrow = computeProfitability.computeProfitability(parameters);
-        console.log("BORRRRROW");
-        console.logInt(_borrow);
         borrow = uint256(_borrow) / (10**27 / _DECIMALS);
     }
 }
