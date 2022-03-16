@@ -10,6 +10,7 @@
     "compiler-version": "off",
     "private-vars-leading-underscore": "error",
     "reason-string": "off",
+    "const-name-snakecase": "off",
     "func-visibility": ["error", { "ignoreConstructors": true }]
   }
 }
