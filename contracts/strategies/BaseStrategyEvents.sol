@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "../external/AccessControl.sol";
+import "../external/AccessControlUpgradeable.sol";
 
 import "../interfaces/IStrategy.sol";
 import "../interfaces/IPoolManager.sol";

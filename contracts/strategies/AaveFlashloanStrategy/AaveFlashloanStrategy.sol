@@ -13,20 +13,22 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "./AaveLibraries.sol";
 import "./AaveInterfaces.sol";
 import "./UniswapInterfaces.sol";
-import "../BaseStrategy.sol";
+import "../BaseStrategyUpgradeable.sol";
 import "./ComputeProfitability.sol";
 
 import "hardhat/console.sol";
 
-contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
+contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower {
     using SafeERC20 for IERC20;
     using Address for address;
+
+    bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
     // AAVE protocol address
     IProtocolDataProvider private constant _protocolDataProvider = IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
     IAaveIncentivesController private constant _incentivesController = IAaveIncentivesController(0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5);
     ILendingPool private constant _lendingPool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
-    IReserveInterestRateStrategy private immutable _interestRateStrategyAddress;
+    IReserveInterestRateStrategy private constant _interestRateStrategyAddress = IReserveInterestRateStrategy(0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27);
 
     // Token addresses
     address private constant _aave = 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9;
@@ -45,9 +47,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     enum CooldownStatus {None, Claim, Initiated}
 
     // SWAP routers
-    IUni private constant _UNI_V2_ROUTER = IUni(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
-    IUni private constant _SUSHI_V2_ROUTER = IUni(0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F);
-    ISwapRouter private constant _UNI_V3_ROUTER = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+    address public constant oneInch = 0x1111111254fb6c44bAC0beD2854e76F90643097d;
 
     // OPS State Variables
     uint256 private constant _DEFAULT_COLLAT_TARGET_MARGIN = 0.02 ether;
@@ -59,7 +59,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     uint256 public maxCollatRatio; // Closest to liquidation we'll risk
     uint256 public daiBorrowCollatRatio; // Used for flashmint
 
-    bool public automaticallyComputeCollatRatio = true;
+    bool public automaticallyComputeCollatRatio;
 
     uint8 public maxIterations;
     bool public isFlashMintActive;
@@ -69,16 +69,8 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     uint256 public minRatio;
     uint256 public minRewardToSell;
 
-    enum SwapRouter {UniV2, SushiV2, UniV3}
-    SwapRouter public swapRouter = SwapRouter.UniV2; // only applied to aave => want, stkAave => aave always uses v3
-
-    bool public sellStkAave;
     bool public cooldownStkAave;
     uint256 public maxStkAavePriceImpactBps;
-
-    uint24 public stkAaveToAaveSwapFee;
-    uint24 public aaveToWethSwapFee;
-    uint24 public wethToWantSwapFee;
 
     bool private _alreadyAdjusted; // Signal whether a position adjust was done in prepareReturn
 
@@ -91,7 +83,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     uint256 private constant _PESSIMISM_FACTOR = 1000; // 10%
     uint256 private _DECIMALS;
 
-    ComputeProfitability public immutable computeProfitability;
+    ComputeProfitability public computeProfitability;
     AggregatorV3Interface public constant chainlinkOracle = AggregatorV3Interface(0x547a514d5e3769680Ce22B2361c10Ea13619e8a9);
 
     int256 public lendingPoolVariableRateSlope1; // base 27 (ray)
@@ -100,19 +92,25 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     int256 public lendingPoolOptimalUtilizationRate; // base 27 (ray)
     int256 public aaveReserveFactor; // base 27 (ray)
 
+    // ============================ Constructor ====================================
+
     /// @notice Constructor of the `Strategy`
     /// @param _poolManager Address of the `PoolManager` lending to this strategy
     /// @param _rewards  The token given to reward keepers.
     /// @param governorList List of addresses with governor privilege
     /// @param guardian Address of the guardian
-    constructor(
+    function initialize(
         address _poolManager,
         IERC20 _rewards,
         address[] memory governorList,
         address guardian,
+        address[] memory keepers,
         ComputeProfitability _computeProfitability
-    ) BaseStrategy(_poolManager, _rewards, governorList, guardian) {
-        require(address(aToken) == address(0));
+    ) external {
+        _initialize(_poolManager, _rewards, governorList, guardian);
+
+        require(address(aToken) == address(0), "0");
+        require(address(_computeProfitability) != address(0), "0");
 
         computeProfitability = _computeProfitability;
 
@@ -127,24 +125,20 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         minRewardToSell = 1e15;
 
         // reward params
-        swapRouter = SwapRouter.UniV2;
-        sellStkAave = true;
         cooldownStkAave = false;
         maxStkAavePriceImpactBps = 500;
 
-        stkAaveToAaveSwapFee = 3000;
-        aaveToWethSwapFee = 3000;
-        wethToWantSwapFee = 3000;
-
         _alreadyAdjusted = false;
 
-        IReserveInterestRateStrategy interestRateStrategyAddress_ = IReserveInterestRateStrategy((_lendingPool.getReserveData(address(want))).interestRateStrategyAddress);
-        _interestRateStrategyAddress = interestRateStrategyAddress_;
+        automaticallyComputeCollatRatio = true;
+
+        // IReserveInterestRateStrategy interestRateStrategyAddress_ = IReserveInterestRateStrategy((_lendingPool.getReserveData(address(want))).interestRateStrategyAddress);
+        // _interestRateStrategyAddress = interestRateStrategyAddress_;
         (,,,, uint256 reserveFactor,,,,,) = _protocolDataProvider.getReserveConfigurationData(address(want));
-        lendingPoolVariableRateSlope1 = int256(interestRateStrategyAddress_.variableRateSlope1());
-        lendingPoolVariableRateSlope2 = int256(interestRateStrategyAddress_.variableRateSlope2());
-        lendingPoolBaseVariableBorrowRate = int256(interestRateStrategyAddress_.baseVariableBorrowRate());
-        lendingPoolOptimalUtilizationRate = int256(interestRateStrategyAddress_.OPTIMAL_UTILIZATION_RATE());
+        lendingPoolVariableRateSlope1 = int256(_interestRateStrategyAddress.variableRateSlope1());
+        lendingPoolVariableRateSlope2 = int256(_interestRateStrategyAddress.variableRateSlope2());
+        lendingPoolBaseVariableBorrowRate = int256(_interestRateStrategyAddress.baseVariableBorrowRate());
+        lendingPoolOptimalUtilizationRate = int256(_interestRateStrategyAddress.OPTIMAL_UTILIZATION_RATE());
         aaveReserveFactor = int256(reserveFactor * 10**23);
 
         // Set aave tokens
@@ -173,10 +167,14 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         _approveMaxSpend(_dai, FlashMintLib.LENDER);
 
         // approve swap router spend
-        _approveMaxSpend(address(_stkAave), address(_UNI_V3_ROUTER));
-        _approveMaxSpend(_aave, address(_UNI_V2_ROUTER));
-        _approveMaxSpend(_aave, address(_SUSHI_V2_ROUTER));
-        _approveMaxSpend(_aave, address(_UNI_V3_ROUTER));
+        _approveMaxSpend(address(_stkAave), oneInch);
+        _approveMaxSpend(_aave, oneInch);
+
+        for (uint256 i = 0; i < keepers.length; i++) {
+            require(keepers[i] != address(0), "0");
+            _setupRole(KEEPER_ROLE, keepers[i]);
+        }
+        _setRoleAdmin(KEEPER_ROLE, GUARDIAN_ROLE);
     }
 
     // SETTERS
@@ -217,29 +215,14 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     }
 
     function setRewardBehavior(
-        SwapRouter _swapRouter,
-        bool _sellStkAave,
         bool _cooldownStkAave,
         uint256 _minRewardToSell,
-        uint256 _maxStkAavePriceImpactBps,
-        uint24 _stkAaveToAaveSwapFee,
-        uint24 _aaveToWethSwapFee,
-        uint24 _wethToWantSwapFee
+        uint256 _maxStkAavePriceImpactBps
     ) external onlyRole(GUARDIAN_ROLE) {
-        require(
-            _swapRouter == SwapRouter.UniV2 ||
-            _swapRouter == SwapRouter.SushiV2 ||
-            _swapRouter == SwapRouter.UniV3
-        );
         require(_maxStkAavePriceImpactBps <= _MAX_BPS);
-        swapRouter = _swapRouter;
-        sellStkAave = _sellStkAave;
         cooldownStkAave = _cooldownStkAave;
         minRewardToSell = _minRewardToSell;
         maxStkAavePriceImpactBps = _maxStkAavePriceImpactBps;
-        stkAaveToAaveSwapFee = _stkAaveToAaveSwapFee;
-        aaveToWethSwapFee = _aaveToWethSwapFee;
-        wethToWantSwapFee = _wethToWantSwapFee;
     }
 
     /// @notice Retrieves lending pool rates for `want`. Those variables are mostly used in `computeMostProfitableBorrow`
@@ -288,8 +271,7 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
     /// @return _debtPayment Amount freed to reimburse the debt
     /// @dev If `_debtOutstanding` is more than we can free we get as much as possible.
     function _prepareReturn(uint256 _debtOutstanding) internal override returns (uint256 _profit, uint256 _loss, uint256 _debtPayment) {
-        // claim & sell rewards
-        _claimAndSellRewards();
+        _claimRewards();
 
         // account for profit / losses
         uint256 totalDebt = poolManager.strategies(address(this)).totalStrategyDebt;
@@ -454,17 +436,12 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         _withdrawCollateral(amount);
     }
 
-    /// @notice Emergency function that we can use to sell rewards if something is broken
-    function manualClaimAndSellRewards() external onlyRole(GUARDIAN_ROLE) {
-        _claimAndSellRewards();
-    }
-
     // INTERNAL ACTIONS
 
-    /// @notice Claim earned stkAAVE and swap them for `want`
+    /// @notice Claim earned stkAAVE (only called at `harvest`)
     /// @dev stkAAVE require a "cooldown" period of 10 days before being claimed
-    function _claimAndSellRewards() internal {
-        uint256 stkAaveBalance = _balanceOfStkAave();
+    function _claimRewards() internal returns(uint256 stkAaveBalance) {
+        stkAaveBalance = _balanceOfStkAave();
         CooldownStatus cooldownStatus;
         if (stkAaveBalance > 0) {
             cooldownStatus = _checkCooldown(); // don't check status if we have no stkAave
@@ -490,17 +467,36 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         if (cooldownStkAave && stkAaveBalance > 0 && cooldownStatus == CooldownStatus.None) {
             _stkAave.cooldown();
         }
+    }
 
-        // Always keep 1 wei to get around cooldown clear
-        if (sellStkAave && stkAaveBalance >= minRewardToSell + 1) {
-            uint256 minAAVEOut = (stkAaveBalance * (_MAX_BPS - maxStkAavePriceImpactBps)) / _MAX_BPS;
-            _sellSTKAAVEToAAVE(stkAaveBalance - 1, minAAVEOut);
+    function _revertBytes(bytes memory errMsg) internal pure {
+        if (errMsg.length > 0) {
+            //solhint-disable-next-line
+            assembly {
+                revert(add(32, errMsg), mload(errMsg))
+            }
+        }
+        revert("117");
+    }
+
+    /// @notice Swap earned stkAave them for `want` through 1Inch
+    /// @param minAmountOut Minimum amount of `want` to receive for the swap to happen
+    /// @param payload Bytes needed for 1Inch API. Tokens swapped should be: stkAave -> `want`
+    function sellRewards(uint256 minAmountOut, bytes memory payload, bool claim) external onlyRole(KEEPER_ROLE) {
+        uint256 stkAaveBalance;
+        if (claim) {
+            stkAaveBalance = _claimRewards();
+        } else {
+            stkAaveBalance = _balanceOfStkAave();
         }
 
-        // sell AAVE for want
-        uint256 aaveBalance = _balanceOfAave();
-        if (aaveBalance >= minRewardToSell) {
-            _sellAAVEForWant(aaveBalance, 0);
+        // Always keep 1 wei to get around cooldown clear
+        if (stkAaveBalance >= minRewardToSell + 1) {
+            (bool success, bytes memory result) = oneInch.call(payload);
+            if (!success) _revertBytes(result);
+
+            uint256 amountOut = abi.decode(result, (uint256));
+            require(amountOut >= minAmountOut, "15");
         }
     }
 
@@ -764,87 +760,6 @@ contract AaveFlashloanStrategy is BaseStrategy, IERC3156FlashBorrower {
         if (block.timestamp < nextClaimStartTimestamp) {
             return CooldownStatus.Initiated;
         }
-    }
-
-    /// @notice Get swap path for UniswapV2/Sushiswap router
-    /// @param _token_in Token we are selling
-    /// @param _token_out Token we are buying
-    function _getTokenOutPathV2(address _token_in, address _token_out) internal pure returns (address[] memory _path) {
-        bool is_weth = _token_in == address(_weth) || _token_out == address(_weth);
-        _path = new address[](is_weth ? 2 : 3);
-        _path[0] = _token_in;
-
-        if (is_weth) {
-            _path[1] = _token_out;
-        } else {
-            _path[1] = address(_weth);
-            _path[2] = _token_out;
-        }
-    }
-
-    /// @notice Swap AAVE (previously swapped from stkAAVE) to `want` token on `swapRouter` (UniswapV2, UniswapV3 or Sushiswap)
-    /// @param amountIn Amount of AAVE to sell
-    /// @param minOut Minimum amount of `want` we expect to get out
-    function _sellAAVEForWant(uint256 amountIn, uint256 minOut) internal {
-        if (amountIn == 0) {
-            return;
-        }
-        if (swapRouter == SwapRouter.UniV3) {
-            bytes memory _path;
-            if (address(want) == _weth) {
-                _path = abi.encodePacked(
-                    address(_aave),
-                    aaveToWethSwapFee,
-                    address(_weth)
-                );
-            } else {
-                _path = abi.encodePacked(
-                    address(_aave),
-                    aaveToWethSwapFee,
-                    address(_weth),
-                    wethToWantSwapFee,
-                    address(want)
-                );
-            }
-
-            _UNI_V3_ROUTER.exactInput(
-                ISwapRouter.ExactInputParams(
-                    _path,
-                    address(this),
-                    block.timestamp,
-                    amountIn,
-                    minOut
-                )
-            );
-        } else {
-            IUni router = swapRouter == SwapRouter.UniV2 ? _UNI_V2_ROUTER : _SUSHI_V2_ROUTER;
-            router.swapExactTokensForTokens(
-                amountIn,
-                minOut,
-                _getTokenOutPathV2(address(_aave), address(want)),
-                address(this),
-                block.timestamp
-            );
-        }
-    }
-
-    /// @notice Swap incentive rewards (stkAAVE) to AAVE on UniswapV3
-    /// @param amountIn Amount of stkAAVE to sell
-    /// @param minOut Minimum amount of AAVE we expect to get out
-    function _sellSTKAAVEToAAVE(uint256 amountIn, uint256 minOut) internal {
-        // NOTE: Unoptimized, can be frontrun and most importantly this pool is low liquidity
-        _UNI_V3_ROUTER.exactInputSingle(
-            ISwapRouter.ExactInputSingleParams(
-                address(_stkAave),
-                address(_aave),
-                stkAaveToAaveSwapFee,
-                address(this),
-                block.timestamp,
-                amountIn, // wei
-                minOut,
-                0
-            )
-        );
     }
 
     /// @notice Get the deposit and debt token for our `want` token
