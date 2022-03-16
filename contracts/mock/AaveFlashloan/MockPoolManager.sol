@@ -48,7 +48,7 @@ contract MockPoolManager is AccessControl {
 
         uint256 target = (_getTotalAsset() * params.debtRatio) / BASE_PARAMS;
 
-        console.log("debtOutstanding: totalStrategyDebt %s / target: %s / debtRatio: %s", params.totalStrategyDebt, target, params.debtRatio);
+        // console.log("debtOutstanding: totalStrategyDebt %s / target: %s / debtRatio: %s", params.totalStrategyDebt, target, params.debtRatio);
 
         if (target > params.totalStrategyDebt) return 0;
 
@@ -72,12 +72,12 @@ contract MockPoolManager is AccessControl {
         // The only issue is if the strategy is compromised; in this case governance
         // should revoke the strategy
         uint256 target = ((_getTotalAsset()) * params.debtRatio) / BASE_PARAMS;
-        console.log("PoolManager - report");
-        console.log("_getTotalAsset %s / target %s", _getTotalAsset(), target);
+        // console.log("PoolManager - report");
+        // console.log("_getTotalAsset %s / target %s", _getTotalAsset(), target);
         if (target > params.totalStrategyDebt) {
             // If the strategy has some credit left, tokens can be transferred to this strategy
             uint256 available = Math.min(target - params.totalStrategyDebt, _getBalance());
-            console.log("available1 %s", available);
+            // console.log("available1 %s", available);
             params.totalStrategyDebt = params.totalStrategyDebt + available;
             totalDebt = totalDebt + available;
             if (available > 0) {
@@ -85,7 +85,7 @@ contract MockPoolManager is AccessControl {
             }
         } else {
             uint256 available = Math.min(params.totalStrategyDebt - target, debtPayment + gain);
-            console.log("available2 %s", available);
+            // console.log("available2 %s", available);
             params.totalStrategyDebt = params.totalStrategyDebt - available;
             totalDebt = totalDebt - available;
             if (available > 0) {
@@ -97,6 +97,10 @@ contract MockPoolManager is AccessControl {
 
     function _getBalance() internal view returns (uint256) {
         return token.balanceOf(address(this));
+    }
+
+    function getTotalAsset() external view returns (uint256) {
+        return _getTotalAsset();
     }
 
     function _getTotalAsset() internal view returns (uint256) {
@@ -151,5 +155,13 @@ contract MockPoolManager is AccessControl {
         _revokeRole(STRATEGY_ROLE, strategy);
 
         emit StrategyRevoked(strategy);
+    }
+
+    function updateStrategyDebtRatio(address strategy, uint256 _debtRatio) external {
+        StrategyParams storage params = strategies[strategy];
+        require(params.lastReport != 0, "78");
+        debtRatio = debtRatio + _debtRatio - params.debtRatio;
+        require(debtRatio <= BASE_PARAMS, "76");
+        params.debtRatio = _debtRatio;
     }
 }

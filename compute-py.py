@@ -33,13 +33,13 @@ price_Aave = 127
 
 # for USDC on Aave 
 # currently deposited assets on the poolManager
-poolManagerFund = 157714195
+poolManagerFund = 2000000.0
 # current stable borrows on compound 
-compBorrowStable = 11958029.754937
+compBorrowStable = 12293507.852921
 # current variable borrows on compound 
-compBorrowVariable = 1425711403.399322
+compBorrowVariable = 1387980428.907538
 # current deposits on compound 
-compDeposit = 812664505.140562 + compBorrowStable + compBorrowVariable
+compDeposit = 2069734850.295572 # 669460913.5351131 + compBorrowStable + compBorrowVariable
 # optimal utilisation ratio
 uOptimal = 0.9
 # base rate 
@@ -49,13 +49,13 @@ slope1 = 0.04
 # slope borrow rate after U optimal
 slope2 = 0.6
 # average fixed borow rate
-rFixed = 0.108870068051917638359824820
+rFixed = 0.10863054577400451
 # reserve factor
 rf = 0.1
 # rewards per second (in dollar) in farm tokens from deposits
-rewardDeposit = price_Aave * 1903258773510960 * 60 * 60 * 24 * 365/ 10**18 # this is as if there was 150$ distributed each week
+rewardDeposit = 6198502.5307997195
 # rewards per second (in dollar) in farm tokens from borrows
-rewardBorrow = price_Aave * 3806517547021920 * 60 * 60 * 24 * 365 / 10**18
+rewardBorrow = 12397005.061599439
 
 # params iteravite method
 # tolerance on diff between b on GD
@@ -65,8 +65,10 @@ tolNR = 10**(-1)
 # max iteration methods
 maxCount = 30
 
+maxCollatRatio = 0.845
+
 # different borrow 
-b = np.arange(0, compDeposit * 2 , compDeposit/1000)
+b = np.arange(0, compDeposit / 10, compDeposit/1000)
 # if we only consider the rewards from borrow as the full revenue will only be a translation of the one only considering borrow rewards
 rewards = np.arange(0, 0.1, 0.005)
 
@@ -226,6 +228,11 @@ def newtonRaphson(bInit, tol):
         bInit = b
         b = bInit - grad / grad2nd
         count +=1
+
+    collatRatio = b / (poolManagerFund + b)
+    print("collatRatio", collatRatio)
+    if (collatRatio > maxCollatRatio):
+        b = maxCollatRatio * poolManagerFund / (1-maxCollatRatio)
 
     return(b,count)
 
