@@ -132,12 +132,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
         // IReserveInterestRateStrategy interestRateStrategyAddress_ = IReserveInterestRateStrategy((_lendingPool.getReserveData(address(want))).interestRateStrategyAddress);
         // _interestRateStrategyAddress = interestRateStrategyAddress_;
-        (,,,, uint256 reserveFactor,,,,,) = _protocolDataProvider.getReserveConfigurationData(address(want));
-        lendingPoolVariableRateSlope1 = int256(_interestRateStrategyAddress.variableRateSlope1());
-        lendingPoolVariableRateSlope2 = int256(_interestRateStrategyAddress.variableRateSlope2());
-        lendingPoolBaseVariableBorrowRate = int256(_interestRateStrategyAddress.baseVariableBorrowRate());
-        lendingPoolOptimalUtilizationRate = int256(_interestRateStrategyAddress.OPTIMAL_UTILIZATION_RATE());
-        aaveReserveFactor = int256(reserveFactor * 10**23);
+        _setAavePoolVariables();
 
         // Set aave tokens
         (address _aToken, , address _debtToken) = _protocolDataProvider.getReserveTokensAddresses(address(want));
@@ -220,6 +215,12 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @notice Retrieves lending pool rates for `want`. Those variables are mostly used in `computeMostProfitableBorrow`
     /// @dev No access control needed because they fetch the values from Aave directly. If it changes there, it will need to be updated here too
     function setAavePoolVariables() external {
+        _setAavePoolVariables();
+    }
+
+    /// @notice Retrieves lending pool rates for `want`. Those variables are mostly used in `computeMostProfitableBorrow`
+    /// @dev No access control needed because they fetch the values from Aave directly. If it changes there, it will need to be updated here too
+    function _setAavePoolVariables() internal {
         (,,,, uint256 reserveFactor,,,,,) = _protocolDataProvider.getReserveConfigurationData(address(want));
         
         lendingPoolVariableRateSlope1 = int256(_interestRateStrategyAddress.variableRateSlope1());

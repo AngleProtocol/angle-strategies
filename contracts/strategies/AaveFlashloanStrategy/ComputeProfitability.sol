@@ -197,10 +197,10 @@ contract ComputeProfitability {
             borrow = 0;
         }
 
-        int256 collatRatio = (borrow * _BASE_RAY) / (parameters.poolManagerAssets + borrow);
-        if (collatRatio > parameters.maxCollatRatio) {
-            borrow = parameters.maxCollatRatio * parameters.poolManagerAssets / (_BASE_RAY - parameters.maxCollatRatio);
-        }
+        // int256 collatRatio = (borrow * _BASE_RAY) / (parameters.poolManagerAssets + borrow);
+        // if (collatRatio > parameters.maxCollatRatio) {
+        //     borrow = parameters.maxCollatRatio * parameters.poolManagerAssets / (_BASE_RAY - parameters.maxCollatRatio);
+        // }
     }
 
     function computeProfitability(SCalculateBorrow memory parameters) public view returns(int256 borrow) {
