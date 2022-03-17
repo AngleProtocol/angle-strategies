@@ -384,11 +384,15 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         }
     }
 
+    function _liquidatePosition(uint256 _amountNeeded) internal override returns (uint256, uint256) {
+        return _liquidatePosition(_amountNeeded, _balanceOfWant());
+    }
+
     /// @notice Withdraws `_amountNeeded` of `want` from Aave
     /// @param _amountNeeded Amount of `want` to free
     /// @return _liquidatedAmount Amount of `want` available
     /// @return _loss Difference between `_amountNeeded` and what is actually available
-    function _liquidatePosition(uint256 _amountNeeded, uint256 wantBalance) internal override returns (uint256 _liquidatedAmount, uint256 _loss) {
+    function _liquidatePosition(uint256 _amountNeeded, uint256 wantBalance) internal returns (uint256 _liquidatedAmount, uint256 _loss) {
         // NOTE: Maintain invariant `want.balanceOf(this) >= _liquidatedAmount`
         // NOTE: Maintain invariant `_liquidatedAmount + _loss <= _amountNeeded`
         if (wantBalance > _amountNeeded) {
@@ -419,8 +423,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @notice Withdraw as much as we can from Aave
     /// @return _amountFreed Amount successfully freed
     function _liquidateAllPositions() internal override returns (uint256 _amountFreed) {
-
-        (_amountFreed, ) = _liquidatePosition(type(uint256).max, _balanceOfWant());
+        (_amountFreed, ) = _liquidatePosition(type(uint256).max);
     }
 
     function _protectedTokens() internal view override returns (address[] memory) {}
