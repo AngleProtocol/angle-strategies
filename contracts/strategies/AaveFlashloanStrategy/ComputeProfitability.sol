@@ -1,9 +1,12 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0
 
 pragma solidity 0.8.7;
 
 import "./AaveInterfaces.sol";
 
+/// @title ComputeProfitability
+/// @author Angle Core Team
+/// @notice Helper contract to get the optimal borrow amount from a set of provided parameters from Aave
 contract ComputeProfitability {
     struct SCalculateBorrow {
         int256 reserveFactor;

@@ -16,6 +16,12 @@ import "./UniswapInterfaces.sol";
 import "../BaseStrategyUpgradeable.sol";
 import "./ComputeProfitability.sol";
 
+/// @title AaveFlashloanStrategy
+/// @author Yearn Finance (https://etherscan.io/address/0xd4E94061183b2DBF24473F28A3559cf4dE4459Db#code) 
+/// but heavily reviewed and modified by Angle Core Team
+/// @notice This strategy is used to optimize lending yield on Aave by taking some form or recursivity that is to say
+/// by borrowing to maximize Aave rewards
+/// @dev Angle strategies computes the optimal collateral ratio based on AAVE rewards for deposits and borrows
 // solhint-disable-next-line max-states-count
 contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower {
     using SafeERC20 for IERC20;
@@ -83,6 +89,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @notice Minimum gap between the collat ratio and the target collat ratio before
     /// rectifying it
     uint256 public minRatio;
+    /// @notice Discount factor applied to the StkAAVE price
+    uint256 public discountFactor;
     /// @notice Max number of iterations possible for the computation of the optimal lever
     uint8 public maxIterations;
     /// @notice Signal whether a position adjustment was done in `prepareReturn`
@@ -143,6 +151,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         // Setting mins
         minWant = 100;
         minRatio = 0.005 ether;
+        discountFactor = 9000;
 
         boolParams = BoolParams({
             automaticallyComputeCollatRatio: true,
@@ -186,11 +195,11 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @notice Estimates the toal assets controlled by the strategy
     /// @dev It sums the effective deposit amount to the rewards accumulated
     function estimatedTotalAssets() public view override returns (uint256) {
-        uint256 wantBalance = _balanceOfWant();
+        (uint256 deposits, uint256 borrows) = getCurrentPosition();
         return
-            _estimatedTotalAssetsExcludingRewards(wantBalance) +
-            _estimatedAAVEToWant(
-                    _balanceOfStkAave() +
+            _balanceOfWant() + deposits - borrows +
+            _estimatedStkAaveToWant(
+                    _balanceOfStkAave() + _balanceOfAave() + 
                     _incentivesController.getRewardsBalance(_getAaveAssets(), address(this))
             );
     }
@@ -283,12 +292,12 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @notice Function called by harvest() to adjust the position
     /// @dev It computes the optimal collateral ratio and adjusts deposits/borrows accordingly
     function _adjustPosition() internal override {
-        uint256 _debtOutstanding = poolManager.debtOutstanding();
-
         if (_alreadyAdjusted) {
             _alreadyAdjusted = false; // reset for next time
             return;
         }
+
+        uint256 _debtOutstanding = poolManager.debtOutstanding();
 
         uint256 wantBalance = _balanceOfWant();
         // deposit available want as collateral
@@ -299,8 +308,11 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         }
 
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
+        uint256 _targetCollatRatio;
         if (boolParams.automaticallyComputeCollatRatio) {
-            _computeOptimalCollatRatio(wantBalance, deposits - borrows);
+            _targetCollatRatio = _computeOptimalCollatRatio(wantBalance, deposits - borrows);
+        } else {
+            _targetCollatRatio = targetCollatRatio;
         }
 
         // check current position
@@ -313,15 +325,15 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
             // NOTE: vault will take free funds during the next harvest
             _freeFunds(amountRequired, deposits, borrows);
-        } else if (currentCollatRatio < targetCollatRatio) {
+        } else if (currentCollatRatio < _targetCollatRatio) {
             // we should lever up
-            if (targetCollatRatio - currentCollatRatio > minRatio) {
+            if (_targetCollatRatio - currentCollatRatio > minRatio) {
                 // we only act on relevant differences
                 _leverMax(deposits, borrows);
             }
-        } else if (currentCollatRatio > targetCollatRatio) {
-            if (currentCollatRatio - targetCollatRatio > minRatio) {
-                uint256 newBorrow = _getBorrowFromSupply(deposits - borrows, targetCollatRatio);
+        } else if (currentCollatRatio > _targetCollatRatio) {
+            if (currentCollatRatio - _targetCollatRatio > minRatio) {
+                uint256 newBorrow = _getBorrowFromSupply(deposits - borrows, _targetCollatRatio);
                 _leverDownTo(newBorrow, deposits, borrows);
             }
         }
@@ -422,6 +434,12 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         boolParams = _boolParams;
     }
 
+    /// @notice Sets the discount factor for the StkAAVE price
+    function setDiscountFactor(uint256 _discountFactor) external onlyRole(GUARDIAN_ROLE) {
+        require(_discountFactor < 10000, "4");
+        discountFactor = _discountFactor;
+    }
+
     /// @notice Retrieves lending pool variables for `want`. Those variables are mostly used in `computeMostProfitableBorrow`
     /// @dev No access control needed because they fetch the values from Aave directly.
     /// If it changes there, it will need to be updated here too
@@ -462,21 +480,17 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         _revokeRole(GUARDIAN_ROLE, guardian);
     }
 
-    /// @notice Swap earned stkAave them for `want` through 1Inch
+    /// @notice Swap earned stkAave or Aave for `want` through 1Inch
     /// @param minAmountOut Minimum amount of `want` to receive for the swap to happen
-    /// @param payload Bytes needed for 1Inch API. Tokens swapped should be: stkAave -> `want`
+    /// @param payload Bytes needed for 1Inch API. Tokens swapped should be: stkAave -> `want` or Aave -> `want`
     function sellRewards(
         uint256 minAmountOut,
         bytes memory payload,
         bool claim
     ) external onlyRole(KEEPER_ROLE) {
-        uint256 stkAaveBalance;
         if (claim) {
-            stkAaveBalance = _claimRewards();
-        } else {
-            stkAaveBalance = _balanceOfStkAave();
+            _claimRewards();
         }
-
         //solhint-disable-next-line
         (bool success, bytes memory result) = _oneInch.call(payload);
         if (!success) _revertBytes(result);
@@ -559,7 +573,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             totalAmountToBorrow = totalAmountToBorrow - _leverUpStep(totalAmountToBorrow, deposits, borrows);
 
             if (totalAmountToBorrow > minWant) {
-                totalAmountToBorrow = totalAmountToBorrow - _leverUpFlashLoan(totalAmountToBorrow, deposits, borrows);
+                totalAmountToBorrow = totalAmountToBorrow - _leverUpFlashLoan(totalAmountToBorrow);
             }
         } else {
             for (uint8 i = 0; i < maxIterations && totalAmountToBorrow > minWant; i++) {
@@ -575,10 +589,9 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @return amount Actual amount deposited/borrowed
     /// @dev Amount returned should equal `amount` but can be lower if we try to flashloan more than `maxFlashLoan` authorized
     function _leverUpFlashLoan(
-        uint256 amount,
-        uint256 deposits,
-        uint256 borrows
+        uint256 amount
     ) internal returns (uint256) {
+        (uint256 deposits, uint256 borrows) = getCurrentPosition();
         uint256 depositsToMeetLtv = _getDepositFromBorrow(borrows, maxBorrowCollatRatio);
         uint256 depositsDeficitToMeetLtv = 0;
         if (depositsToMeetLtv > deposits) {
@@ -787,7 +800,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
         ) = _protocolDataProvider.getReserveData(address(want));
 
-        uint256 stkAavePriceToUSDC = _estimatedAAVEToWant(1 ether);
+        uint256 stkAavePriceInWant = _estimatedStkAaveToWant(1 ether);
         // This works if `wantBase < 10**27` which we should expect to be very the case for the strategies we are
         // launching at the moment
         uint256 normalizationFactor = 10**27 / wantBase;
@@ -802,8 +815,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             totalVariableDebt: int256(totalVariableDebt * normalizationFactor),
             totalDeposits: int256((availableLiquidity + totalStableDebt + totalVariableDebt) * normalizationFactor),
             stableBorrowRate: int256(averageStableBorrowRate),
-            rewardDeposit: int256(emissionPerSecondAToken * 10**3 * 86400 * 365 * stkAavePriceToUSDC),
-            rewardBorrow: int256(emissionPerSecondDebtToken * 10**3 * 86400 * 365 * stkAavePriceToUSDC),
+            rewardDeposit: int256(emissionPerSecondAToken * 10**3 * 86400 * 365 * stkAavePriceInWant),
+            rewardBorrow: int256(emissionPerSecondDebtToken * 10**3 * 86400 * 365 * stkAavePriceInWant),
             poolManagerAssets: int256(balanceExcludingRewards * normalizationFactor),
             maxCollatRatio: int256(maxCollatRatio * 10**9),
             slope1: _slope1,
@@ -840,23 +853,15 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         return IERC20(address(_stkAave)).balanceOf(address(this));
     }
 
-    /// @notice Returns the total assets actually controlled by the strategy without taking into account
-    /// rewards accumulated by it
-    /// @dev This function is always called following a call to the `wantBalance`
-    function _estimatedTotalAssetsExcludingRewards(uint256 wantBalance) internal view returns (uint256) {
-        (uint256 deposits, uint256 borrows) = getCurrentPosition();
-        return wantBalance + deposits - borrows;
-    }
-
     /// @notice Estimate the amount of `want` we will get out by swapping it for AAVE
     /// @param amount Amount of AAVE we want to exchange (in base 18)
     /// @return amount Amount of `want` we are getting. We include a discount to account for slippage equal to 9000
     /// @dev Uses Chainlink spot price. Return value will be in base of `want` (6 for USDC)
-    function _estimatedAAVEToWant(uint256 amount) internal view returns (uint256) {
+    function _estimatedStkAaveToWant(uint256 amount) internal view returns (uint256) {
         (, int256 aavePriceUSD, , , ) = _chainlinkOracle.latestRoundData(); // stkAavePriceUSD is in base 8
         // `aavePriceUSD` is in base 8, and the discount factor is in base 4, so ultimately we need to divide
         // by `1e(18+8+4)
-        return (uint256(aavePriceUSD) * amount * wantBase * 9000) / 1e30;
+        return (uint256(aavePriceUSD) * amount * wantBase * discountFactor) / 1e30;
     }
 
     /// @notice Verifies the cooldown status for earned stkAAVE
