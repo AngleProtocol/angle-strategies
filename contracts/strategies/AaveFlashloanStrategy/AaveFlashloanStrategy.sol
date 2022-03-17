@@ -38,6 +38,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     ILendingPool private constant _lendingPool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
     IProtocolDataProvider private constant _protocolDataProvider =
         IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
+    IReserveInterestRateStrategy private constant _interestRateStrategyAddress =
+         IReserveInterestRateStrategy(0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27);
 
     // ============================== Token Addresses ==============================
 
@@ -61,6 +63,10 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     uint256 private _cooldownSeconds;
     uint256 private _unstakeWindow;
     int256 private _reserveFactor;
+    int256 private _slope1;
+    int256 private _slope2;
+    int256 private _r0;
+    int256 private _uOptimal;
 
     // =============================== Parameters and Variables ====================
 
@@ -110,20 +116,18 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
     /// @notice Constructor of the `Strategy`
     /// @param _poolManager Address of the `PoolManager` lending to this strategy
-    /// @param _rewards  The token given to reward keepers
-    /// @param governorList List of addresses with governor privilege
+    /// @param governor Governor address of the protocol
     /// @param guardian Address of the guardian
     /// @param keepers List of the addresses with keeper privilege
     /// @param _computeProfitability Reference to the contract used to compute leverage
     function initialize(
         address _poolManager,
-        IERC20 _rewards,
-        address[] memory governorList,
+        address governor,
         address guardian,
         address[] memory keepers,
         ComputeProfitability _computeProfitability
     ) external {
-        _initialize(_poolManager, _rewards, governorList, guardian);
+        _initialize(_poolManager, governor, guardian);
         // Initializing roles first
         for (uint256 i = 0; i < keepers.length; i++) {
             require(keepers[i] != address(0), "0");
@@ -754,6 +758,10 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         _cooldownSeconds = IStakedAave(_stkAave).COOLDOWN_SECONDS();
         _unstakeWindow = IStakedAave(_stkAave).UNSTAKE_WINDOW();
         _reserveFactor = int256(reserveFactor_ * 10**23);
+        _slope1 = int256(_interestRateStrategyAddress.variableRateSlope1());
+        _slope2 = int256(_interestRateStrategyAddress.variableRateSlope2());
+        _r0 = int256(_interestRateStrategyAddress.baseVariableBorrowRate());
+        _uOptimal = int256(_interestRateStrategyAddress.OPTIMAL_UTILIZATION_RATE());
     }
 
     // ========================= Internal View Functions ===========================
@@ -798,7 +806,11 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             rewardDeposit: int256(emissionPerSecondAToken * 10**3 * 86400 * 365 * stkAavePriceToUSDC),
             rewardBorrow: int256(emissionPerSecondDebtToken * 10**3 * 86400 * 365 * stkAavePriceToUSDC),
             poolManagerAssets: int256(balanceExcludingRewards * normalizationFactor),
-            maxCollatRatio: int256(maxCollatRatio * 10**9)
+            maxCollatRatio: int256(maxCollatRatio * 10**9),
+            slope1: _slope1,
+            slope2: _slope2,
+            r0: _r0,
+            uOptimal: _uOptimal
         });
 
         borrow = uint256(computeProfitability.computeProfitability(parameters)) / normalizationFactor;

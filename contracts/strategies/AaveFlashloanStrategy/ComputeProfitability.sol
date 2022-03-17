@@ -15,26 +15,13 @@ contract ComputeProfitability {
         int256 rewardBorrow;
         int256 poolManagerAssets;
         int256 maxCollatRatio;
+        int256 slope1;
+        int256 slope2;
+        int256 r0;
+        int256 uOptimal;
     }
-
-    IReserveInterestRateStrategy private constant _interestRateStrategyAddress =
-        IReserveInterestRateStrategy(0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27);
-    IProtocolDataProvider private constant _protocolDataProvider =
-        IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
-
-    int256 public slope1;
-    int256 public slope2;
-    int256 public r0;
-    int256 public uOptimal;
 
     constructor() {}
-
-    function setAavePoolVariables() external {
-        slope1 = int256(_interestRateStrategyAddress.variableRateSlope1());
-        slope2 = int256(_interestRateStrategyAddress.variableRateSlope2());
-        r0 = int256(_interestRateStrategyAddress.baseVariableBorrowRate());
-        uOptimal = int256(_interestRateStrategyAddress.OPTIMAL_UTILIZATION_RATE());
-    }
 
     int256 private constant _BASE_RAY = 10**27;
 
@@ -47,15 +34,15 @@ contract ComputeProfitability {
     // borrow must be in BASE token (6 for USDC)
     function _calculateInterest(int256 borrow, SCalculateBorrow memory parameters)
         internal
-        view
+        pure
         returns (int256 interests)
     {
         int256 newUtilization = _computeUtilization(borrow, parameters);
 
-        if (newUtilization < uOptimal) {
-            interests = r0 + (slope1 * newUtilization) / uOptimal;
+        if (newUtilization < parameters.uOptimal) {
+            interests = parameters.r0 + (parameters.slope1 * newUtilization) / parameters.uOptimal;
         } else {
-            interests = r0 + slope1 + (slope2 * (newUtilization - uOptimal)) / (_BASE_RAY - uOptimal);
+            interests = parameters.r0 + parameters.slope1 + (parameters.slope2 * (newUtilization - parameters.uOptimal)) / (_BASE_RAY - parameters.uOptimal);
         }
         return interests;
     }
@@ -69,15 +56,15 @@ contract ComputeProfitability {
     // return value "interests" in BASE ray
     function _calculateInterestPrime(int256 borrow, SCalculateBorrow memory parameters)
         internal
-        view
+        pure
         returns (int256 interests)
     {
         int256 uprime = _computeUprime(borrow, parameters);
         uprime = (uprime * _BASE_RAY) / (parameters.totalDeposits + borrow);
-        if (_computeUtilization(borrow, parameters) < uOptimal) {
-            interests = (slope1 * uprime) / uOptimal;
+        if (_computeUtilization(borrow, parameters) < parameters.uOptimal) {
+            interests = (parameters.slope1 * uprime) / parameters.uOptimal;
         } else {
-            interests = (slope2 * uprime) / (_BASE_RAY - uOptimal);
+            interests = (parameters.slope2 * uprime) / (_BASE_RAY - parameters.uOptimal);
         }
 
         return interests;
@@ -86,21 +73,21 @@ contract ComputeProfitability {
     // return value "interests" in BASE ray
     function _calculateInterestPrime2(int256 borrow, SCalculateBorrow memory parameters)
         internal
-        view
+        pure
         returns (int256 interests)
     {
         int256 uprime = -2 * _computeUprime(borrow, parameters); // BASE ray
         uprime = (uprime * _BASE_RAY) / (parameters.totalDeposits + borrow);
         uprime = (uprime * _BASE_RAY) / (parameters.totalDeposits + borrow);
-        if (_computeUtilization(borrow, parameters) < uOptimal) {
-            interests = (slope1 * uprime) / uOptimal;
+        if (_computeUtilization(borrow, parameters) < parameters.uOptimal) {
+            interests = (parameters.slope1 * uprime) / parameters.uOptimal;
         } else {
-            interests = (slope2 * uprime) / (_BASE_RAY - uOptimal);
+            interests = (parameters.slope2 * uprime) / (_BASE_RAY - parameters.uOptimal);
         }
         return interests;
     }
 
-    function _revenue(int256 borrow, SCalculateBorrow memory parameters) internal view returns (int256) {
+    function _revenue(int256 borrow, SCalculateBorrow memory parameters) internal pure returns (int256) {
         int256 newRate = _calculateInterest(borrow, parameters);
         int256 poolManagerFund = parameters.poolManagerAssets;
         int256 newPoolDeposit = borrow + poolManagerFund;
@@ -155,7 +142,7 @@ contract ComputeProfitability {
         int256 borrow,
         SCalculateBorrow memory parameters,
         SRevenuePrimeVars memory vars
-    ) internal view returns (int256) {
+    ) internal pure returns (int256) {
         int256 newRatePrime2 = _calculateInterestPrime2(borrow, parameters);
 
         int256 derivate;
@@ -207,7 +194,7 @@ contract ComputeProfitability {
 
     function _revenuePrimeVars(int256 borrow, SCalculateBorrow memory parameters)
         internal
-        view
+        pure
         returns (SRevenuePrimeVars memory)
     {
         int256 newRate = _calculateInterest(borrow, parameters);
@@ -247,7 +234,7 @@ contract ComputeProfitability {
         int256 _borrow,
         int256 tolerance,
         SCalculateBorrow memory parameters
-    ) internal view returns (int256 borrow, int256 count) {
+    ) internal pure returns (int256 borrow, int256 count) {
         int256 grad;
         int256 grad2nd;
 
@@ -282,7 +269,7 @@ contract ComputeProfitability {
         // }
     }
 
-    function computeProfitability(SCalculateBorrow memory parameters) external view returns (int256 borrow) {
+    function computeProfitability(SCalculateBorrow memory parameters) external pure returns (int256 borrow) {
         int256 tolerance = 10**(27 - 2); // 1%
         (borrow, ) = _newtonRaphson(parameters.poolManagerAssets, tolerance, parameters);
     }
