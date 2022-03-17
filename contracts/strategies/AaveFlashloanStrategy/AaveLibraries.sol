@@ -50,7 +50,11 @@ library DataTypes {
         uint256 data;
     }
 
-    enum InterestRateMode {NONE, STABLE, VARIABLE}
+    enum InterestRateMode {
+        NONE,
+        STABLE,
+        VARIABLE
+    }
 }
 
 library FlashMintLib {
@@ -69,7 +73,8 @@ library FlashMintLib {
     address private constant _WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address private constant _DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
     IAToken public constant ADAI = IAToken(0x028171bCA77440897B824Ca71D1c56caC55b68A3);
-    IProtocolDataProvider private constant _protocolDataProvider = IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
+    IProtocolDataProvider private constant _protocolDataProvider =
+        IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
     ILendingPool private constant _lendingPool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
 
     bytes32 public constant CALLBACK_SUCCESS = keccak256("ERC3156FlashBorrower.onFlashLoan");
@@ -104,7 +109,9 @@ library FlashMintLib {
             if (requiredDAI > _maxLiquidity) {
                 requiredDAI = _maxLiquidity;
                 // NOTE: if we cap amountDAI, we reduce amountToken we are taking too
-                amount = (fromDAI(requiredDAI - requiredDAIToCloseLTVGap, token) * collatRatioDAI) / _COLLAT_RATIO_PRECISION;
+                amount =
+                    (fromDAI(requiredDAI - requiredDAIToCloseLTVGap, token) * collatRatioDAI) /
+                    _COLLAT_RATIO_PRECISION;
             }
         }
 
@@ -117,7 +124,7 @@ library FlashMintLib {
             IERC20(dai).approve(address(LENDER), 0);
             IERC20(dai).approve(address(LENDER), type(uint256).max);
         }
-        
+
         IERC3156FlashLender(LENDER).flashLoan(IERC3156FlashBorrower(address(this)), dai, requiredDAI, data);
 
         emit Leverage(amountDesired, amount, requiredDAI, depositToCloseLTVGap, deficit, LENDER);
@@ -125,7 +132,12 @@ library FlashMintLib {
         return amount; // we need to return the amount of Token we have changed our position in
     }
 
-    function loanLogic(bool deficit, uint256 amount, uint256 amountFlashmint, address want) public returns (bytes32) {
+    function loanLogic(
+        bool deficit,
+        uint256 amount,
+        uint256 amountFlashmint,
+        address want
+    ) public returns (bytes32) {
         address dai = _DAI;
         bool isDai = (want == dai);
 
@@ -133,26 +145,11 @@ library FlashMintLib {
 
         if (isDai) {
             if (deficit) {
-                lp.deposit(
-                    dai,
-                    amountFlashmint - amount,
-                    address(this),
-                    _referral
-                );
-                lp.repay(
-                    dai,
-                    IERC20(dai).balanceOf(address(this)),
-                    2,
-                    address(this)
-                );
+                lp.deposit(dai, amountFlashmint - amount, address(this), _referral);
+                lp.repay(dai, IERC20(dai).balanceOf(address(this)), 2, address(this));
                 lp.withdraw(dai, amountFlashmint, address(this));
             } else {
-                lp.deposit(
-                    dai,
-                    IERC20(dai).balanceOf(address(this)),
-                    address(this),
-                    _referral
-                );
+                lp.deposit(dai, IERC20(dai).balanceOf(address(this)), address(this), _referral);
                 lp.borrow(dai, amount, 2, _referral, address(this));
                 lp.withdraw(dai, amountFlashmint - amount, address(this));
             }
@@ -163,21 +160,11 @@ library FlashMintLib {
             if (deficit) {
                 // 2a. if in deficit withdraw amount and repay it
                 lp.withdraw(want, amount, address(this));
-                lp.repay(
-                    want,
-                    IERC20(want).balanceOf(address(this)),
-                    2,
-                    address(this)
-                );
+                lp.repay(want, IERC20(want).balanceOf(address(this)), 2, address(this));
             } else {
                 // 2b. if levering up borrow and deposit
                 lp.borrow(want, amount, 2, _referral, address(this));
-                lp.deposit(
-                    want,
-                    IERC20(want).balanceOf(address(this)),
-                    address(this),
-                    _referral
-                );
+                lp.deposit(want, IERC20(want).balanceOf(address(this)), address(this), _referral);
             }
             // 3. Withdraw DAI
             lp.withdraw(dai, amountFlashmint, address(this));
@@ -197,7 +184,8 @@ library FlashMintLib {
         }
 
         if (asset == _WETH) {
-            return (_amount * (uint256(10)**uint256(IOptionalERC20(dai).decimals()))) / priceOracle().getAssetPrice(dai);
+            return
+                (_amount * (uint256(10)**uint256(IOptionalERC20(dai).decimals()))) / priceOracle().getAssetPrice(dai);
         }
 
         address[] memory tokens = new address[](2);
@@ -216,7 +204,8 @@ library FlashMintLib {
         }
 
         if (asset == _WETH) {
-            return (_amount * priceOracle().getAssetPrice(dai)) / (uint256(10)**uint256(IOptionalERC20(dai).decimals()));
+            return
+                (_amount * priceOracle().getAssetPrice(dai)) / (uint256(10)**uint256(IOptionalERC20(dai).decimals()));
         }
 
         address[] memory tokens = new address[](2);

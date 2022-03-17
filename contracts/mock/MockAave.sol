@@ -118,16 +118,16 @@ abstract contract MockAave is
         stakersCooldownsValue = _stakersCooldownsValue;
     }
 
-    function getPriceOracle() external view returns(address) {
+    function getPriceOracle() external view returns (address) {
         return address(this);
     }
 
-    function getAssetsPrices(address[] calldata) external pure returns(uint256[] memory) {
+    function getAssetsPrices(address[] calldata) external pure returns (uint256[] memory) {
         uint256[] memory _ret = new uint256[](2);
         _ret[0] = uint256(392936527437060);
         _ret[1] = uint256(394087347138603);
         return _ret;
-    } 
+    }
 }
 
 contract MockMKRLender {
@@ -141,7 +141,12 @@ contract MockMKRLender {
         return 0;
     }
 
-    function flashLoan(IERC3156FlashBorrower receiver, address token, uint256 amount, bytes calldata data) external returns (bool) {
+    function flashLoan(
+        IERC3156FlashBorrower receiver,
+        address token,
+        uint256 amount,
+        bytes calldata data
+    ) external returns (bool) {
         return true;
     }
 }
@@ -275,17 +280,25 @@ contract MockProtocolDataProvider {
     address public immutable debtToken;
     MockAave public immutable mockAave;
 
-    constructor(address _aToken, address _debtToken, address _mockAave) {
+    constructor(
+        address _aToken,
+        address _debtToken,
+        address _mockAave
+    ) {
         aToken = _aToken;
         debtToken = _debtToken;
         mockAave = MockAave(_mockAave);
     }
 
-    function getReserveTokensAddresses(address) external view returns(
-        address aTokenAddress,
-        address stableDebtTokenAddress,
-        address variableDebtTokenAddress
-    ) {
+    function getReserveTokensAddresses(address)
+        external
+        view
+        returns (
+            address aTokenAddress,
+            address stableDebtTokenAddress,
+            address variableDebtTokenAddress
+        )
+    {
         aTokenAddress = aToken;
         stableDebtTokenAddress = debtToken;
         variableDebtTokenAddress = debtToken;
