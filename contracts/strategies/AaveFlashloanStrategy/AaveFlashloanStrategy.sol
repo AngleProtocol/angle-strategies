@@ -190,7 +190,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         return
             _estimatedTotalAssetsExcludingRewards(wantBalance) +
             _estimatedAAVEToWant(
-                wantBalance +
                     _balanceOfStkAave() +
                     _incentivesController.getRewardsBalance(_getAaveAssets(), address(this))
             );
