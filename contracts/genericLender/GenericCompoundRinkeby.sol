@@ -112,9 +112,8 @@ contract GenericCompoundRinkeby is GenericLenderBase {
     }
 
     /// @notice Returns an estimation of the current Annual Percentage Rate after a new deposit
-    /// @param amount The amount to add to the lending platform
     // solhint-disable-next-line no-unused-vars
-    function aprAfterDeposit(uint256 amount) external view override returns (uint256) {
+    function aprAfterDeposit(uint256) external view override returns (uint256) {
         // Rinkeby version
         return _apr();
     }

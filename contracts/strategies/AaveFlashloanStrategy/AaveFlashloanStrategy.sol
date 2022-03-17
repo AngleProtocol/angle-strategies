@@ -87,6 +87,17 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @notice Signal whether a position adjustment was done in `prepareReturn`
     bool private _alreadyAdjusted;
 
+    /*
+    struct BoolParams {
+        bool automaticallyComputeCollatRatio;
+        bool isFlashMintActive;
+        bool withdrawCheck;
+        bool cooldownStkAave;
+    }
+    
+    BoolParams public boolParams;
+    */
+
     // ========================= Supply and Borrow Tokens ==========================
 
     IAToken public aToken;
@@ -205,7 +216,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
     // ============================== Setters ======================================
 
-    /// @notice Sets collateral targets
+    /// @notice Sets collateral targets and value for collateral ratio
     function setCollateralTargets(
         uint256 _targetCollatRatio,
         uint256 _maxCollatRatio,
@@ -229,6 +240,19 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         daiBorrowCollatRatio = _daiBorrowCollatRatio;
     }
 
+    /// @notice Sets `minWant`, `minRatio` and `maxItrations` values
+    function setMinsAndMaxs(
+        uint256 _minWant,
+        uint256 _minRatio,
+        uint8 _maxIterations
+    ) external onlyRole(GUARDIAN_ROLE) {
+        require(_minRatio < maxBorrowCollatRatio);
+        require(_maxIterations > 0 && _maxIterations < 16);
+        minWant = _minWant;
+        minRatio = _minRatio;
+        maxIterations = _maxIterations;
+    }
+
     function setIsFlashMintActive(bool _isFlashMintActive) external onlyRole(GUARDIAN_ROLE) {
         isFlashMintActive = _isFlashMintActive;
     }
@@ -249,17 +273,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         cooldownStkAave = _cooldownStkAave;
     }
 
-    function setMinsAndMaxs(
-        uint256 _minWant,
-        uint256 _minRatio,
-        uint8 _maxIterations
-    ) external onlyRole(GUARDIAN_ROLE) {
-        require(_minRatio < maxBorrowCollatRatio);
-        require(_maxIterations > 0 && _maxIterations < 16);
-        minWant = _minWant;
-        minRatio = _minRatio;
-        maxIterations = _maxIterations;
-    }
 
     /// @notice Retrieves lending pool rates for `want`. Those variables are mostly used in `computeMostProfitableBorrow`
     /// @dev No access control needed because they fetch the values from Aave directly. If it changes there, it will need to be updated here too
@@ -751,15 +764,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         return FlashMintLib.loanLogic(deficit, amountWant, amount, address(want));
     }
 
-    function _getCurrentCollatRatio(uint256 deposits, uint256 borrows)
-        internal
-        view
-        returns (uint256 currentCollatRatio)
-    {
-        if (deposits > 0) {
-            currentCollatRatio = (borrows * _COLLATERAL_RATIO_PRECISION) / deposits;
-        }
-    }
+
 
     /// @notice Estimate the amount of `want` we will get out by swapping it for AAVE
     /// @param amount Amount of AAVE we want to exchange (in base 18)
@@ -773,7 +778,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     }
 
     /// @notice Verifies the cooldown status for earned stkAAVE
-    function _checkCooldown() internal view returns (CooldownStatus) {
+    function _checkCooldown() internal view returns (CooldownStatus cooldownStatus) {
         uint256 cooldownStartTimestamp = IStakedAave(_stkAave).stakersCooldowns(address(this));
 
         uint256 nextClaimStartTimestamp = cooldownStartTimestamp + _cooldownSeconds;
@@ -825,6 +830,16 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @param collatRatio Collateral ratio to target
     function _getBorrowFromSupply(uint256 supply, uint256 collatRatio) internal pure returns (uint256) {
         return (supply * collatRatio) / (_COLLATERAL_RATIO_PRECISION - collatRatio);
+    }
+
+    function _getCurrentCollatRatio(uint256 deposits, uint256 borrows)
+        internal
+        pure
+        returns (uint256 currentCollatRatio)
+    {
+        if (deposits > 0) {
+            currentCollatRatio = (borrows * _COLLATERAL_RATIO_PRECISION) / deposits;
+        }
     }
 
     /// @notice Computes the optimal collateral ratio based on current interests and incentives on Aave
@@ -895,6 +910,9 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         // launching at the moment
         uint256 normalizationFactor = 10**27 / wantBase;
 
+        (uint256 emissionPerSecondAToken,,) = _incentivesController.assets(address(aToken));
+        (uint256 emissionPerSecondDebtToken,,) = _incentivesController.assets(address(debtToken));
+
         // TODO double check maths here
         ComputeProfitability.SCalculateBorrow memory parameters = ComputeProfitability.SCalculateBorrow({
             reserveFactor: _reserveFactor,
@@ -902,10 +920,9 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             totalVariableDebt: int256(totalVariableDebt * normalizationFactor),
             totalDeposits: int256((availableLiquidity + totalStableDebt + totalVariableDebt) * normalizationFactor),
             stableBorrowRate: int256(averageStableBorrowRate),
-            // We're fetching the emission per second for the aToken
-            rewardDeposit: int256(_incentivesController.assets(address(aToken)) * 10**3 * 86400 * 365 * stkAavePriceToUSDC),
+            rewardDeposit: int256(emissionPerSecondAToken * 10**3 * 86400 * 365 * stkAavePriceToUSDC),
             // Same for the debt token
-            rewardBorrow: int256(_incentivesController.assets(address(debtToken)) * 10**3 * 86400 * 365 * stkAavePriceToUSDC),
+            rewardBorrow: int256(emissionPerSecondDebtToken * 10**3 * 86400 * 365 * stkAavePriceToUSDC),
             poolManagerAssets: int256(balanceExcludingRewards * normalizationFactor),
             maxCollatRatio: int256(maxCollatRatio * 10**9)
         });

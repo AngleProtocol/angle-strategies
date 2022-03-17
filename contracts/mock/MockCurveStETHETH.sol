@@ -23,7 +23,7 @@ contract MockCurveStETHETH {
         int128 from,
         int128 to,
         uint256 _from_amount,
-        uint256 _min_to_amount
+        uint256
     ) external payable {
         if (from == 0 && to == 1) {
             IERC20(stETH).transfer(msg.sender, (msg.value * dy) / 10**18);
@@ -39,8 +39,8 @@ contract MockCurveStETHETH {
     }
 
     function get_dy(
-        int128 from,
-        int128 to,
+        int128,
+        int128,
         uint256 _from_amount
     ) external view returns (uint256) {
         return (_from_amount * dy) / 10**18;

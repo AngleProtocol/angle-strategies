@@ -8,6 +8,7 @@ import "../interfaces/mock/IMockUniswapV3Pool.sol";
 contract MockUniswapV3Pool is IMockUniswapV3Pool {
     address public immutable token0;
     address public immutable token1;
+    uint256 public compilerMuter;
 
     // array of ticks
     int24[65535] public ticks;
@@ -48,6 +49,8 @@ contract MockUniswapV3Pool is IMockUniswapV3Pool {
     }
 
     function increaseObservationCardinalityNext(uint16 observationCardinalityNext) external override {
+        compilerMuter = 0;
+        observationCardinalityNext;
         return;
     }
 }

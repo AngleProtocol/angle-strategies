@@ -72,12 +72,12 @@ abstract contract MockAave is
     }
 
     function calculateInterestRates(
-        address reserve,
-        uint256 utilizationRate,
-        uint256 totalStableDebt,
-        uint256 totalVariableDebt,
-        uint256 averageStableBorrowRate,
-        uint256 reserveFactor
+        address,
+        uint256,
+        uint256,
+        uint256,
+        uint256,
+        uint256
     )
         external
         pure
@@ -132,21 +132,24 @@ abstract contract MockAave is
 
 contract MockMKRLender {
     mapping(address => uint256) public maxFlashLoan;
+    uint256 public compilerMuter;
 
     constructor(address _token, uint256 _maxFlashLoan) {
         maxFlashLoan[_token] = _maxFlashLoan;
     }
 
     function flashFee(address, uint256) external view returns (uint256) {
+        compilerMuter;
         return 0;
     }
 
     function flashLoan(
-        IERC3156FlashBorrower receiver,
-        address token,
-        uint256 amount,
-        bytes calldata data
+        IERC3156FlashBorrower,
+        address,
+        uint256,
+        bytes calldata
     ) external returns (bool) {
+        compilerMuter = 0;
         return true;
     }
 }
@@ -187,6 +190,7 @@ contract MockLendingPool is ILendingPool {
     MockAToken public immutable aToken;
     MockAToken public immutable debtToken;
     uint128 public currentLiquidityRate = 0;
+    uint256 public compilerMuter;
 
     constructor(address _aToken, address _debtToken) {
         aToken = MockAToken(_aToken);
@@ -264,11 +268,12 @@ contract MockLendingPool is ILendingPool {
     ) external {}
 
     function repay(
-        address asset,
-        uint256 amount,
-        uint256 rateMode,
-        address onBehalfOf
+        address,
+        uint256,
+        uint256,
+        address
     ) external returns (uint256) {
+        compilerMuter = 0;
         return 0;
     }
 }
