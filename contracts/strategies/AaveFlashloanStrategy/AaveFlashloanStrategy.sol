@@ -822,7 +822,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             stableBorrowRate: int256(averageStableBorrowRate),
             rewardDeposit: int256((emissionPerSecondAToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase),
             rewardBorrow: int256((emissionPerSecondDebtToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase),
-            poolManagerAssets: int256(balanceExcludingRewards * normalizationFactor),
+            strategyAssets: int256(balanceExcludingRewards * normalizationFactor),
             maxCollatRatio: int256(maxCollatRatio * 10**9),
             slope1: _slope1,
             slope2: _slope2,

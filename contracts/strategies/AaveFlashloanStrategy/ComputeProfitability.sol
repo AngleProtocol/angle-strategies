@@ -16,7 +16,7 @@ contract ComputeProfitability {
         int256 stableBorrowRate;
         int256 rewardDeposit;
         int256 rewardBorrow;
-        int256 poolManagerAssets;
+        int256 strategyAssets;
         int256 maxCollatRatio;
         int256 slope1;
         int256 slope2;
@@ -72,78 +72,92 @@ contract ComputeProfitability {
         }
     }
 
-    function _revenuePrimes(int256 borrow, SCalculateBorrow memory parameters)
+    function _revenuePrimes(
+        int256 borrow,
+        SCalculateBorrow memory parameters,
+        bool onlyRevenue
+    )
         internal
         pure
         returns (
             int256 revenue,
             int256 revenuePrime,
-            int256 revenurPrime2nd
+            int256 revenuePrime2nd
         )
     {
         (int256 newRate, int256 newRatePrime, int256 newRatePrime2) = _calculateInterestPrimes(borrow, parameters);
 
-        // precomputed values
-        int256 poolManagerFund = parameters.poolManagerAssets;
-        int256 newPoolDeposit = borrow + poolManagerFund;
-        int256 newCompDeposit = borrow + parameters.totalDeposits;
-        int256 newCompBorrowVariable = borrow + parameters.totalVariableDebt;
-        int256 newCompBorrow = newCompBorrowVariable + parameters.totalStableDebt;
-
-        // derivate 0
-        int256 proportionStrat = (newPoolDeposit * (_BASE_RAY - parameters.reserveFactor)) / newCompDeposit;
+        // 0 derivate
+        int256 proportionStrat = ((borrow + parameters.strategyAssets) * (_BASE_RAY - parameters.reserveFactor)) /
+            (borrow + parameters.totalDeposits);
         int256 poolYearlyRevenue = (parameters.totalStableDebt *
             parameters.stableBorrowRate +
-            newCompBorrowVariable *
+            (borrow + parameters.totalVariableDebt) *
             newRate) / _BASE_RAY;
 
-        int256 earnings = (proportionStrat * poolYearlyRevenue) / _BASE_RAY;
-        int256 cost = (borrow * newRate) / _BASE_RAY;
-        int256 rewards = (borrow * parameters.rewardBorrow) /
-            (newCompBorrowVariable) +
-            (newPoolDeposit * parameters.rewardDeposit) /
-            newCompDeposit;
-
-        // 1st derivate
-        int256 proportionStratPrime = ((parameters.totalDeposits - poolManagerFund) *
-            (_BASE_RAY - parameters.reserveFactor)) / newCompDeposit;
-        proportionStratPrime = (proportionStratPrime * _BASE_RAY) / newCompDeposit;
-        int256 poolYearlyRevenuePrime = (newRate * _BASE_RAY + newCompBorrowVariable * newRatePrime) / _BASE_RAY;
-        int256 costPrime = (newRate * _BASE_RAY + borrow * newRatePrime) / _BASE_RAY;
-        int256 rewardBorrowPrime = (parameters.rewardBorrow * (parameters.totalVariableDebt)) / newCompBorrowVariable;
-        rewardBorrowPrime = (rewardBorrowPrime * _BASE_RAY) / newCompBorrowVariable;
-        int256 rewardDepositPrime = (parameters.rewardDeposit * (parameters.totalDeposits - poolManagerFund)) /
-            newCompDeposit;
-        rewardDepositPrime = (rewardDepositPrime * _BASE_RAY) / newCompDeposit;
-
-        // 2nd derivate
-        int256 proportionStratPrime2nd = (-2 * (proportionStratPrime * (_BASE_RAY))) / (newCompDeposit);
-        int256 poolYearlyRevenuePrime2nd = ((2 * newRatePrime * _BASE_RAY) + (newCompBorrowVariable) * newRatePrime2) /
+        revenue =
+            (proportionStrat * poolYearlyRevenue) /
+            _BASE_RAY +
+            (borrow * parameters.rewardBorrow) /
+            ((borrow + parameters.totalVariableDebt)) +
+            ((borrow + parameters.strategyAssets) * parameters.rewardDeposit) /
+            (borrow + parameters.totalDeposits) -
+            (borrow * newRate) /
             _BASE_RAY;
-        int256 costPrime2nd = ((2 * newRatePrime * _BASE_RAY) + borrow * newRatePrime2) / _BASE_RAY;
-        int256 rewardBorrowPrime2nd = (-2 * rewardBorrowPrime * _BASE_RAY) / newCompBorrowVariable;
-        int256 rewardDeposit2nd = (-2 * rewardDepositPrime * _BASE_RAY) / newCompDeposit;
 
-        revenue = earnings + rewards - cost;
-        revenuePrime =
-            ((proportionStratPrime * poolYearlyRevenue + poolYearlyRevenuePrime * proportionStrat) / _BASE_RAY) +
-            rewardBorrowPrime +
-            rewardDepositPrime -
-            costPrime;
-        revenurPrime2nd =
-            (proportionStratPrime2nd *
-                poolYearlyRevenue +
-                proportionStratPrime *
-                poolYearlyRevenuePrime +
-                poolYearlyRevenuePrime *
-                proportionStratPrime +
-                poolYearlyRevenuePrime2nd *
-                proportionStrat +
-                (rewardBorrowPrime2nd + rewardDeposit2nd) *
-                (_BASE_RAY) -
-                costPrime2nd *
-                (_BASE_RAY)) /
-            (_BASE_RAY);
+        if (!onlyRevenue) {
+            // 1st derivate
+            {
+                // stack too deep so computing block per block
+                int256 proportionStratPrime = ((parameters.totalDeposits - parameters.strategyAssets) *
+                    (_BASE_RAY - parameters.reserveFactor)) / (borrow + parameters.totalDeposits);
+                proportionStratPrime = (proportionStratPrime * _BASE_RAY) / (borrow + parameters.totalDeposits);
+                int256 poolYearlyRevenuePrime = (newRate *
+                    _BASE_RAY +
+                    (borrow + parameters.totalVariableDebt) *
+                    newRatePrime) / _BASE_RAY;
+
+                revenuePrime = ((proportionStratPrime * poolYearlyRevenue + poolYearlyRevenuePrime * proportionStrat) /
+                    _BASE_RAY);
+
+                {
+                    int256 proportionStratPrime2nd = (-2 * (proportionStratPrime * (_BASE_RAY))) /
+                        ((borrow + parameters.totalDeposits));
+                    revenuePrime2nd =
+                        2 *
+                        proportionStratPrime *
+                        poolYearlyRevenuePrime +
+                        proportionStratPrime2nd *
+                        poolYearlyRevenue;
+                }
+                // stack too deep
+                poolYearlyRevenuePrime =
+                    ((2 * newRatePrime * _BASE_RAY) + ((borrow + parameters.totalVariableDebt)) * newRatePrime2) /
+                    _BASE_RAY;
+
+                revenuePrime2nd += poolYearlyRevenuePrime * proportionStrat;
+            }
+
+            int256 costPrime = (newRate * _BASE_RAY + borrow * newRatePrime) / _BASE_RAY;
+            int256 rewardBorrowPrime = (parameters.rewardBorrow * (parameters.totalVariableDebt)) /
+                (borrow + parameters.totalVariableDebt);
+            rewardBorrowPrime = (rewardBorrowPrime * _BASE_RAY) / (borrow + parameters.totalVariableDebt);
+            int256 rewardDepositPrime = (parameters.rewardDeposit *
+                (parameters.totalDeposits - parameters.strategyAssets)) / (borrow + parameters.totalDeposits);
+            rewardDepositPrime = (rewardDepositPrime * _BASE_RAY) / (borrow + parameters.totalDeposits);
+
+            revenuePrime += rewardBorrowPrime + rewardDepositPrime - costPrime;
+
+            // 2nd derivate
+            // reusing variables for the stack too deep issue
+            costPrime = ((2 * newRatePrime * _BASE_RAY) + borrow * newRatePrime2) / _BASE_RAY;
+            rewardBorrowPrime = (-2 * rewardBorrowPrime * _BASE_RAY) / (borrow + parameters.totalVariableDebt);
+            rewardDepositPrime = (-2 * rewardDepositPrime * _BASE_RAY) / (borrow + parameters.totalDeposits);
+
+            revenuePrime2nd =
+                (revenuePrime2nd + (rewardBorrowPrime + rewardDepositPrime) * (_BASE_RAY) - costPrime * (_BASE_RAY)) /
+                (_BASE_RAY);
+        }
     }
 
     function _abs(int256 x) private pure returns (int256) {
@@ -163,32 +177,27 @@ contract ComputeProfitability {
         int256 borrowInit = _borrow;
         borrow = _borrow;
 
-        (int256 y, , ) = _revenuePrimes(0, parameters);
-        (int256 revenueWithBorrow, , ) = _revenuePrimes(_BASE_RAY, parameters);
+        (int256 y, , ) = _revenuePrimes(0, parameters, true);
+        (int256 revenueWithBorrow, , ) = _revenuePrimes(_BASE_RAY, parameters, true);
         if (revenueWithBorrow <= y) {
             return (0, 1);
         }
 
         while (count < maxCount && (count == 0 || _abs((borrowInit - borrow) / borrowInit) > tolerance)) {
-            (, grad, grad2nd) = _revenuePrimes(borrow, parameters);
+            (, grad, grad2nd) = _revenuePrimes(borrow, parameters, false);
             borrowInit = borrow;
             borrow = borrowInit - (grad * _BASE_RAY) / grad2nd;
             count += 1;
         }
 
-        (int256 x, , ) = _revenuePrimes(borrow, parameters);
+        (int256 x, , ) = _revenuePrimes(borrow, parameters, true);
         if (x <= y) {
             borrow = 0;
         }
-
-        // int256 collatRatio = (borrow * _BASE_RAY) / (parameters.poolManagerAssets + borrow);
-        // if (collatRatio > parameters.maxCollatRatio) {
-        //     borrow = parameters.maxCollatRatio * parameters.poolManagerAssets / (_BASE_RAY - parameters.maxCollatRatio);
-        // }
     }
 
     function computeProfitability(SCalculateBorrow memory parameters) external pure returns (int256 borrow) {
         int256 tolerance = 10**(27 - 2); // 1%
-        (borrow, ) = _newtonRaphson(parameters.poolManagerAssets, tolerance, parameters);
+        (borrow, ) = _newtonRaphson(parameters.strategyAssets, tolerance, parameters);
     }
 }
