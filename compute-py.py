@@ -61,7 +61,7 @@ rewardBorrow = 12397005.061599439
 # tolerance on diff between b on GD
 tolGD = 10**(-1)
 # tolerance on diffbetween b on Newton Raphson
-tolNR = 10**(-1)
+tolNR = 10**(-2)
 # max iteration methods
 maxCount = 30
 
@@ -239,6 +239,36 @@ def newtonRaphson(bInit, tol):
 # bSol,count = gradientDescent(np.array([poolManagerFund]), tolGD)
 # print('Gradient descent method: We get in %s from the optimisation :%s', count,bSol)
 
+print("\nFIRST")
+poolManagerFund=101766710
+compBorrowStable=15189738
+compBorrowVariable=1519560738
+compDeposit=2363034344
+rFixed=0.107947966979642732282179799
+rewardDeposit=8497843
+rewardBorrow=16995686
+bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]) ,tolNR)
+print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
+
+print("\nSECOND")
+poolManagerFund=101766710
+compBorrowStable=15189738
+compBorrowVariable=1846803919
+compDeposit=2812044235
+rFixed=0.107947966979642732282179799
+rewardDeposit=8497843
+rewardBorrow=16995686
+bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]) ,tolNR)
+print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
+
+print("\nTHIRD")
+poolManagerFund=101766710
+compBorrowStable=15189738
+compBorrowVariable=1697642328
+compDeposit=2737882644
+rFixed=0.107947966979642732282179799
+rewardDeposit=8497843
+rewardBorrow=16995686
 bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]) ,tolNR)
 print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
 

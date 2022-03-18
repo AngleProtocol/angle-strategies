@@ -92,8 +92,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     uint256 public discountFactor;
     /// @notice Max number of iterations possible for the computation of the optimal lever
     uint8 public maxIterations;
-    /// @notice Signal whether a position adjustment was done in `prepareReturn`
-    bool private _alreadyAdjusted;
 
     struct BoolParams {
         // Whether collateral ratio will be automatically computed
@@ -159,7 +157,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             cooldownStkAave: true
         });
 
-        _alreadyAdjusted = false;
+
         // Setting reward params
         _setAavePoolVariables();
 
@@ -258,9 +256,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             // but it is possible for the strategy to unwind full position
             (amountAvailable, ) = _liquidatePosition(amountRequired, amountAvailable, deposits, borrows);
 
-            // Don't do a redundant adjustment in adjustPosition
-            _alreadyAdjusted = true;
-
             if (amountAvailable >= amountRequired) {
                 _debtPayment = _debtOutstanding;
                 // profit remains unchanged unless there is not enough to pay it
@@ -294,10 +289,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @notice Function called by harvest() to adjust the position
     /// @dev It computes the optimal collateral ratio and adjusts deposits/borrows accordingly
     function _adjustPosition() internal override {
-        if (_alreadyAdjusted) {
-            _alreadyAdjusted = false; // reset for next time
-            return;
-        }
+        
 
         uint256 _debtOutstanding = poolManager.debtOutstanding();
 
@@ -466,18 +458,15 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         _withdrawCollateral(amount);
     }
 
-    /// @notice Adds a new guardian address and echoes the change to the contracts
-    /// that interact with this collateral `PoolManager`
+    /// @notice Adds a new guardian address
     /// @param _guardian New guardian address
-    /// @dev This internal function has to be put in this file because `AccessControl` is not defined
-    /// in `PoolManagerInternal`
     function addGuardian(address _guardian) external override onlyRole(POOLMANAGER_ROLE) {
         // Granting the new role
         // Access control for this contract
         _grantRole(GUARDIAN_ROLE, _guardian);
     }
 
-    /// @notice Revokes the guardian role and propagates the change to other contracts
+    /// @notice Revokes the guardian role
     /// @param guardian Old guardian address to revoke
     function revokeGuardian(address guardian) external override onlyRole(POOLMANAGER_ROLE) {
         _revokeRole(GUARDIAN_ROLE, guardian);
@@ -675,7 +664,9 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
                 _depositCollateral(Math.min(toDeposit, _balanceOfWant()));
             }
         } else {
-            _withdrawExcessCollateral(_targetCollatRatio, deposits, currentBorrowed);
+            if (deposits - targetDeposit > minWant) {
+                _withdrawExcessCollateral(_targetCollatRatio, deposits, currentBorrowed);
+            }
         }
     }
 

@@ -2,9 +2,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ethers, network } from 'hardhat';
 import { utils, constants, BigNumber, Contract } from 'ethers';
 import { expect } from '../test-utils/chai-setup';
-import querystring from 'querystring';
-import { deploy, randomAddress, impersonate } from '../test-utils';
-import { inReceipt, inIndirectReceipt } from '../test-utils/expectEvent';
+import { deploy, impersonate } from '../test-utils';
 import {
   AaveFlashloanStrategy,
   FlashMintLib,
@@ -13,57 +11,25 @@ import {
   MockAave,
   MockPoolManager,
   MockProtocolDataProvider,
-  MockUniswapV2Router,
-  MockUniswapV3Router,
   ERC20__factory,
   MockAToken,
   MockLendingPool,
   MockLendingPool__factory,
   IAaveIncentivesController__factory,
   MockProtocolDataProvider__factory,
-  MockUniswapV2Router__factory,
-  MockUniswapV3Pool__factory,
   MockToken__factory,
   ComputeProfitability,
   IStakedAave,
   IStakedAave__factory,
-  TransparentUpgradeableProxy__factory,
   AaveFlashloanStrategy__factory,
 } from '../../typechain';
-import { use } from 'chai';
 
 // HELPER for console.log, to delete
 const logUSDC = (amount: BigNumber) => utils.formatUnits(amount, 6);
 
-const oneInchEndpoint = (
-  fromTokenAddress: string,
-  toTokenAddress: string,
-  amount: string,
-  fromAddress: string,
-  slippage: string,
-) => {
-  const params = querystring.stringify({
-    fromTokenAddress,
-    toTokenAddress,
-    amount,
-    fromAddress,
-    slippage,
-  });
-  console.log(params);
-  return `https://api.1inch.exchange/v4.0/$%7BchainId%7D/swap?${params}`;
-};
-
-oneInchEndpoint(
-  '0x4da27a545c0c5B758a6BA100e3a049001de870f5',
-  '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-  utils.parseUnits('100', 18).toString(),
-  '0x32B61Bb22Cbe4834bc3e73DcE85280037D944a4D',
-  '0.5',
-);
-
 describe('AaveFlashloan Strat', () => {
   // ATokens
-  let aToken: MockAToken, debtToken: MockAToken, aDai: MockAToken;
+  let aToken: MockAToken, debtToken: MockAToken;
 
   // Tokens
   let wantToken: MockToken,
@@ -71,8 +37,7 @@ describe('AaveFlashloan Strat', () => {
     aave: MockToken,
     stkAave: IStakedAave,
     weth: MockToken,
-    rewardToken: MockToken,
-    mockAAVE: MockToken;
+    rewardToken: MockToken;
 
   // Guardians
   let deployer: SignerWithAddress,
@@ -81,9 +46,6 @@ describe('AaveFlashloan Strat', () => {
     guardian: SignerWithAddress,
     user: SignerWithAddress,
     keeper: SignerWithAddress;
-
-  // Routers
-  let uniV2Router: MockUniswapV2Router, uniV3Router: MockUniswapV3Router, sushiV2Router: MockUniswapV2Router;
 
   let poolManager: MockPoolManager;
   let protocolDataProvider: MockProtocolDataProvider;
@@ -135,22 +97,8 @@ describe('AaveFlashloan Strat', () => {
       MockToken__factory.abi,
       '0x31429d1856aD1377A8A0079410B297e1a9e214c2',
     )) as MockToken;
-    mockAAVE = (await deploy('MockToken', ['mock aave token', 'mockAAVE', 18])) as MockToken;
 
-    [deployer, proxyAdmin, governor, guardian, user] = await ethers.getSigners();
-
-    uniV2Router = (await ethers.getContractAt(
-      MockUniswapV2Router__factory.abi,
-      '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
-    )) as MockUniswapV2Router;
-    sushiV2Router = (await ethers.getContractAt(
-      MockUniswapV2Router__factory.abi,
-      '0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F',
-    )) as MockUniswapV2Router;
-    uniV3Router = (await ethers.getContractAt(
-      MockUniswapV3Pool__factory.abi,
-      '0xE592427A0AEce92De3Edee1F18E0157C05861564',
-    )) as MockUniswapV3Router;
+    [deployer, proxyAdmin, governor, guardian, user, keeper] = await ethers.getSigners();
 
     poolManager = (await deploy('MockPoolManager', [wantToken.address, 0])) as MockPoolManager;
 
@@ -168,8 +116,6 @@ describe('AaveFlashloan Strat', () => {
       MockLendingPool__factory.abi,
       '0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9',
     )) as MockLendingPool;
-
-    const daiLender = await deploy('MockMKRLender', [dai.address, constants.MaxUint256]);
 
     flashMintLib = (await deploy('FlashMintLib')) as FlashMintLib;
     computeProfitabilityContract = (await deploy('ComputeProfitability')) as ComputeProfitability;
@@ -196,7 +142,6 @@ describe('AaveFlashloan Strat', () => {
 
     aToken = (await ethers.getContractAt(MockToken__factory.abi, await strategy.aToken())) as MockAToken;
     debtToken = (await ethers.getContractAt(MockToken__factory.abi, await strategy.debtToken())) as MockAToken;
-    // aDai = (await deploy('MockAToken', ['adai token', 'aDai', 18])) as MockAToken;
   });
 
   describe('Constructor', () => {
@@ -247,14 +192,10 @@ describe('AaveFlashloan Strat', () => {
       expect(allowanceDai1).to.equal(constants.MaxUint256);
       expect(allowanceDai2).to.equal(constants.MaxUint256);
 
-      const allowanceAave1 = await aave.allowance(strategy.address, uniV2Router.address);
-      const allowanceAave2 = await aave.allowance(strategy.address, sushiV2Router.address);
-      const allowanceAave3 = await aave.allowance(strategy.address, uniV3Router.address);
-      expect(allowanceAave1).to.equal(constants.MaxUint256);
-      expect(allowanceAave2).to.equal(constants.MaxUint256);
-      expect(allowanceAave3).to.equal(constants.MaxUint256);
+      const allowanceAave = await aave.allowance(strategy.address, await strategy.oneInch());
+      expect(allowanceAave).to.equal(constants.MaxUint256);
 
-      const allowanceStkAave = await stkAave.allowance(strategy.address, uniV3Router.address);
+      const allowanceStkAave = await stkAave.allowance(strategy.address, await strategy.oneInch());
       expect(allowanceStkAave).to.equal(constants.MaxUint256);
     });
 
@@ -268,11 +209,11 @@ describe('AaveFlashloan Strat', () => {
       await expect(await strategy.hasRole(POOLMANAGER_ROLE, poolManager.address)).to.be.true;
     });
 
-    it.only('params', async () => {
+    it('params', async () => {
       expect(await strategy.computeProfitability()).to.equal(computeProfitabilityContract.address);
       expect(await strategy.maxIterations()).to.equal(6);
       await expect(await strategy.isFlashMintActive()).to.be.true;
-      expect(await strategy.maxStkAavePriceImpactBps()).to.equal(500);
+      expect(await strategy.PESSIMISM_FACTOR()).to.equal(1000);
       expect(await strategy.minWant()).to.equal(100);
       expect(await strategy.minRatio()).to.equal(utils.parseEther('0.005'));
       expect(await strategy.minRewardToSell()).to.equal(utils.parseUnits('1', 15));
@@ -366,22 +307,18 @@ describe('AaveFlashloan Strat', () => {
       expect(await strategy.maxIterations()).to.equal(15);
     });
 
-    it.only('setRewardBehavior', async () => {
-      expect(
-        strategy.connect(user).setRewardBehavior(true, utils.parseUnits('0.1', 18), utils.parseUnits('0.05', 4)),
-      ).to.be.revertedWith(`AccessControl: account ${user.address.toLowerCase()} is missing role`);
+    it('setRewardBehavior', async () => {
+      expect(strategy.connect(user).setRewardBehavior(true, utils.parseUnits('0.1', 18))).to.be.revertedWith(
+        `AccessControl: account ${user.address.toLowerCase()} is missing role`,
+      );
 
       await expect(await strategy.cooldownStkAave()).to.be.false;
       expect(await strategy.minRewardToSell()).to.equal(utils.parseUnits('0.001', 18));
-      expect(await strategy.maxStkAavePriceImpactBps()).to.equal(utils.parseUnits('0.05', 4));
 
-      await strategy
-        .connect(guardian)
-        .setRewardBehavior(false, utils.parseUnits('0.1', 18), utils.parseUnits('0.2', 4));
+      await strategy.connect(guardian).setRewardBehavior(false, utils.parseUnits('0.1', 18));
 
       await expect(await strategy.cooldownStkAave()).to.be.false;
       expect(await strategy.minRewardToSell()).to.equal(utils.parseUnits('0.1', 18));
-      expect(await strategy.maxStkAavePriceImpactBps()).to.equal(utils.parseUnits('0.2', 4));
     });
 
     it('setAavePoolVariables', async () => {
@@ -440,33 +377,34 @@ describe('AaveFlashloan Strat', () => {
     });
   });
 
-  describe('Strategy', () => {
-    const _startAmountUSDC = utils.parseUnits((1_000_000).toString(), 6);
+  describe.only('Strategy', () => {
+    const _startAmountUSDC = utils.parseUnits((2_000_000).toString(), 6);
 
     beforeEach(async () => {
       await (await poolManager.addStrategy(strategy.address, utils.parseUnits('0.75', 9))).wait();
 
       await impersonate('0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3', async acc => {
         await wantToken.connect(acc).transfer(user.address, _startAmountUSDC);
-        await wantToken.connect(acc).transfer(user.address, _startAmountUSDC);
       });
       // console.log('balance', utils.formatUnits(await wantToken.balanceOf(user.address), 6));
 
       await wantToken.connect(user).transfer(poolManager.address, _startAmountUSDC);
-      await wantToken.connect(user).transfer(strategy.address, _startAmountUSDC);
+      // await wantToken.connect(user).transfer(strategy.address, _startAmountUSDC);
     });
 
     it('estimatedTotalAssets', async () => {
-      expect(await strategy.estimatedTotalAssets()).to.equal(_startAmountUSDC);
+      expect(await strategy.estimatedTotalAssets()).to.equal(0);
 
       /*
-      sometimes reverts with error "5"
+      sometimes reverts with reason "5"
       which is error "VL_NOT_ENOUGH_AVAILABLE_USER_BALANCE" here: https://etherscan.io/address/0xc6845a5c768bf8d7681249f8927877efda425baf#code
       */
       await strategy.harvest();
 
       const { deposits, borrows } = await strategy.getCurrentPosition();
       const totalAssets = (await wantToken.balanceOf(strategy.address)).add(deposits).sub(borrows);
+      const debtRatio = (await poolManager.strategies(strategy.address)).debtRatio;
+      expect(totalAssets).to.equal(_startAmountUSDC.mul(debtRatio).div(utils.parseUnits('1', 9)));
       expect(await strategy.estimatedTotalAssets()).to.equal(totalAssets);
     });
 
@@ -498,17 +436,12 @@ describe('AaveFlashloan Strat', () => {
       await network.provider.send('evm_increaseTime', [3600 * 24 * 5]); // forward 5 days
       await network.provider.send('evm_mine');
 
-      const maxStkAavePriceImpactBps = await strategy.maxStkAavePriceImpactBps();
-      const rewardsAfter = (
-        await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address)
-      )
-        .mul(BigNumber.from(10_000).sub(maxStkAavePriceImpactBps))
-        .div(BigNumber.from(10_000));
+      const rewardsAfter = await incentivesController.getRewardsBalance(
+        [aToken.address, debtToken.address],
+        strategy.address,
+      );
 
-      const _PESSIMISM_FACTOR = 1000;
-      const estimatedRewards = (await strategy.estimatedAAVEToWant(rewardsAfter))
-        .mul(BigNumber.from(10_000).sub(_PESSIMISM_FACTOR))
-        .div(BigNumber.from(10_000));
+      const estimatedRewards = await strategy.estimatedAAVEToWant(rewardsAfter);
       expect(await strategy.estimatedRewardsInWant()).to.equal(estimatedRewards);
     });
 
@@ -528,28 +461,42 @@ describe('AaveFlashloan Strat', () => {
 
       expect(await wantToken.balanceOf(strategy.address)).to.equal(0);
 
-      await strategy.connect(guardian).sellRewards(0, 'true', true);
+      expect(strategy.connect(guardian).sellRewards(0, '0x', true)).to.be.revertedWith(
+        `AccessControl: account ${guardian.address.toLowerCase()} is missing role ${await strategy.KEEPER_ROLE()}`,
+      );
+      // TODO: add tests
 
       const estimatedUSDC = await strategy.estimatedAAVEToWant(rewards);
 
-      // we allow a 5% delta, due to slippage on Uniswap
-      expect(await wantToken.balanceOf(strategy.address))
-        .to.be.at.most(estimatedUSDC)
-        .least(estimatedUSDC.mul(95).div(100));
+      console.log('rewards', rewards);
+      console.log('estimatedUSDC', estimatedUSDC);
+      console.log('balance stk', await stkAave.balanceOf(strategy.address));
 
-      expect(
-        await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
-      ).to.equal(0);
+      console.log('cooldown', new Date((await stkAave.stakersCooldowns(strategy.address)).toNumber() * 1000));
+
+      await impersonate('0xba3dFcc2045b57C9CE81180570fC8a087E35AB4a', async acc => {
+        await strategy.connect(guardian).addKeeper(acc.address);
+        await strategy.connect(acc).sellRewards(0, oneInchPayload, true);
+      });
+      console.log('cooldown', new Date((await stkAave.stakersCooldowns(strategy.address)).toNumber() * 1000));
+
+      // TODO: fix test
+      // // we allow a 5% delta, due to slippage on Uniswap
+      // expect(await wantToken.balanceOf(strategy.address))
+      //   .to.be.at.most(estimatedUSDC)
+      //   .least(estimatedUSDC.mul(95).div(100));
+
+      // expect(
+      //   await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
+      // ).to.equal(0);
     });
 
-    it.only('sellRewards', async () => {
+    it('sellRewards', async () => {
       expect(await stkAave.balanceOf(strategy.address)).to.equal(0);
       expect(await aave.balanceOf(strategy.address)).to.equal(0);
 
       const tx = await (await strategy.harvest()).wait();
-      await strategy
-        .connect(guardian)
-        .setRewardBehavior(true, await strategy.minRewardToSell(), await strategy.maxStkAavePriceImpactBps());
+      await strategy.connect(guardian).setRewardBehavior(true, await strategy.minRewardToSell());
 
       const timestamp = (await ethers.provider.getBlock(tx.blockNumber)).timestamp;
 
@@ -559,25 +506,30 @@ describe('AaveFlashloan Strat', () => {
       expect(await stkAave.stakersCooldowns(strategy.address)).to.equal(0);
       expect(await wantToken.balanceOf(strategy.address)).to.equal(0);
 
-      await strategy.connect(guardian).sellRewards(0, 'true', true);
+      expect(strategy.connect(guardian).sellRewards(0, '0x', true)).to.be.revertedWith(
+        `AccessControl: account ${guardian.address.toLowerCase()} is missing role ${await strategy.KEEPER_ROLE()}`,
+      );
+      // TODO: add tests
 
-      const timestampPlus1Day = timestamp + 3600 * 24 + 30;
-      expect(await stkAave.stakersCooldowns(strategy.address))
-        .to.be.at.most(timestampPlus1Day)
-        .least(timestamp);
+      // TODO: fix
+      // const timestampPlus1Day = timestamp + 3600 * 24 + 30;
+      // expect(await stkAave.stakersCooldowns(strategy.address))
+      //   .to.be.at.most(timestampPlus1Day)
+      //   .least(timestamp);
 
-      expect(
-        await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
-      ).to.equal(0);
+      // expect(
+      //   await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
+      // ).to.equal(0);
 
-      await network.provider.send('evm_increaseTime', [3600 * 24 * 11]); // forward 12 days
-      await network.provider.send('evm_mine');
+      // await network.provider.send('evm_increaseTime', [3600 * 24 * 11]); // forward 12 days
+      // await network.provider.send('evm_mine');
 
-      await strategy.connect(guardian).sellRewards(0, 'true', true);
+      // // TODO: add tests
+      // // await strategy.connect(guardian).sellRewards(0, 'true', true);
 
-      expect(
-        await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
-      ).to.equal(0);
+      // expect(
+      //   await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
+      // ).to.equal(0);
     });
 
     it('_prepareReturn', async () => {
@@ -601,11 +553,18 @@ describe('AaveFlashloan Strat', () => {
 
     it('_prepareReturn 2', async () => {
       await strategy.harvest();
-      expect(await strategy.estimatedTotalAssets()).to.be.closeTo(_startAmountUSDC.mul(3).div(2), 10);
+      const debtRatio = (await poolManager.strategies(strategy.address)).debtRatio;
+      expect(await strategy.estimatedTotalAssets()).to.equal(
+        _startAmountUSDC.mul(debtRatio).div(utils.parseUnits('1', 9)),
+      );
 
-      await poolManager.updateStrategyDebtRatio(strategy.address, utils.parseUnits('0.5', 9));
+      const newDebtRatio = utils.parseUnits('0.5', 9);
+      await poolManager.updateStrategyDebtRatio(strategy.address, newDebtRatio);
       await strategy.harvest();
-      expect(await strategy.estimatedTotalAssets()).to.be.closeTo(_startAmountUSDC, 15000);
+      expect(await strategy.estimatedTotalAssets()).to.be.closeTo(
+        _startAmountUSDC.mul(newDebtRatio).div(utils.parseUnits('1', 9)),
+        15000,
+      );
     });
 
     it('_prepareReturn 3', async () => {
