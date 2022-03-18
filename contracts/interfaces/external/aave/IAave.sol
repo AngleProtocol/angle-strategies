@@ -24,6 +24,15 @@ interface IAaveIncentivesController {
             uint256,
             uint256
         );
+
+    function assets(address asset)
+        external
+        view
+        returns (
+            uint256 emissionPerSecond,
+            uint256 index,
+            uint256 lastUpdateTimestamp
+        );
 }
 
 interface IAToken is IERC20 {
@@ -84,6 +93,15 @@ interface IProtocolDataProvider {
             uint256 liquidityIndex,
             uint256 variableBorrowIndex,
             uint40 lastUpdateTimestamp
+        );
+
+    function getReserveTokensAddresses(address asset)
+        external
+        view
+        returns (
+            address aTokenAddress,
+            address stableDebtTokenAddress,
+            address variableDebtTokenAddress
         );
 }
 

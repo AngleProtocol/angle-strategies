@@ -466,21 +466,30 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         _withdrawCollateral(amount);
     }
 
-    /// @notice Adds a new guardian address and echoes the change to the contracts
-    /// that interact with this collateral `PoolManager`
+    /// @notice Adds a new guardian address
     /// @param _guardian New guardian address
-    /// @dev This internal function has to be put in this file because `AccessControl` is not defined
-    /// in `PoolManagerInternal`
     function addGuardian(address _guardian) external override onlyRole(POOLMANAGER_ROLE) {
         // Granting the new role
         // Access control for this contract
         _grantRole(GUARDIAN_ROLE, _guardian);
     }
 
-    /// @notice Revokes the guardian role and propagates the change to other contracts
+    /// @notice Revokes the guardian role
     /// @param guardian Old guardian address to revoke
     function revokeGuardian(address guardian) external override onlyRole(POOLMANAGER_ROLE) {
         _revokeRole(GUARDIAN_ROLE, guardian);
+    }
+
+    /// @notice Adds a new keeper
+    /// @param _keeper New keeper address
+    function addKeeper(address _keeper) external onlyRole(GUARDIAN_ROLE) {
+        _grantRole(KEEPER_ROLE, _keeper);
+    }
+
+    /// @notice Revokes a keeper
+    /// @param _keeper Old keeper address to revoke
+    function revokeKeeper(address _keeper) external onlyRole(GUARDIAN_ROLE) {
+        _revokeRole(KEEPER_ROLE, _keeper);
     }
 
     /// @notice Swap earned stkAave or Aave for `want` through 1Inch

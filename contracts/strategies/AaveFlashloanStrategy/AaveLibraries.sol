@@ -114,6 +114,10 @@ library FlashMintLib {
                     _COLLAT_RATIO_PRECISION;
             }
         }
+        
+        // lendingPool divided the amount required by `liquidityIndex` which can cause some rounding issues
+        // so we end up requesting an amount a bit higher to make sure the flashloan does't revert
+        requiredDAI = requiredDAI * uint256(_lendingPool.getReserveData(token).liquidityIndex) / 10**27;
 
         bytes memory data = abi.encode(deficit, amount);
         uint256 _fee = IERC3156FlashLender(LENDER).flashFee(dai, requiredDAI);
