@@ -55,7 +55,11 @@ contract MockPoolManager is AccessControl {
         return (params.totalStrategyDebt - target);
     }
 
-    function report(uint256 gain, uint256 loss, uint256 debtPayment) external {
+    function report(
+        uint256 gain,
+        uint256 loss,
+        uint256 debtPayment
+    ) external {
         require(token.balanceOf(msg.sender) >= gain + debtPayment, "72");
 
         StrategyParams storage params = strategies[msg.sender];

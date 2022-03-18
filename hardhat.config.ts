@@ -56,6 +56,15 @@ const config: HardhatUserConfig = {
           },
         },
       },
+      'contracts/stableMaster/StableMasterFront.sol': {
+        version: '0.8.7',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 830,
+          },
+        },
+      },
     },
   },
   defaultNetwork: 'hardhat',

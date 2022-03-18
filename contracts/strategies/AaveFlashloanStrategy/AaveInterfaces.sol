@@ -11,10 +11,7 @@ interface IAaveIncentivesController {
      * @param user The address of the user
      * @return The rewards
      **/
-    function getRewardsBalance(address[] calldata assets, address user)
-        external
-        view
-        returns (uint256);
+    function getRewardsBalance(address[] calldata assets, address user) external view returns (uint256);
 
     /**
      * @dev Claims reward for an user, on all the assets of the lending pool, accumulating the pending rewards
@@ -48,10 +45,7 @@ interface IAaveIncentivesController {
      * @param user the address of the user
      * @return the unclaimed user rewards
      */
-    function getUserUnclaimedRewards(address user)
-        external
-        view
-        returns (uint256);
+    function getUserUnclaimedRewards(address user) external view returns (uint256);
 
     /**
      * @dev for backward compatibility with previous implementation of the Incentives controller
@@ -103,12 +97,7 @@ interface ILendingPool {
      * @param to Address that will receive the underlying
      * @param amount The amount to be withdrawn
      **/
-    event Withdraw(
-        address indexed reserve,
-        address indexed user,
-        address indexed to,
-        uint256 amount
-    );
+    event Withdraw(address indexed reserve, address indexed user, address indexed to, uint256 amount);
 
     /**
      * @dev Emitted on borrow() and flashLoan() when debt needs to be opened
@@ -138,12 +127,7 @@ interface ILendingPool {
      * @param repayer The address of the user initiating the repay(), providing the funds
      * @param amount The amount repaid
      **/
-    event Repay(
-        address indexed reserve,
-        address indexed user,
-        address indexed repayer,
-        uint256 amount
-    );
+    event Repay(address indexed reserve, address indexed user, address indexed repayer, uint256 amount);
 
     /**
      * @dev Emitted on swapBorrowRateMode()
@@ -158,30 +142,21 @@ interface ILendingPool {
      * @param reserve The address of the underlying asset of the reserve
      * @param user The address of the user enabling the usage as collateral
      **/
-    event ReserveUsedAsCollateralEnabled(
-        address indexed reserve,
-        address indexed user
-    );
+    event ReserveUsedAsCollateralEnabled(address indexed reserve, address indexed user);
 
     /**
      * @dev Emitted on setUserUseReserveAsCollateral()
      * @param reserve The address of the underlying asset of the reserve
      * @param user The address of the user enabling the usage as collateral
      **/
-    event ReserveUsedAsCollateralDisabled(
-        address indexed reserve,
-        address indexed user
-    );
+    event ReserveUsedAsCollateralDisabled(address indexed reserve, address indexed user);
 
     /**
      * @dev Emitted on rebalanceStableBorrowRate()
      * @param reserve The address of the underlying asset of the reserve
      * @param user The address of the user for which the rebalance has been executed
      **/
-    event RebalanceStableBorrowRate(
-        address indexed reserve,
-        address indexed user
-    );
+    event RebalanceStableBorrowRate(address indexed reserve, address indexed user);
 
     /**
      * @dev Emitted on flashLoan()
@@ -355,8 +330,7 @@ interface ILendingPool {
      * @param asset The address of the underlying asset deposited
      * @param useAsCollateral `true` if the user wants to use the deposit as collateral, `false` otherwise
      **/
-    function setUserUseReserveAsCollateral(address asset, bool useAsCollateral)
-        external;
+    function setUserUseReserveAsCollateral(address asset, bool useAsCollateral) external;
 
     /**
      * @dev Function to liquidate a non-healthy position collateral-wise, with Health Factor below 1
@@ -434,10 +408,7 @@ interface ILendingPool {
         address interestRateStrategyAddress
     ) external;
 
-    function setReserveInterestRateStrategyAddress(
-        address reserve,
-        address rateStrategyAddress
-    ) external;
+    function setReserveInterestRateStrategyAddress(address reserve, address rateStrategyAddress) external;
 
     function setConfiguration(address reserve, uint256 configuration) external;
 
@@ -446,50 +417,35 @@ interface ILendingPool {
      * @param asset The address of the underlying asset of the reserve
      * @return The configuration of the reserve
      **/
-    function getConfiguration(address asset)
-        external
-        view
-        returns (DataTypes.ReserveConfigurationMap memory);
+    function getConfiguration(address asset) external view returns (DataTypes.ReserveConfigurationMap memory);
 
     /**
      * @dev Returns the configuration of the user across all the reserves
      * @param user The user address
      * @return The configuration of the user
      **/
-    function getUserConfiguration(address user)
-        external
-        view
-        returns (DataTypes.UserConfigurationMap memory);
+    function getUserConfiguration(address user) external view returns (DataTypes.UserConfigurationMap memory);
 
     /**
      * @dev Returns the normalized income normalized income of the reserve
      * @param asset The address of the underlying asset of the reserve
      * @return The reserve's normalized income
      */
-    function getReserveNormalizedIncome(address asset)
-        external
-        view
-        returns (uint256);
+    function getReserveNormalizedIncome(address asset) external view returns (uint256);
 
     /**
      * @dev Returns the normalized variable debt per unit of asset
      * @param asset The address of the underlying asset of the reserve
      * @return The reserve normalized variable debt
      */
-    function getReserveNormalizedVariableDebt(address asset)
-        external
-        view
-        returns (uint256);
+    function getReserveNormalizedVariableDebt(address asset) external view returns (uint256);
 
     /**
      * @dev Returns the state and configuration of the reserve
      * @param asset The address of the underlying asset of the reserve
      * @return The state of the reserve
      **/
-    function getReserveData(address asset)
-        external
-        view
-        returns (DataTypes.ReserveData memory);
+    function getReserveData(address asset) external view returns (DataTypes.ReserveData memory);
 
     function finalizeTransfer(
         address asset,
@@ -502,10 +458,7 @@ interface ILendingPool {
 
     function getReservesList() external view returns (address[] memory);
 
-    function getAddressesProvider()
-        external
-        view
-        returns (ILendingPoolAddressesProvider);
+    function getAddressesProvider() external view returns (ILendingPoolAddressesProvider);
 
     function setPause(bool val) external;
 
@@ -518,10 +471,7 @@ interface IProtocolDataProvider {
         address tokenAddress;
     }
 
-    function ADDRESSES_PROVIDER()
-        external
-        view
-        returns (ILendingPoolAddressesProvider);
+    function ADDRESSES_PROVIDER() external view returns (ILendingPoolAddressesProvider);
 
     function getAllReservesTokens() external view returns (TokenData[] memory);
 
@@ -599,10 +549,7 @@ interface IScaledBalanceToken {
      * @return The scaled balance of the user
      * @return The scaled balance and the scaled total supply
      **/
-    function getScaledUserBalanceAndSupply(address user)
-        external
-        view
-        returns (uint256, uint256);
+    function getScaledUserBalanceAndSupply(address user) external view returns (uint256, uint256);
 
     /**
      * @dev Returns the scaled total supply of the variable debt token. Represents sum(debt/index)
@@ -624,12 +571,7 @@ interface IVariableDebtToken is IERC20, IScaledBalanceToken {
      * @param value The amount to be minted
      * @param index The last index of the reserve
      **/
-    event Mint(
-        address indexed from,
-        address indexed onBehalfOf,
-        uint256 value,
-        uint256 index
-    );
+    event Mint(address indexed from, address indexed onBehalfOf, uint256 value, uint256 index);
 
     /**
      * @dev Mints debt token to the `onBehalfOf` address
@@ -669,10 +611,7 @@ interface IVariableDebtToken is IERC20, IScaledBalanceToken {
     /**
      * @dev Returns the address of the incentives controller contract
      **/
-    function getIncentivesController()
-        external
-        view
-        returns (IAaveIncentivesController);
+    function getIncentivesController() external view returns (IAaveIncentivesController);
 }
 
 /**
@@ -740,10 +679,7 @@ interface IOptionalERC20 {
 interface IPriceOracle {
     function getAssetPrice(address _asset) external view returns (uint256);
 
-    function getAssetsPrices(address[] calldata _assets)
-        external
-        view
-        returns (uint256[] memory);
+    function getAssetsPrices(address[] calldata _assets) external view returns (uint256[] memory);
 
     function getSourceOfAsset(address _asset) external view returns (address);
 
@@ -847,12 +783,7 @@ interface IAToken is IERC20, IScaledBalanceToken, IInitializableAToken {
      * @param value The amount being burned
      * @param index The new liquidity index of the reserve
      **/
-    event Burn(
-        address indexed from,
-        address indexed target,
-        uint256 value,
-        uint256 index
-    );
+    event Burn(address indexed from, address indexed target, uint256 value, uint256 index);
 
     /**
      * @dev Emitted during the transfer action
@@ -861,12 +792,7 @@ interface IAToken is IERC20, IScaledBalanceToken, IInitializableAToken {
      * @param value The amount being transferred
      * @param index The new liquidity index of the reserve
      **/
-    event BalanceTransfer(
-        address indexed from,
-        address indexed to,
-        uint256 value,
-        uint256 index
-    );
+    event BalanceTransfer(address indexed from, address indexed to, uint256 value, uint256 index);
 
     /**
      * @dev Burns aTokens from `user` and sends the equivalent amount of underlying to `receiverOfUnderlying`
@@ -908,9 +834,7 @@ interface IAToken is IERC20, IScaledBalanceToken, IInitializableAToken {
      * @param amount The amount getting transferred
      * @return The amount transferred
      **/
-    function transferUnderlyingTo(address user, uint256 amount)
-        external
-        returns (uint256);
+    function transferUnderlyingTo(address user, uint256 amount) external returns (uint256);
 
     /**
      * @dev Invoked to execute actions on the aToken side after a repayment.
@@ -922,10 +846,7 @@ interface IAToken is IERC20, IScaledBalanceToken, IInitializableAToken {
     /**
      * @dev Returns the address of the incentives controller contract
      **/
-    function getIncentivesController()
-        external
-        view
-        returns (IAaveIncentivesController);
+    function getIncentivesController() external view returns (IAaveIncentivesController);
 
     /**
      * @dev Returns the address of the underlying asset of this aToken (E.g. WETH for aWETH)
@@ -939,45 +860,51 @@ interface IAToken is IERC20, IScaledBalanceToken, IInitializableAToken {
  * @author Aave
  */
 interface IReserveInterestRateStrategy {
-  function baseVariableBorrowRate() external view returns (uint256);
-  function getMaxVariableBorrowRate() external view returns (uint256);
-  function stableRateSlope1() external view returns (uint256);
-  function stableRateSlope2() external view returns (uint256);
-  function variableRateSlope1() external view returns (uint256);
-  function variableRateSlope2() external view returns (uint256);
-  function OPTIMAL_UTILIZATION_RATE() external view returns (uint256);
+    function baseVariableBorrowRate() external view returns (uint256);
 
-  function calculateInterestRates(
-    address reserve,
-    uint256 availableLiquidity,
-    uint256 totalStableDebt,
-    uint256 totalVariableDebt,
-    uint256 averageStableBorrowRate,
-    uint256 reserveFactor
-  )
-    external
-    view
-    returns (
-      uint256,
-      uint256,
-      uint256
-    );
+    function getMaxVariableBorrowRate() external view returns (uint256);
 
-  function calculateInterestRates(
-    address reserve,
-    address aToken,
-    uint256 liquidityAdded,
-    uint256 liquidityTaken,
-    uint256 totalStableDebt,
-    uint256 totalVariableDebt,
-    uint256 averageStableBorrowRate,
-    uint256 reserveFactor
-  )
-    external
-    view
-    returns (
-      uint256 liquidityRate,
-      uint256 stableBorrowRate,
-      uint256 variableBorrowRate
-    );
+    function stableRateSlope1() external view returns (uint256);
+
+    function stableRateSlope2() external view returns (uint256);
+
+    function variableRateSlope1() external view returns (uint256);
+
+    function variableRateSlope2() external view returns (uint256);
+
+    function OPTIMAL_UTILIZATION_RATE() external view returns (uint256);
+
+    function calculateInterestRates(
+        address reserve,
+        uint256 availableLiquidity,
+        uint256 totalStableDebt,
+        uint256 totalVariableDebt,
+        uint256 averageStableBorrowRate,
+        uint256 reserveFactor
+    )
+        external
+        view
+        returns (
+            uint256,
+            uint256,
+            uint256
+        );
+
+    function calculateInterestRates(
+        address reserve,
+        address aToken,
+        uint256 liquidityAdded,
+        uint256 liquidityTaken,
+        uint256 totalStableDebt,
+        uint256 totalVariableDebt,
+        uint256 averageStableBorrowRate,
+        uint256 reserveFactor
+    )
+        external
+        view
+        returns (
+            uint256 liquidityRate,
+            uint256 stableBorrowRate,
+            uint256 variableBorrowRate
+        );
 }

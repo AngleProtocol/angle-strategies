@@ -33,18 +33,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
     /// @notice Base of the ERC20 token farmed by this strategy
     uint256 public wantBase;
 
-    //@notice Reference to the ERC20 distributed as a reward by the strategy
-    IERC20 public rewards;
-
     // ============================ Parameters =====================================
-
-    /// @notice The minimum number of seconds between harvest calls. See
-    /// `setMinReportDelay()` for more details
-    uint256 public minReportDelay;
-
-    /// @notice The maximum number of seconds between harvest calls. See
-    /// `setMaxReportDelay()` for more details
-    uint256 public maxReportDelay;
 
     /// @notice Use this to adjust the threshold at which running a debt causes a
     /// harvest trigger. See `setDebtThreshold()` for more details
@@ -53,14 +42,6 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
     /// @notice See note on `setEmergencyExit()`
     bool public emergencyExit;
 
-    /// @notice The minimum amount moved for a call to `havest` to
-    /// be "justifiable". See `setRewardAmountAndMinimumAmountMoved()` for more details
-    uint256 public minimumAmountMoved;
-
-    /// @notice Reward obtained by calling harvest
-    /// @dev If this is null rewards are not currently being distributed
-    uint256 public rewardAmount;
-
     // ============================ Constructor ====================================
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -68,44 +49,26 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
 
     /// @notice Constructor of the `BaseStrategy`
     /// @param _poolManager Address of the `PoolManager` lending collateral to this strategy
-    /// @param _rewards  The token given to reward keepers
-    /// @param governorList List of the governor addresses of the protocol
+    /// @param governor Governor address of the protocol
     /// @param guardian Address of the guardian
     function _initialize(
         address _poolManager,
-        IERC20 _rewards,
-        address[] memory governorList,
+        address governor,
         address guardian
     ) internal initializer {
         poolManager = IPoolManager(_poolManager);
         want = IERC20(poolManager.token());
         wantBase = 10**(IERC20Metadata(address(want)).decimals());
-        require(guardian != address(0) && address(_rewards) != address(0), "0");
-        // The token given as a reward to keepers should be different from the token handled by the
-        // strategy
-        require(address(_rewards) != address(want), "92");
-        rewards = _rewards;
-
-        // Initializing variables
-        minReportDelay = 0;
-        maxReportDelay = 86400;
-        debtThreshold = 100 * BASE;
-        minimumAmountMoved = 0;
-        rewardAmount = 0;
-        emergencyExit = false;
-
+        require(guardian != address(0) && governor != address(0) && governor != guardian, "0");
         // AccessControl
         // Governor is guardian so no need for a governor role
-        // `PoolManager` is guardian as well to allow for more flexibility
-        _setupRole(POOLMANAGER_ROLE, address(_poolManager));
-        for (uint256 i = 0; i < governorList.length; i++) {
-            require(governorList[i] != address(0), "0");
-            _setupRole(GUARDIAN_ROLE, governorList[i]);
-        }
         _setupRole(GUARDIAN_ROLE, guardian);
+        _setupRole(GUARDIAN_ROLE, governor);
+        _setupRole(POOLMANAGER_ROLE, address(_poolManager));
         _setRoleAdmin(POOLMANAGER_ROLE, POOLMANAGER_ROLE);
         _setRoleAdmin(GUARDIAN_ROLE, POOLMANAGER_ROLE);
-
+        debtThreshold = 100 * BASE;
+        emergencyExit = false;
         // Give `PoolManager` unlimited access (might save gas)
         want.safeIncreaseAllowance(address(poolManager), type(uint256).max);
     }
@@ -144,22 +107,6 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
             (profit, loss, debtPayment) = _prepareReturn(debtOutstanding);
         }
         emit Harvested(profit, loss, debtPayment, debtOutstanding);
-
-        // Taking into account the rewards to distribute
-        // This should be done before reporting to the `PoolManager`
-        // because the `PoolManager` will update the params.lastReport of the strategy
-        if (rewardAmount > 0) {
-            uint256 lastReport = poolManager.strategies(address(this)).lastReport;
-            if (
-                (block.timestamp - lastReport >= minReportDelay) && // Should not trigger if we haven't waited long enough since previous harvest
-                ((block.timestamp - lastReport >= maxReportDelay) || // If hasn't been called in a while
-                    (debtPayment > debtThreshold) || // If the debt was too high
-                    (loss > 0) || // If some loss occured
-                    (minimumAmountMoved < want.balanceOf(address(this)) + profit)) // If the amount moved was significant
-            ) {
-                rewards.safeTransfer(msg.sender, rewardAmount);
-            }
-        }
 
         // Allows Manager to take up to the "harvested" balance of this contract,
         // which is the amount it has earned since the last time it reported to
@@ -211,56 +158,6 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
     /// @return True if the strategy is actively managing a position.
     function isActive() public view returns (bool) {
         return estimatedTotalAssets() > 0;
-    }
-
-    /// @notice Provides a signal to the keeper that `harvest()` should be called. The
-    /// keeper will provide the estimated gas cost that they would pay to call
-    /// `harvest()`, and this function should use that estimate to make a
-    /// determination if calling it is "worth it" for the keeper. This is not
-    /// the only consideration into issuing this trigger, for example if the
-    /// position would be negatively affected if `harvest()` is not called
-    /// shortly, then this can return `true` even if the keeper might be "at a
-    /// loss"
-    /// @return `true` if `harvest()` should be called, `false` otherwise.
-    /// @dev `callCostInWei` must be priced in terms of `wei` (1e-18 ETH).
-    /// @dev See `min/maxReportDelay`, `debtThreshold` to adjust the
-    /// strategist-controlled parameters that will influence whether this call
-    /// returns `true` or not. These parameters will be used in conjunction
-    /// with the parameters reported to the Manager (see `params`) to determine
-    /// if calling `harvest()` is merited.
-    /// @dev This function has been tested in a branch different from the main branch
-    function harvestTrigger() external view virtual returns (bool) {
-        StrategyParams memory params = poolManager.strategies(address(this));
-
-        // Should not trigger if we haven't waited long enough since previous harvest
-        if (block.timestamp - params.lastReport < minReportDelay) return false;
-
-        // Should trigger if hasn't been called in a while
-        if (block.timestamp - params.lastReport >= maxReportDelay) return true;
-
-        // If some amount is owed, pay it back
-        // NOTE: Since debt is based on deposits, it makes sense to guard against large
-        //       changes to the value from triggering a harvest directly through user
-        //       behavior. This should ensure reasonable resistance to manipulation
-        //       from user-initiated withdrawals as the outstanding debt fluctuates.
-        uint256 outstanding = poolManager.debtOutstanding();
-
-        if (outstanding > debtThreshold) return true;
-
-        // Check for profits and losses
-        uint256 total = estimatedTotalAssets();
-        // Trigger if we have a loss to report
-
-        if (total + debtThreshold < params.totalStrategyDebt) return true;
-
-        uint256 profit = 0;
-        if (total > params.totalStrategyDebt) profit = total - params.totalStrategyDebt; // We've earned a profit!
-
-        // Otherwise, only trigger if it "makes sense" economically (gas cost
-        // is <N% of value moved)
-        uint256 credit = poolManager.creditAvailable();
-
-        return (minimumAmountMoved < credit + profit);
     }
 
     // ============================ Internal Functions =============================
@@ -353,56 +250,11 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
         emit EmergencyExitActivated();
     }
 
-    /// @notice Used to change `rewards`.
-    /// @param _rewards The address to use for pulling rewards.
-    function setRewards(IERC20 _rewards) external onlyRole(GUARDIAN_ROLE) {
-        require(address(_rewards) != address(0) && address(_rewards) != address(want), "92");
-        rewards = _rewards;
-        emit UpdatedRewards(address(_rewards));
-    }
-
-    /// @notice Used to change the reward amount and the `minimumAmountMoved` parameter
-    /// @param _rewardAmount The new amount of reward given to keepers
-    /// @param _minimumAmountMoved The new minimum amount of collateral moved for a call to `harvest` to be
-    /// considered profitable and justifying a reward given to the keeper calling the function
-    /// @dev A null reward amount corresponds to reward distribution being deactivated
-    function setRewardAmountAndMinimumAmountMoved(uint256 _rewardAmount, uint256 _minimumAmountMoved)
-        external
-        onlyRole(GUARDIAN_ROLE)
-    {
-        rewardAmount = _rewardAmount;
-        minimumAmountMoved = _minimumAmountMoved;
-        emit UpdatedRewardAmountAndMinimumAmountMoved(_rewardAmount, _minimumAmountMoved);
-    }
-
-    /// @notice Used to change `minReportDelay`. `minReportDelay` is the minimum number
-    /// of blocks that should pass for `harvest()` to be called.
-    /// @param _delay The minimum number of seconds to wait between harvests.
-    /// @dev  For external keepers (such as the Keep3r network), this is the minimum
-    /// time between jobs to wait. (see `harvestTrigger()`
-    /// for more details.)
-    function setMinReportDelay(uint256 _delay) external onlyRole(GUARDIAN_ROLE) {
-        minReportDelay = _delay;
-        emit UpdatedMinReportDelayed(_delay);
-    }
-
-    /// @notice Used to change `maxReportDelay`. `maxReportDelay` is the maximum number
-    /// of blocks that should pass for `harvest()` to be called.
-    /// @param _delay The maximum number of seconds to wait between harvests.
-    /// @dev  For external keepers (such as the Keep3r network), this is the maximum
-    /// time between jobs to wait. (see `harvestTrigger()`
-    /// for more details.)
-    function setMaxReportDelay(uint256 _delay) external onlyRole(GUARDIAN_ROLE) {
-        maxReportDelay = _delay;
-        emit UpdatedMaxReportDelayed(_delay);
-    }
-
     /// @notice Sets how far the Strategy can go into loss without a harvest and report
     /// being required.
     /// @param _debtThreshold How big of a loss this Strategy may carry without
     /// @dev By default this is 0, meaning any losses would cause a harvest which
-    /// will subsequently report the loss to the Manager for tracking. (See
-    /// `harvestTrigger()` for more details.)
+    /// will subsequently report the loss to the Manager for tracking. 
     function setDebtThreshold(uint256 _debtThreshold) external onlyRole(GUARDIAN_ROLE) {
         debtThreshold = _debtThreshold;
         emit UpdatedDebtThreshold(_debtThreshold);
