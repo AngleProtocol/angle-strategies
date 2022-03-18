@@ -17,7 +17,7 @@ import "../BaseStrategyUpgradeable.sol";
 import "./ComputeProfitability.sol";
 
 /// @title AaveFlashloanStrategy
-/// @author Yearn Finance (https://etherscan.io/address/0xd4E94061183b2DBF24473F28A3559cf4dE4459Db#code) 
+/// @author Yearn Finance (https://etherscan.io/address/0xd4E94061183b2DBF24473F28A3559cf4dE4459Db#code)
 /// but heavily reviewed and modified by Angle Core Team
 /// @notice This strategy is used to optimize lending yield on Aave by taking some form or recursivity that is to say
 /// by borrowing to maximize Aave rewards
@@ -45,7 +45,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     IProtocolDataProvider private constant _protocolDataProvider =
         IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
     IReserveInterestRateStrategy private constant _interestRateStrategyAddress =
-         IReserveInterestRateStrategy(0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27);
+        IReserveInterestRateStrategy(0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27);
 
     // ============================== Token Addresses ==============================
 
@@ -110,6 +110,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// These parameters are packed in a struct for efficiency of SLOAD operations
     BoolParams public boolParams;
 
+    uint8 private _oracleDecimals;
+
     // ========================= Supply and Borrow Tokens ==========================
 
     IAToken private _aToken;
@@ -163,6 +165,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         _alreadyAdjusted = false;
         // Setting reward params
         _setAavePoolVariables();
+        // get decimals chainlink
+        _oracleDecimals = _chainlinkOracle.decimals();
 
         // Set AAVE tokens
         (address aToken_, , address debtToken_) = _protocolDataProvider.getReserveTokensAddresses(address(want));
@@ -197,9 +201,12 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     function estimatedTotalAssets() public view override returns (uint256) {
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
         return
-            _balanceOfWant() + deposits - borrows +
+            _balanceOfWant() +
+            deposits -
+            borrows +
             _estimatedStkAaveToWant(
-                    _balanceOfStkAave() + _balanceOfAave() + 
+                _balanceOfStkAave() +
+                    _balanceOfAave() +
                     _incentivesController.getRewardsBalance(_getAaveAssets(), address(this))
             );
     }
@@ -588,9 +595,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @param amount Amount we will deposit and borrow on Aave
     /// @return amount Actual amount deposited/borrowed
     /// @dev Amount returned should equal `amount` but can be lower if we try to flashloan more than `maxFlashLoan` authorized
-    function _leverUpFlashLoan(
-        uint256 amount
-    ) internal returns (uint256) {
+    function _leverUpFlashLoan(uint256 amount) internal returns (uint256) {
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
         uint256 depositsToMeetLtv = _getDepositFromBorrow(borrows, maxBorrowCollatRatio);
         uint256 depositsDeficitToMeetLtv = 0;
@@ -815,8 +820,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             totalVariableDebt: int256(totalVariableDebt * normalizationFactor),
             totalDeposits: int256((availableLiquidity + totalStableDebt + totalVariableDebt) * normalizationFactor),
             stableBorrowRate: int256(averageStableBorrowRate),
-            rewardDeposit: int256(emissionPerSecondAToken * 10**3 * 86400 * 365 * stkAavePriceInWant),
-            rewardBorrow: int256(emissionPerSecondDebtToken * 10**3 * 86400 * 365 * stkAavePriceInWant),
+            rewardDeposit: int256((emissionPerSecondAToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase),
+            rewardBorrow: int256((emissionPerSecondDebtToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase),
             poolManagerAssets: int256(balanceExcludingRewards * normalizationFactor),
             maxCollatRatio: int256(maxCollatRatio * 10**9),
             slope1: _slope1,
@@ -861,7 +866,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         (, int256 aavePriceUSD, , , ) = _chainlinkOracle.latestRoundData(); // stkAavePriceUSD is in base 8
         // `aavePriceUSD` is in base 8, and the discount factor is in base 4, so ultimately we need to divide
         // by `1e(18+8+4)
-        return (uint256(aavePriceUSD) * amount * wantBase * discountFactor) / 1e30;
+        return (uint256(aavePriceUSD) * amount * wantBase * discountFactor) / 1e22 / _oracleDecimals;
     }
 
     /// @notice Verifies the cooldown status for earned stkAAVE

@@ -121,7 +121,7 @@ def revenue(b):
     depositRate = f2 * (1-rf)/ newCompDeposit
     earnings = f1*f2
     cost = b * newRate
-    rewards = b * rewardBorrow / newCompBorrow + newPoolDeposit * rewardDeposit /newCompDeposit
+    rewards = b * rewardBorrow / newCompBorrowVariable + newPoolDeposit * rewardDeposit /newCompDeposit
     return  earnings + rewards - cost
 
 
@@ -139,7 +139,7 @@ def revenuePrime(b):
     f1prime = (compDeposit - poolManagerFund) * (1-rf) / newCompDeposit**2 
     f2prime = newRate + newCompBorrowVariable * newRatePrime
     f3prime = newRate + b * newRatePrime
-    f4prime =  rewardBorrow * (compBorrowStable + compBorrowVariable) / newCompBorrow**2 
+    f4prime =  rewardBorrow * (compBorrowVariable) / newCompBorrowVariable**2 
     f5prime =  rewardDeposit * (compDeposit - poolManagerFund) / newCompDeposit**2
 
     derivate = f1prime*f2 + f2prime*f1 - f3prime + f4prime + f5prime
@@ -162,7 +162,7 @@ def revenuePrime2nd(b):
     f1prime2nd = - (compDeposit - poolManagerFund) * (1-rf) *2 / newCompDeposit**3
     f2prime2nd = newRatePrime + newRatePrime + newCompBorrowVariable * newRatePrime2nd
     f3prime2nd = newRatePrime + newRatePrime + b * newRatePrime2nd
-    f4prime2nd =  - rewardBorrow * (compBorrowStable + compBorrowVariable) * 2/ newCompBorrow**3 
+    f4prime2nd =  - rewardBorrow * (compBorrowVariable) * 2/ newCompBorrowVariable**3 
     f5prime2nd =  - rewardDeposit * (compDeposit - poolManagerFund) * 2 / newCompDeposit**3
 
     derivate = f1prime2nd*f2 + f1prime*f2prime + f2prime*f1prime + f2prime2nd*f1 - f3prime2nd + f4prime2nd + f5prime2nd

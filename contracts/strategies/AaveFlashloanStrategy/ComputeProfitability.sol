@@ -34,22 +34,6 @@ contract ComputeProfitability {
             (parameters.totalDeposits + borrow);
     }
 
-    // borrow must be in BASE token (6 for USDC)
-    function _calculateInterest(int256 borrow, SCalculateBorrow memory parameters)
-        internal
-        pure
-        returns (int256 interests)
-    {
-        int256 newUtilization = _computeUtilization(borrow, parameters);
-
-        if (newUtilization < parameters.uOptimal) {
-            interests = parameters.r0 + (parameters.slope1 * newUtilization) / parameters.uOptimal;
-        } else {
-            interests = parameters.r0 + parameters.slope1 + (parameters.slope2 * (newUtilization - parameters.uOptimal)) / (_BASE_RAY - parameters.uOptimal);
-        }
-        return interests;
-    }
-
     function _computeUprime(int256 borrow, SCalculateBorrow memory parameters) internal pure returns (int256) {
         return
             ((parameters.totalDeposits - parameters.totalStableDebt - parameters.totalVariableDebt) * _BASE_RAY) /
@@ -57,180 +41,113 @@ contract ComputeProfitability {
     }
 
     // return value "interests" in BASE ray
-    function _calculateInterestPrime(int256 borrow, SCalculateBorrow memory parameters)
+    function _calculateInterestPrimes(int256 borrow, SCalculateBorrow memory parameters)
         internal
         pure
-        returns (int256 interests)
+        returns (
+            int256 interests,
+            int256 interestsPrime,
+            int256 interestsPrime2
+        )
     {
+        int256 newUtilization = _computeUtilization(borrow, parameters);
+        int256 denomUPrime = (parameters.totalDeposits + borrow);
         int256 uprime = _computeUprime(borrow, parameters);
-        uprime = (uprime * _BASE_RAY) / (parameters.totalDeposits + borrow);
-        if (_computeUtilization(borrow, parameters) < parameters.uOptimal) {
-            interests = (parameters.slope1 * uprime) / parameters.uOptimal;
+        int256 uprime2 = -2 * uprime;
+        uprime = (uprime * _BASE_RAY) / denomUPrime;
+        uprime2 = (uprime2 * _BASE_RAY) / denomUPrime;
+        uprime2 = (uprime2 * _BASE_RAY) / denomUPrime;
+        if (newUtilization < parameters.uOptimal) {
+            interests = parameters.r0 + (parameters.slope1 * newUtilization) / parameters.uOptimal;
+            interestsPrime = (parameters.slope1 * uprime) / parameters.uOptimal;
+            interestsPrime2 = (parameters.slope1 * uprime2) / parameters.uOptimal;
         } else {
-            interests = (parameters.slope2 * uprime) / (_BASE_RAY - parameters.uOptimal);
+            interests =
+                parameters.r0 +
+                parameters.slope1 +
+                (parameters.slope2 * (newUtilization - parameters.uOptimal)) /
+                (_BASE_RAY - parameters.uOptimal);
+            interestsPrime = (parameters.slope2 * uprime) / (_BASE_RAY - parameters.uOptimal);
+            interestsPrime2 = (parameters.slope2 * uprime2) / (_BASE_RAY - parameters.uOptimal);
         }
-
-        return interests;
     }
 
-    // return value "interests" in BASE ray
-    function _calculateInterestPrime2(int256 borrow, SCalculateBorrow memory parameters)
+    function _revenuePrimes(int256 borrow, SCalculateBorrow memory parameters)
         internal
         pure
-        returns (int256 interests)
+        returns (
+            int256 revenue,
+            int256 revenuePrime,
+            int256 revenurPrime2nd
+        )
     {
-        int256 uprime = -2 * _computeUprime(borrow, parameters); // BASE ray
-        uprime = (uprime * _BASE_RAY) / (parameters.totalDeposits + borrow);
-        uprime = (uprime * _BASE_RAY) / (parameters.totalDeposits + borrow);
-        if (_computeUtilization(borrow, parameters) < parameters.uOptimal) {
-            interests = (parameters.slope1 * uprime) / parameters.uOptimal;
-        } else {
-            interests = (parameters.slope2 * uprime) / (_BASE_RAY - parameters.uOptimal);
-        }
-        return interests;
-    }
+        (int256 newRate, int256 newRatePrime, int256 newRatePrime2) = _calculateInterestPrimes(borrow, parameters);
 
-    function _revenue(int256 borrow, SCalculateBorrow memory parameters) internal pure returns (int256) {
-        int256 newRate = _calculateInterest(borrow, parameters);
+        // precomputed values
         int256 poolManagerFund = parameters.poolManagerAssets;
         int256 newPoolDeposit = borrow + poolManagerFund;
         int256 newCompDeposit = borrow + parameters.totalDeposits;
         int256 newCompBorrowVariable = borrow + parameters.totalVariableDebt;
+        int256 newCompBorrow = newCompBorrowVariable + parameters.totalStableDebt;
 
-        int256 f1 = (newPoolDeposit * (_BASE_RAY - parameters.reserveFactor)) / newCompDeposit;
-        int256 f2 = (parameters.totalStableDebt * parameters.stableBorrowRate + newCompBorrowVariable * newRate) /
-            _BASE_RAY;
+        // derivate 0
+        int256 proportionStrat = (newPoolDeposit * (_BASE_RAY - parameters.reserveFactor)) / newCompDeposit;
+        int256 poolYearlyRevenue = (parameters.totalStableDebt *
+            parameters.stableBorrowRate +
+            newCompBorrowVariable *
+            newRate) / _BASE_RAY;
 
-        int256 earnings = (f1 * f2) / _BASE_RAY;
+        int256 earnings = (proportionStrat * poolYearlyRevenue) / _BASE_RAY;
         int256 cost = (borrow * newRate) / _BASE_RAY;
         int256 rewards = (borrow * parameters.rewardBorrow) /
-            (newCompBorrowVariable + parameters.totalStableDebt) +
+            (newCompBorrowVariable) +
             (newPoolDeposit * parameters.rewardDeposit) /
             newCompDeposit;
-        return earnings + rewards - cost;
-    }
 
-    struct SRevenuePrimeVars {
-        int256 newRate;
-        int256 newRatePrime;
-        int256 poolManagerFund;
-        int256 newPoolDeposit;
-        int256 newCompDeposit;
-        int256 newCompBorrowVariable;
-        int256 newCompBorrow;
-        int256 f1;
-        int256 f2;
-        int256 f1prime;
-        int256 f2prime;
-    }
+        // 1st derivate
+        int256 proportionStratPrime = ((parameters.totalDeposits - poolManagerFund) *
+            (_BASE_RAY - parameters.reserveFactor)) / newCompDeposit;
+        proportionStratPrime = (proportionStratPrime * _BASE_RAY) / newCompDeposit;
+        int256 poolYearlyRevenuePrime = (newRate * _BASE_RAY + newCompBorrowVariable * newRatePrime) / _BASE_RAY;
+        int256 costPrime = (newRate * _BASE_RAY + borrow * newRatePrime) / _BASE_RAY;
+        int256 rewardBorrowPrime = (parameters.rewardBorrow * (parameters.totalVariableDebt)) / newCompBorrowVariable;
+        rewardBorrowPrime = (rewardBorrowPrime * _BASE_RAY) / newCompBorrowVariable;
+        int256 rewardDepositPrime = (parameters.rewardDeposit * (parameters.totalDeposits - poolManagerFund)) /
+            newCompDeposit;
+        rewardDepositPrime = (rewardDepositPrime * _BASE_RAY) / newCompDeposit;
 
-    function _revenuePrime(
-        int256 borrow,
-        SCalculateBorrow memory parameters,
-        SRevenuePrimeVars memory vars
-    ) internal pure returns (int256) {
-        int256 f3prime = (vars.newRate * _BASE_RAY + borrow * vars.newRatePrime) / _BASE_RAY;
+        // 2nd derivate
+        int256 proportionStratPrime2nd = (-2 * (proportionStratPrime * (_BASE_RAY))) / (newCompDeposit);
+        int256 poolYearlyRevenuePrime2nd = ((2 * newRatePrime * _BASE_RAY) + (newCompBorrowVariable) * newRatePrime2) /
+            _BASE_RAY;
+        int256 costPrime2nd = ((2 * newRatePrime * _BASE_RAY) + borrow * newRatePrime2) / _BASE_RAY;
+        int256 rewardBorrowPrime2nd = (-2 * rewardBorrowPrime * _BASE_RAY) / newCompBorrowVariable;
+        int256 rewardDeposit2nd = (-2 * rewardDepositPrime * _BASE_RAY) / newCompDeposit;
 
-        int256 f4prime = (parameters.rewardBorrow * (parameters.totalStableDebt + parameters.totalVariableDebt)) /
-            vars.newCompBorrow;
-        f4prime = (f4prime * _BASE_RAY) / vars.newCompBorrow;
-        int256 f5prime = (parameters.rewardDeposit * (parameters.totalDeposits - vars.poolManagerFund)) /
-            vars.newCompDeposit;
-        f5prime = (f5prime * _BASE_RAY) / vars.newCompDeposit;
-
-        return ((vars.f1prime * vars.f2 + vars.f2prime * vars.f1) / _BASE_RAY) - f3prime + f4prime + f5prime;
-    }
-
-    function _revenuePrime2(
-        int256 borrow,
-        SCalculateBorrow memory parameters,
-        SRevenuePrimeVars memory vars
-    ) internal pure returns (int256) {
-        int256 newRatePrime2 = _calculateInterestPrime2(borrow, parameters);
-
-        int256 derivate;
-        {
-            int256 f1prime2nd = (-(parameters.totalDeposits - vars.poolManagerFund) *
-                (_BASE_RAY - parameters.reserveFactor) *
-                2) / (vars.newCompDeposit);
-            f1prime2nd = (f1prime2nd * (_BASE_RAY)) / (vars.newCompDeposit);
-            f1prime2nd = (f1prime2nd * (_BASE_RAY)) / (vars.newCompDeposit);
-
-            int256 f2prime2nd = ((vars.newRatePrime * _BASE_RAY + vars.newRatePrime * _BASE_RAY) +
-                (vars.newCompBorrowVariable) *
-                newRatePrime2) / (_BASE_RAY);
-            int256 f3prime2nd = ((vars.newRatePrime * _BASE_RAY + vars.newRatePrime * _BASE_RAY) +
-                (borrow) *
-                newRatePrime2) / (_BASE_RAY);
-
-            int256 f4prime2nd = (-(parameters.rewardBorrow) *
-                (parameters.totalStableDebt + parameters.totalVariableDebt) *
-                2) / (vars.newCompBorrow);
-            f4prime2nd = (f4prime2nd * (_BASE_RAY)) / (vars.newCompBorrow);
-            f4prime2nd = (f4prime2nd * (_BASE_RAY)) / (vars.newCompBorrow);
-            int256 f5prime2nd = (-(parameters.rewardDeposit) * (parameters.totalDeposits - vars.poolManagerFund) * 2) /
-                (vars.newCompDeposit);
-            f5prime2nd = (f5prime2nd * (_BASE_RAY)) / (vars.newCompDeposit);
-            f5prime2nd = (f5prime2nd * (_BASE_RAY)) / (vars.newCompDeposit);
-
-            derivate =
-                f1prime2nd *
-                vars.f2 +
-                vars.f1prime *
-                vars.f2prime +
-                vars.f2prime *
-                vars.f1prime +
-                f2prime2nd *
-                vars.f1 -
-                f3prime2nd *
-                (_BASE_RAY) +
-                (f4prime2nd + f5prime2nd) *
-                (_BASE_RAY);
-        }
-
-        return derivate / (_BASE_RAY);
+        revenue = earnings + rewards - cost;
+        revenuePrime =
+            ((proportionStratPrime * poolYearlyRevenue + poolYearlyRevenuePrime * proportionStrat) / _BASE_RAY) +
+            rewardBorrowPrime +
+            rewardDepositPrime -
+            costPrime;
+        revenurPrime2nd =
+            (proportionStratPrime2nd *
+                poolYearlyRevenue +
+                proportionStratPrime *
+                poolYearlyRevenuePrime +
+                poolYearlyRevenuePrime *
+                proportionStratPrime +
+                poolYearlyRevenuePrime2nd *
+                proportionStrat +
+                (rewardBorrowPrime2nd + rewardDeposit2nd) *
+                (_BASE_RAY) -
+                costPrime2nd *
+                (_BASE_RAY)) /
+            (_BASE_RAY);
     }
 
     function _abs(int256 x) private pure returns (int256) {
         return x >= 0 ? x : -x;
-    }
-
-    function _revenuePrimeVars(int256 borrow, SCalculateBorrow memory parameters)
-        internal
-        pure
-        returns (SRevenuePrimeVars memory)
-    {
-        int256 newRate = _calculateInterest(borrow, parameters);
-        int256 newRatePrime = _calculateInterestPrime(borrow, parameters);
-
-        int256 poolManagerFund = parameters.poolManagerAssets;
-        int256 newPoolDeposit = borrow + poolManagerFund;
-        int256 newCompDeposit = borrow + parameters.totalDeposits;
-        int256 newCompBorrowVariable = borrow + parameters.totalVariableDebt;
-
-        int256 f1 = (newPoolDeposit * (_BASE_RAY - parameters.reserveFactor)) / newCompDeposit;
-        int256 f2 = (parameters.totalStableDebt * parameters.stableBorrowRate + newCompBorrowVariable * newRate) /
-            _BASE_RAY;
-
-        int256 f1prime = ((parameters.totalDeposits - poolManagerFund) * (_BASE_RAY - parameters.reserveFactor)) /
-            newCompDeposit;
-        f1prime = (f1prime * _BASE_RAY) / newCompDeposit;
-        int256 f2prime = (newRate * _BASE_RAY + newCompBorrowVariable * newRatePrime) / _BASE_RAY;
-
-        return
-            SRevenuePrimeVars({
-                newRate: newRate,
-                newRatePrime: newRatePrime,
-                poolManagerFund: poolManagerFund,
-                newPoolDeposit: newPoolDeposit,
-                newCompDeposit: newCompDeposit,
-                newCompBorrowVariable: newCompBorrowVariable,
-                newCompBorrow: newCompBorrowVariable + parameters.totalStableDebt,
-                f1: f1,
-                f2: f2,
-                f1prime: f1prime,
-                f2prime: f2prime
-            });
     }
 
     function _newtonRaphson(
@@ -246,22 +163,20 @@ contract ComputeProfitability {
         int256 borrowInit = _borrow;
         borrow = _borrow;
 
-        int256 y = _revenue(0, parameters);
-
-        if (_revenue(_BASE_RAY, parameters) <= y) {
+        (int256 y, , ) = _revenuePrimes(0, parameters);
+        (int256 revenueWithBorrow, , ) = _revenuePrimes(_BASE_RAY, parameters);
+        if (revenueWithBorrow <= y) {
             return (0, 1);
         }
 
         while (count < maxCount && (count == 0 || _abs((borrowInit - borrow) / borrowInit) > tolerance)) {
-            SRevenuePrimeVars memory vars = _revenuePrimeVars(borrow, parameters);
-            grad = -_revenuePrime(borrow, parameters, vars);
-            grad2nd = -_revenuePrime2(borrow, parameters, vars);
+            (, grad, grad2nd) = _revenuePrimes(borrow, parameters);
             borrowInit = borrow;
             borrow = borrowInit - (grad * _BASE_RAY) / grad2nd;
             count += 1;
         }
 
-        int256 x = _revenue(borrow, parameters);
+        (int256 x, , ) = _revenuePrimes(borrow, parameters);
         if (x <= y) {
             borrow = 0;
         }
