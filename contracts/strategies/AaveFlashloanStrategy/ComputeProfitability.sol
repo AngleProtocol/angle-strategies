@@ -53,14 +53,13 @@ contract ComputeProfitability {
         int256 newUtilization = _computeUtilization(borrow, parameters);
         int256 denomUPrime = (parameters.totalDeposits + borrow);
         int256 uprime = _computeUprime(borrow, parameters);
-        int256 uprime2 = -2 * uprime;
         uprime = (uprime * _BASE_RAY) / denomUPrime;
-        uprime2 = (uprime2 * _BASE_RAY) / denomUPrime;
-        uprime2 = (uprime2 * _BASE_RAY) / denomUPrime;
+        int256 uprime2nd = -2 * uprime;
+        uprime2nd = (uprime2nd * _BASE_RAY) / denomUPrime;
         if (newUtilization < parameters.uOptimal) {
             interests = parameters.r0 + (parameters.slope1 * newUtilization) / parameters.uOptimal;
             interestsPrime = (parameters.slope1 * uprime) / parameters.uOptimal;
-            interestsPrime2 = (parameters.slope1 * uprime2) / parameters.uOptimal;
+            interestsPrime2 = (parameters.slope1 * uprime2nd) / parameters.uOptimal;
         } else {
             interests =
                 parameters.r0 +
@@ -68,7 +67,7 @@ contract ComputeProfitability {
                 (parameters.slope2 * (newUtilization - parameters.uOptimal)) /
                 (_BASE_RAY - parameters.uOptimal);
             interestsPrime = (parameters.slope2 * uprime) / (_BASE_RAY - parameters.uOptimal);
-            interestsPrime2 = (parameters.slope2 * uprime2) / (_BASE_RAY - parameters.uOptimal);
+            interestsPrime2 = (parameters.slope2 * uprime2nd) / (_BASE_RAY - parameters.uOptimal);
         }
     }
 
@@ -99,7 +98,7 @@ contract ComputeProfitability {
             (proportionStrat * poolYearlyRevenue) /
             _BASE_RAY +
             (borrow * parameters.rewardBorrow) /
-            ((borrow + parameters.totalVariableDebt)) +
+            (borrow + parameters.totalVariableDebt) +
             ((borrow + parameters.strategyAssets) * parameters.rewardDeposit) /
             (borrow + parameters.totalDeposits) -
             (borrow * newRate) /
@@ -132,10 +131,10 @@ contract ComputeProfitability {
                 }
                 // stack too deep
                 poolYearlyRevenuePrime =
-                    ((2 * newRatePrime * _BASE_RAY) + ((borrow + parameters.totalVariableDebt)) * newRatePrime2) /
+                    (2 * newRatePrime * _BASE_RAY + (borrow + parameters.totalVariableDebt) * newRatePrime2) /
                     _BASE_RAY;
 
-                revenuePrime2nd += poolYearlyRevenuePrime * proportionStrat;
+                revenuePrime2nd = (revenuePrime2nd + poolYearlyRevenuePrime * proportionStrat) / _BASE_RAY;
             }
 
             int256 costPrime = (newRate * _BASE_RAY + borrow * newRatePrime) / _BASE_RAY;
@@ -154,9 +153,7 @@ contract ComputeProfitability {
             rewardBorrowPrime = (-2 * rewardBorrowPrime * _BASE_RAY) / (borrow + parameters.totalVariableDebt);
             rewardDepositPrime = (-2 * rewardDepositPrime * _BASE_RAY) / (borrow + parameters.totalDeposits);
 
-            revenuePrime2nd =
-                (revenuePrime2nd + (rewardBorrowPrime + rewardDepositPrime) * (_BASE_RAY) - costPrime * (_BASE_RAY)) /
-                (_BASE_RAY);
+            revenuePrime2nd += (rewardBorrowPrime + rewardDepositPrime) - costPrime;
         }
     }
 
