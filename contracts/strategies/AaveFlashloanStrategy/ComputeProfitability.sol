@@ -2,8 +2,6 @@
 
 pragma solidity 0.8.7;
 
-import "./AaveInterfaces.sol";
-
 /// @title ComputeProfitability
 /// @author Angle Core Team
 /// @notice Helper contract to get the optimal borrow amount from a set of provided parameters from Aave
@@ -17,7 +15,6 @@ contract ComputeProfitability {
         int256 rewardDeposit;
         int256 rewardBorrow;
         int256 strategyAssets;
-        int256 maxCollatRatio;
         int256 slope1;
         int256 slope2;
         int256 r0;
@@ -28,26 +25,29 @@ contract ComputeProfitability {
 
     int256 private constant _BASE_RAY = 10**27;
 
+    /// @notice Computes the Aave utilization ratio
     function _computeUtilization(int256 borrow, SCalculateBorrow memory parameters) internal pure returns (int256) {
         return
             ((parameters.totalStableDebt + parameters.totalVariableDebt + borrow) * _BASE_RAY) /
             (parameters.totalDeposits + borrow);
     }
 
+    /// @notice Computes the derivative of the utilization ratio with respect to the amount borrowed
     function _computeUprime(int256 borrow, SCalculateBorrow memory parameters) internal pure returns (int256) {
         return
             ((parameters.totalDeposits - parameters.totalStableDebt - parameters.totalVariableDebt) * _BASE_RAY) /
             (parameters.totalDeposits + borrow);
     }
 
-    // return value "interests" in BASE ray
-    function calculateInterestPrimes(int256 borrow, SCalculateBorrow memory parameters)
-        public
+    /// @notice Computes the value of the interest rate, its first and second order derivatives
+    /// @dev The returned value is in `_BASE_RAY`
+    function _calculateInterestPrimes(int256 borrow, SCalculateBorrow memory parameters)
+        internal
         pure
         returns (
-            int256 interests,
-            int256 interestsPrime,
-            int256 interestsPrime2
+            int256 interest,
+            int256 interestPrime,
+            int256 interestPrime2
         )
     {
         int256 newUtilization = _computeUtilization(borrow, parameters);
@@ -57,21 +57,22 @@ contract ComputeProfitability {
         int256 uprime2nd = -2 * uprime;
         uprime2nd = (uprime2nd * _BASE_RAY) / denomUPrime;
         if (newUtilization < parameters.uOptimal) {
-            interests = parameters.r0 + (parameters.slope1 * newUtilization) / parameters.uOptimal;
-            interestsPrime = (parameters.slope1 * uprime) / parameters.uOptimal;
-            interestsPrime2 = (parameters.slope1 * uprime2nd) / parameters.uOptimal;
+            interest = parameters.r0 + (parameters.slope1 * newUtilization) / parameters.uOptimal;
+            interestPrime = (parameters.slope1 * uprime) / parameters.uOptimal;
+            interestPrime2 = (parameters.slope1 * uprime2nd) / parameters.uOptimal;
         } else {
-            interests =
+            interest =
                 parameters.r0 +
                 parameters.slope1 +
                 (parameters.slope2 * (newUtilization - parameters.uOptimal)) /
                 (_BASE_RAY - parameters.uOptimal);
-            interestsPrime = (parameters.slope2 * uprime) / (_BASE_RAY - parameters.uOptimal);
-            interestsPrime2 = (parameters.slope2 * uprime2nd) / (_BASE_RAY - parameters.uOptimal);
+            interestPrime = (parameters.slope2 * uprime) / (_BASE_RAY - parameters.uOptimal);
+            interestPrime2 = (parameters.slope2 * uprime2nd) / (_BASE_RAY - parameters.uOptimal);
         }
     }
 
-    function revenuePrimes(
+    /// @notice Computes the value of the revenue, as well as its first and second order derivatives
+    function _revenuePrimes(
         int256 borrow,
         SCalculateBorrow memory parameters,
         bool onlyRevenue
@@ -86,7 +87,7 @@ contract ComputeProfitability {
     {
         (int256 newRate, int256 newRatePrime, int256 newRatePrime2) = calculateInterestPrimes(borrow, parameters);
 
-        // 0 derivate
+        // 0 order derivative
         int256 proportionStrat = ((borrow + parameters.strategyAssets) * (_BASE_RAY - parameters.reserveFactor)) /
             (borrow + parameters.totalDeposits);
         int256 poolYearlyRevenue = (parameters.totalStableDebt *
@@ -105,9 +106,9 @@ contract ComputeProfitability {
             _BASE_RAY;
 
         if (!onlyRevenue) {
-            // 1st derivate
+            // 1st order derivative
             {
-                // stack too deep so computing block per block
+                // Computing block per block to avoid stack too deep errors
                 int256 proportionStratPrime = ((parameters.totalDeposits - parameters.strategyAssets) *
                     (_BASE_RAY - parameters.reserveFactor)) / (borrow + parameters.totalDeposits);
                 proportionStratPrime = (proportionStratPrime * _BASE_RAY) / (borrow + parameters.totalDeposits);
@@ -129,7 +130,6 @@ contract ComputeProfitability {
                         proportionStratPrime2nd *
                         poolYearlyRevenue;
                 }
-                // stack too deep
                 poolYearlyRevenuePrime =
                     (2 * newRatePrime * _BASE_RAY + (borrow + parameters.totalVariableDebt) * newRatePrime2) /
                     _BASE_RAY;
@@ -147,8 +147,8 @@ contract ComputeProfitability {
 
             revenuePrime += rewardBorrowPrime + rewardDepositPrime - costPrime;
 
-            // 2nd derivate
-            // reusing variables for the stack too deep issue
+            // 2nd order derivative
+            // Reusing variables for the stack too deep issue
             costPrime = ((2 * newRatePrime * _BASE_RAY) + borrow * newRatePrime2) / _BASE_RAY;
             rewardBorrowPrime = (-2 * rewardBorrowPrime * _BASE_RAY) / (borrow + parameters.totalVariableDebt);
             rewardDepositPrime = (-2 * rewardDepositPrime * _BASE_RAY) / (borrow + parameters.totalDeposits);
@@ -157,31 +157,32 @@ contract ComputeProfitability {
         }
     }
 
+    /// @notice Returns the absolute value of an integer
     function _abs(int256 x) private pure returns (int256) {
         return x >= 0 ? x : -x;
     }
 
+    /// @notice Performs a newton Raphson approximation to get the zero point of the derivative of the 
+    /// revenue function of the protocol depending on the amount borrowed
     function _newtonRaphson(
         int256 _borrow,
-        int256 tolerance,
         SCalculateBorrow memory parameters
-    ) internal pure returns (int256 borrow, uint256 count) {
+    ) internal pure returns (int256 borrow) {
         int256 grad;
         int256 grad2nd;
 
-        uint256 maxCount = 30;
-        count = 0;
+        uint256 count;
         int256 borrowInit = _borrow;
         borrow = _borrow;
 
         (int256 y, , ) = revenuePrimes(0, parameters, true);
         (int256 revenueWithBorrow, , ) = revenuePrimes(_BASE_RAY, parameters, true);
         if (revenueWithBorrow <= y) {
-            return (0, 1);
+            return 0;
         }
-
-        while (count < maxCount && (count == 0 || _abs(((borrowInit - borrow) * _BASE_RAY) / borrowInit) > tolerance)) {
-            (, grad, grad2nd) = revenuePrimes(borrow, parameters, false);
+        // Tolerance is 1%
+        while (count < 30 && (count == 0 || _abs((borrowInit - borrow) / borrowInit) > 10**25)) {
+            (, grad, grad2nd) = _revenuePrimes(borrow, parameters, false);
             borrowInit = borrow;
             borrow = borrowInit - (grad * _BASE_RAY) / grad2nd;
             count += 1;
@@ -193,8 +194,9 @@ contract ComputeProfitability {
         }
     }
 
+    /// @notice Computes the optimal borrow amount of the strategy depending on Aave protocol parameters
+    /// to maximize folding revenues
     function computeProfitability(SCalculateBorrow memory parameters) external pure returns (int256 borrow) {
-        int256 tolerance = 10**(27 - 2); // 1%
-        (borrow, ) = _newtonRaphson(parameters.strategyAssets, tolerance, parameters);
+        borrow = _newtonRaphson(parameters.strategyAssets, parameters);
     }
 }

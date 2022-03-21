@@ -813,7 +813,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         (uint256 emissionPerSecondAToken, , ) = _incentivesController.assets(address(_aToken));
         (uint256 emissionPerSecondDebtToken, , ) = _incentivesController.assets(address(_debtToken));
 
-        // TODO double check maths here
         ComputeProfitability.SCalculateBorrow memory parameters = ComputeProfitability.SCalculateBorrow({
             reserveFactor: _reserveFactor,
             totalStableDebt: int256(totalStableDebt * normalizationFactor),
@@ -823,7 +822,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             rewardDeposit: int256((emissionPerSecondAToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase),
             rewardBorrow: int256((emissionPerSecondDebtToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase),
             strategyAssets: int256(balanceExcludingRewards * normalizationFactor),
-            maxCollatRatio: int256(maxCollatRatio * 10**9),
             slope1: _slope1,
             slope2: _slope2,
             r0: _r0,
