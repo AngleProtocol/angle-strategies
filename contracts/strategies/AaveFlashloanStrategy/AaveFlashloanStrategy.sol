@@ -886,8 +886,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         assets[1] = address(_debtToken);
     }
 
-    // ========================= Internal Pure Functions ===========================
-
     /// @notice Get Aave ratios for a token in order to compute later our collateral ratio
     /// @param token Address of the token for which to check the ratios (usually `want` token)
     /// @dev `getReserveConfigurationData` returns values in base 4. So here `ltv` and `liquidationThreshold` are returned in base 18
@@ -897,6 +895,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         ltv = ltv * _BPS_WAD_RATIO;
         liquidationThreshold = liquidationThreshold * _BPS_WAD_RATIO;
     }
+
+    // ========================= Internal Pure Functions ===========================
 
     /// @notice Get target borrow amount based on deposit and collateral ratio
     /// @param deposit Current total deposited on Aave
