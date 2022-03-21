@@ -163,11 +163,9 @@ contract ComputeProfitability {
         return x >= 0 ? x : -x;
     }
 
-    /// @notice Performs a newton Raphson approximation to get the zero point of the derivative of the 
+    /// @notice Performs a newton Raphson approximation to get the zero point of the derivative of the
     /// revenue function of the protocol depending on the amount borrowed
-    function _newtonRaphson(
-        SCalculateBorrow memory parameters
-    ) internal pure returns (int256 borrow) {
+    function _newtonRaphson(SCalculateBorrow memory parameters) internal pure returns (int256 borrow) {
         (int256 y, , ) = _revenuePrimes(0, parameters, true);
         (int256 revenueWithBorrow, , ) = _revenuePrimes(_BASE_RAY, parameters, true);
         if (revenueWithBorrow <= y) {
@@ -186,7 +184,7 @@ contract ComputeProfitability {
             count += 1;
         }
 
-        (int256 x, , ) = revenuePrimes(borrow, parameters, true);
+        (int256 x, , ) = _revenuePrimes(borrow, parameters, true);
         if (x <= y) {
             borrow = 0;
         }
