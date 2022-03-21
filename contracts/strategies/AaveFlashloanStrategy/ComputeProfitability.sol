@@ -41,8 +41,8 @@ contract ComputeProfitability {
     }
 
     // return value "interests" in BASE ray
-    function _calculateInterestPrimes(int256 borrow, SCalculateBorrow memory parameters)
-        internal
+    function calculateInterestPrimes(int256 borrow, SCalculateBorrow memory parameters)
+        public
         pure
         returns (
             int256 interests,
@@ -71,12 +71,12 @@ contract ComputeProfitability {
         }
     }
 
-    function _revenuePrimes(
+    function revenuePrimes(
         int256 borrow,
         SCalculateBorrow memory parameters,
         bool onlyRevenue
     )
-        internal
+        public
         pure
         returns (
             int256 revenue,
@@ -84,7 +84,7 @@ contract ComputeProfitability {
             int256 revenuePrime2nd
         )
     {
-        (int256 newRate, int256 newRatePrime, int256 newRatePrime2) = _calculateInterestPrimes(borrow, parameters);
+        (int256 newRate, int256 newRatePrime, int256 newRatePrime2) = calculateInterestPrimes(borrow, parameters);
 
         // 0 derivate
         int256 proportionStrat = ((borrow + parameters.strategyAssets) * (_BASE_RAY - parameters.reserveFactor)) /
@@ -165,29 +165,29 @@ contract ComputeProfitability {
         int256 _borrow,
         int256 tolerance,
         SCalculateBorrow memory parameters
-    ) internal pure returns (int256 borrow, int256 count) {
+    ) internal pure returns (int256 borrow, uint256 count) {
         int256 grad;
         int256 grad2nd;
 
-        int256 maxCount = 30;
+        uint256 maxCount = 30;
         count = 0;
         int256 borrowInit = _borrow;
         borrow = _borrow;
 
-        (int256 y, , ) = _revenuePrimes(0, parameters, true);
-        (int256 revenueWithBorrow, , ) = _revenuePrimes(_BASE_RAY, parameters, true);
+        (int256 y, , ) = revenuePrimes(0, parameters, true);
+        (int256 revenueWithBorrow, , ) = revenuePrimes(_BASE_RAY, parameters, true);
         if (revenueWithBorrow <= y) {
             return (0, 1);
         }
 
-        while (count < maxCount && (count == 0 || _abs((borrowInit - borrow) / borrowInit) > tolerance)) {
-            (, grad, grad2nd) = _revenuePrimes(borrow, parameters, false);
+        while (count < maxCount && (count == 0 || _abs(((borrowInit - borrow) * _BASE_RAY) / borrowInit) > tolerance)) {
+            (, grad, grad2nd) = revenuePrimes(borrow, parameters, false);
             borrowInit = borrow;
             borrow = borrowInit - (grad * _BASE_RAY) / grad2nd;
             count += 1;
         }
 
-        (int256 x, , ) = _revenuePrimes(borrow, parameters, true);
+        (int256 x, , ) = revenuePrimes(borrow, parameters, true);
         if (x <= y) {
             borrow = 0;
         }

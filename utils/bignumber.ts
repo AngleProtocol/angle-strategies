@@ -1,3 +1,4 @@
+import { expect } from 'chai';
 import { utils, BigNumber, BigNumberish } from 'ethers';
 
 export function mwei(number: BigNumberish): BigNumber {
@@ -78,4 +79,15 @@ export function divBy10e18(bigNumber: BigNumberish): number {
 // BNtoEth
 export function divBy10ePow(bigNumber: BigNumberish, pow: number | BigNumber): number {
   return parseFloat(utils.formatUnits(bigNumber, pow));
+}
+
+export async function expectApproxDelta(actual: BigNumber, expected: BigNumber, delta: BigNumber): Promise<void> {
+  const margin = expected.div(delta);
+  if (actual.isNegative()) {
+    expect(expected.gte(actual.add(margin))).to.be.true;
+    expect(expected.lte(actual.sub(margin))).to.be.true;
+  } else {
+    expect(expected.lte(actual.add(margin))).to.be.true;
+    expect(expected.gte(actual.sub(margin))).to.be.true;
+  }
 }
