@@ -915,6 +915,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @notice Get target deposit amount based on borrow and collateral ratio
     /// @param borrow Current total borrowed on Aave
     /// @param collatRatio Collateral ratio to target
+    /// @param deposits Current deposit amount: this is what the function should return if the `collatRatio` is null
     function _getDepositFromBorrow(uint256 borrow, uint256 collatRatio, uint256 deposits) internal pure returns (uint256) {
         if (collatRatio == 0) return deposits;
         else return (borrow * _COLLATERAL_RATIO_PRECISION) / collatRatio;
