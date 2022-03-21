@@ -597,7 +597,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @dev Amount returned should equal `amount` but can be lower if we try to flashloan more than `maxFlashLoan` authorized
     function _leverUpFlashLoan(uint256 amount) internal returns (uint256) {
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
-        uint256 depositsToMeetLtv = _getDepositFromBorrow(borrows, maxBorrowCollatRatio);
+        uint256 depositsToMeetLtv = _getDepositFromBorrow(borrows, maxBorrowCollatRatio, deposits);
         uint256 depositsDeficitToMeetLtv = 0;
         if (depositsToMeetLtv > deposits) {
             depositsDeficitToMeetLtv = depositsToMeetLtv - deposits;
@@ -672,7 +672,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
         // Deposit back to get `targetCollatRatio` (we always need to leave this in this ratio)
         uint256 _targetCollatRatio = targetCollatRatio;
-        uint256 targetDeposit = _getDepositFromBorrow(currentBorrowed, _targetCollatRatio);
+        uint256 targetDeposit = _getDepositFromBorrow(currentBorrowed, _targetCollatRatio, deposits);
         if (targetDeposit > deposits) {
             uint256 toDeposit = targetDeposit - deposits;
             if (toDeposit > minWant) {
@@ -704,7 +704,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         uint256 borrows
     ) internal returns (uint256 amount) {
         if (deposits == 0 && borrows == 0) (deposits, borrows) = getCurrentPosition();
-        uint256 theoDeposits = _getDepositFromBorrow(borrows, collatRatio);
+        uint256 theoDeposits = _getDepositFromBorrow(borrows, collatRatio, deposits);
         if (deposits > theoDeposits) {
             uint256 toWithdraw = deposits - theoDeposits;
             return _withdrawCollateral(toWithdraw);
@@ -915,8 +915,9 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @notice Get target deposit amount based on borrow and collateral ratio
     /// @param borrow Current total borrowed on Aave
     /// @param collatRatio Collateral ratio to target
-    function _getDepositFromBorrow(uint256 borrow, uint256 collatRatio) internal pure returns (uint256) {
-        return (borrow * _COLLATERAL_RATIO_PRECISION) / collatRatio;
+    function _getDepositFromBorrow(uint256 borrow, uint256 collatRatio, uint256 deposits) internal pure returns (uint256) {
+        if (collatRatio == 0) return deposits;
+        else return (borrow * _COLLATERAL_RATIO_PRECISION) / collatRatio;
     }
 
     /// @notice Get target borrow amount based on supply (deposits - borrow) and collateral ratio
