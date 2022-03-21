@@ -15,6 +15,7 @@ contract ComputeProfitability {
         int256 rewardDeposit;
         int256 rewardBorrow;
         int256 strategyAssets;
+        int256 borrowedAssets;
         int256 slope1;
         int256 slope2;
         int256 r0;
@@ -165,23 +166,20 @@ contract ComputeProfitability {
     /// @notice Performs a newton Raphson approximation to get the zero point of the derivative of the 
     /// revenue function of the protocol depending on the amount borrowed
     function _newtonRaphson(
-        int256 _borrow,
         SCalculateBorrow memory parameters
     ) internal pure returns (int256 borrow) {
-        int256 grad;
-        int256 grad2nd;
-
-        uint256 count;
-        int256 borrowInit = _borrow;
-        borrow = _borrow;
-
-        (int256 y, , ) = revenuePrimes(0, parameters, true);
-        (int256 revenueWithBorrow, , ) = revenuePrimes(_BASE_RAY, parameters, true);
+        (int256 y, , ) = _revenuePrimes(0, parameters, true);
+        (int256 revenueWithBorrow, , ) = _revenuePrimes(_BASE_RAY, parameters, true);
         if (revenueWithBorrow <= y) {
             return 0;
         }
-        // Tolerance is 1%
-        while (count < 30 && (count == 0 || _abs((borrowInit - borrow) / borrowInit) > 10**25)) {
+        uint256 count;
+        int256 borrowInit;
+        int256 grad;
+        int256 grad2nd;
+        borrow = parameters.borrowedAssets;
+        // Tolerance is 1% in this method: indeed we're stopping: `_abs(borrowInit - borrow)/ borrowInit < 10**(-2)`
+        while (count < 30 && (count == 0 || _abs(borrowInit - borrow) * 10**2 > borrowInit)) {
             (, grad, grad2nd) = _revenuePrimes(borrow, parameters, false);
             borrowInit = borrow;
             borrow = borrowInit - (grad * _BASE_RAY) / grad2nd;
@@ -196,7 +194,7 @@ contract ComputeProfitability {
 
     /// @notice Computes the optimal borrow amount of the strategy depending on Aave protocol parameters
     /// to maximize folding revenues
-    function computeProfitability(SCalculateBorrow memory parameters) external pure returns (int256 borrow) {
-        borrow = _newtonRaphson(parameters.strategyAssets, parameters);
+    function computeProfitability(SCalculateBorrow memory parameters) external pure returns (int256) {
+        return _newtonRaphson(parameters);
     }
 }
