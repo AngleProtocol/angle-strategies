@@ -78,7 +78,7 @@ contract ComputeProfitability {
         SCalculateBorrow memory parameters,
         bool onlyRevenue
     )
-        public
+        internal
         pure
         returns (
             int256 revenue,
@@ -86,7 +86,7 @@ contract ComputeProfitability {
             int256 revenuePrime2nd
         )
     {
-        (int256 newRate, int256 newRatePrime, int256 newRatePrime2) = calculateInterestPrimes(borrow, parameters);
+        (int256 newRate, int256 newRatePrime, int256 newRatePrime2) = _calculateInterestPrimes(borrow, parameters);
 
         // 0 order derivative
         int256 proportionStrat = ((borrow + parameters.strategyAssets) * (_BASE_RAY - parameters.reserveFactor)) /
