@@ -1,4 +1,3 @@
-/* eslint-disable camelcase */
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ethers, deployments, network } from 'hardhat';
 import { utils, Wallet, constants, Contract, BigNumber, providers } from 'ethers';
@@ -23,7 +22,7 @@ import {
   IProtocolDataProvider,
 } from '../typechain';
 
-const logBN = (amount: BigNumber, { base = 6, pad = 20, sign = false } = {}) => {
+export const logBN = (amount: BigNumber, { base = 6, pad = 20, sign = false } = {}) => {
   const num = parseFloat(utils.formatUnits(amount, base));
   const formattedNum = new Intl.NumberFormat('fr-FR', {
     style: 'decimal',
@@ -34,12 +33,30 @@ const logBN = (amount: BigNumber, { base = 6, pad = 20, sign = false } = {}) => 
   return formattedNum.padStart(pad, ' ');
 };
 
-const advanceTime = async (hours: number) => {
+export const advanceTime = async (hours: number) => {
   await network.provider.send('evm_increaseTime', [3600 * hours]); // forward X hours
   await network.provider.send('evm_mine');
 };
 
-async function main() {
+export function assert(assertion: boolean, message = 'Assertion failed') {
+  if (!assertion) throw new Error(message);
+}
+
+export async function setup(startBlocknumber?: number) {
+  if (startBlocknumber) {
+    await network.provider.request({
+      method: 'hardhat_reset',
+      params: [
+        {
+          forking: {
+            jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
+            blockNumber: startBlocknumber,
+          },
+        },
+      ],
+    });
+  }
+
   const [deployer, proxyAdmin, governor, guardian, user, keeper] = await ethers.getSigners();
 
   // === TOKENS ===
@@ -125,21 +142,6 @@ async function main() {
   await wantToken.connect(richUSDCUser).approve(lendingPool.address, constants.MaxUint256);
   await aToken.connect(richUSDCUser).approve(lendingPool.address, constants.MaxUint256);
 
-  // === SETUP ===
-  await (
-    await poolManager
-      .connect(realGuardian)
-      .updateStrategyDebtRatio((await oldStrategy).address, utils.parseUnits('0.2', 9))
-  ).wait();
-  const strategyDebtRatio = 0.75;
-  await (
-    await poolManager
-      .connect(realGuardian)
-      .addStrategy(strategy.address, utils.parseUnits(strategyDebtRatio.toString(), 9))
-  ).wait();
-  await network.provider.request({ method: 'hardhat_stopImpersonatingAccount', params: [realGuardian.address] });
-
-  // === HELPERS ===
   const logBalances = async () =>
     console.log(`
   Balance USDC:     ${logBN(await wantToken.balanceOf(strategy.address))}
@@ -150,13 +152,13 @@ async function main() {
   )}
   `);
 
-  // const logPosition = async () =>
-  //   console.log(`
-  // Position:
-  //  deposits:  ${logBN(await aToken.balanceOf(strategy.address))}
-  //  borrows:   ${logBN(await debtToken.balanceOf(strategy.address))}
-  //  target cr: ${logBN(await strategy.targetCollatRatio(), { base: 18 })}
-  // `);
+  const logPosition = async () =>
+    console.log(`
+  Position:
+   deposits:  ${logBN(await aToken.balanceOf(strategy.address))}
+   borrows:   ${logBN(await debtToken.balanceOf(strategy.address))}
+   target cr: ${logBN(await strategy.targetCollatRatio(), { base: 18 })}
+  `);
 
   const logAssets = async () =>
     console.log(`
@@ -166,14 +168,24 @@ async function main() {
     strategy:     ${logBN(await strategy.estimatedTotalAssets())}
   `);
 
-  // const logRates = async () => {
-  //   const rates = await protocolDataProvider.getReserveData(wantToken.address);
-  //   console.log(`
-  //   Rates:
-  //     deposit: ${utils.formatUnits(rates.liquidityRate, 25).slice(0, 6)}%
-  //     borrow: ${utils.formatUnits(rates.variableBorrowRate, 25).slice(0, 6)}%
-  //   `);
-  // };
+  const logRates = async () => {
+    const rates = await protocolDataProvider.getReserveData(wantToken.address);
+    console.log(`
+    Rates:
+      deposit: ${utils.formatUnits(rates.liquidityRate, 25).slice(0, 6)}%
+      borrow: ${utils.formatUnits(rates.variableBorrowRate, 25).slice(0, 6)}%
+    `);
+  };
+
+  const aavePriceChainlink = await new Contract(
+    '0x547a514d5e3769680Ce22B2361c10Ea13619e8a9',
+    [
+      'function latestRoundData() external view returns (uint80 roundId,int256 answer,uint256 startedAt,uint256 updatedAt,uint80 answeredInRound)',
+    ],
+    deployer,
+  ).latestRoundData();
+  const aavePrice = (aavePriceChainlink.answer as BigNumber).div(100);
+  // const aavePrice = utils.parseUnits('157', 6); // Can be used to update the price manually
 
   const harvest = async () => {
     const aTokenBefore = await aToken.balanceOf(strategy.address);
@@ -192,7 +204,6 @@ async function main() {
     const crAfter = await strategy.targetCollatRatio();
     const ratesAfter = await protocolDataProvider.getReserveData(wantToken.address);
 
-    const aavePrice = utils.parseUnits('157', 6);
     const aTokenEmissions = (await incentivesController.assets(aToken.address)).emissionPerSecond.mul(
       60 * 60 * 24 * 365,
     );
@@ -257,59 +268,32 @@ async function main() {
 
     finalRate: ${utils.formatUnits(finalRate, 19).slice(0, 6)}% (aRewards: ${utils
       .formatUnits(aEmissions.div(aTokenAfter), 19)
-      .slice(0, 6)}% / debtRewards: ${utils.formatUnits(debtEmissions.div(debtTokenAfter), 19).slice(0, 6)}%)
+      .slice(0, 6)}% / debtRewards: ${
+      debtTokenAfter.eq(0) ? '0' : utils.formatUnits(debtEmissions.div(debtTokenAfter), 19).slice(0, 6)
+    }%)
     ==========================
     `);
   };
 
-  const randomDeposit = async () => {
-    const min = 5_000_000;
-    const max = 50_000_000;
-    const amount = utils.parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), 6);
-    console.log(`user depositing... ${logBN(amount)}`);
-    await lendingPool.connect(richUSDCUser).deposit(USDC, amount, richUSDCUser.address, 0);
+  return {
+    USDC,
+    strategy,
+    lendingPool,
+    protocolDataProvider,
+    stkAave,
+    poolManager,
+    incentivesController,
+    oldStrategy,
+    realGuardian,
+    richUSDCUser,
+    aToken,
+    debtToken,
+    wantToken,
+    aavePrice,
+    logAssets,
+    logBalances,
+    logPosition,
+    logRates,
+    harvest,
   };
-  const randomWithdraw = async () => {
-    const min = 5_000_000;
-    const max = 50_000_000;
-    let amount = utils.parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), 6);
-    const maxAmount = await aToken.balanceOf(richUSDCUser.address);
-    if (amount.gt(maxAmount)) {
-      amount = maxAmount;
-    }
-    console.log(`user withdrawing... ${logBN(amount)} (max: ${logBN(maxAmount)})`);
-    await lendingPool.connect(richUSDCUser).withdraw(USDC, amount, richUSDCUser.address);
-  };
-
-  // ====== SCRIPTS ======
-  await (await oldStrategy.harvest()).wait();
-  await harvest();
-  logAssets();
-
-  await randomDeposit();
-  await harvest();
-
-  // console.log('advance 1 day');
-  // await advanceTime(24);
-
-  await randomDeposit();
-  await harvest();
-  console.log('Deposits rich user', logBN(await aToken.balanceOf(richUSDCUser.address)));
-  await randomWithdraw();
-  await harvest();
-  console.log('Deposits rich user', logBN(await aToken.balanceOf(richUSDCUser.address)));
-
-  await randomDeposit();
-  await harvest();
-  console.log('Deposits rich user', logBN(await aToken.balanceOf(richUSDCUser.address)));
-
-  await randomWithdraw();
-
-  await randomDeposit();
-  await harvest();
-  console.log('Deposits rich user', logBN(await aToken.balanceOf(richUSDCUser.address)));
-
-  // console.log('done');
 }
-
-main();

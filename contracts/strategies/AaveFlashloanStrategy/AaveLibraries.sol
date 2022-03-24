@@ -6,6 +6,8 @@ import { IAToken, IProtocolDataProvider, IProtocolDataProvider, ILendingPool, IP
 import "@openzeppelin/contracts/interfaces/IERC3156FlashLender.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+import "hardhat/console.sol";
+
 library DataTypes {
     // refer to the whitepaper, section 1.1 basic concepts for a formal description of these properties.
     struct ReserveData {
@@ -106,6 +108,21 @@ library FlashMintLib {
             }
 
             uint256 _maxLiquidity = maxLiquidity();
+            
+            // lendingPool divided the amount required by `liquidityIndex` which can cause some rounding issues
+            // so we end up requesting an amount a bit higher to make sure the flashloan does't revert
+            uint256 liquidityIndex = _lendingPool.getReserveData(dai).liquidityIndex;
+            requiredDAI = ((requiredDAI * 10**27 / liquidityIndex) + 1) * liquidityIndex / 10**27;
+            // requiredDAI = (requiredDAI * liquidityIndex + 10**27/2) / 10**27;
+            uint256 divided = (requiredDAI * 10**27 + liquidityIndex/2) / liquidityIndex;
+            uint256 divided2 = requiredDAI * 10**27 / liquidityIndex;
+            console.log("requiredDAI %s", requiredDAI);
+            console.log("divided %s", divided);
+            console.log("divided2 %s", divided2);
+            console.log("liquidityIndex %s", liquidityIndex);
+            console.log("mult %s", divided*liquidityIndex / 10**27);
+
+
             if (requiredDAI > _maxLiquidity) {
                 requiredDAI = _maxLiquidity;
                 // NOTE: if we cap amountDAI, we reduce amountToken we are taking too
@@ -115,10 +132,6 @@ library FlashMintLib {
             }
         }
         
-        // lendingPool divided the amount required by `liquidityIndex` which can cause some rounding issues
-        // so we end up requesting an amount a bit higher to make sure the flashloan does't revert
-        requiredDAI = requiredDAI * uint256(_lendingPool.getReserveData(token).liquidityIndex) / 10**27;
-
         bytes memory data = abi.encode(deficit, amount);
         uint256 _fee = IERC3156FlashLender(LENDER).flashFee(dai, requiredDAI);
         // Check that fees have not been increased without us knowing
@@ -160,6 +173,8 @@ library FlashMintLib {
         } else {
             // 1. Deposit DAI in Aave as collateral
             lp.deposit(dai, amountFlashmint, address(this), _referral);
+            console.log("amountFlashmint %s", amountFlashmint);
+            console.log("balance %s", ADAI.balanceOf(address(this)));
 
             if (deficit) {
                 // 2a. if in deficit withdraw amount and repay it

@@ -480,18 +480,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         _revokeRole(GUARDIAN_ROLE, guardian);
     }
 
-    /// @notice Adds a new keeper
-    /// @param _keeper New keeper address
-    function addKeeper(address _keeper) external onlyRole(GUARDIAN_ROLE) {
-        _grantRole(KEEPER_ROLE, _keeper);
-    }
-
-    /// @notice Revokes a keeper
-    /// @param _keeper Old keeper address to revoke
-    function revokeKeeper(address _keeper) external onlyRole(GUARDIAN_ROLE) {
-        _revokeRole(KEEPER_ROLE, _keeper);
-    }
-
     /// @notice Swap earned stkAave or Aave for `want` through 1Inch
     /// @param minAmountOut Minimum amount of `want` to receive for the swap to happen
     /// @param payload Bytes needed for 1Inch API. Tokens swapped should be: stkAave -> `want` or Aave -> `want`
@@ -684,7 +672,9 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
                 _depositCollateral(Math.min(toDeposit, _balanceOfWant()));
             }
         } else {
-            _withdrawExcessCollateral(_targetCollatRatio, deposits, currentBorrowed);
+            if (deposits - targetDeposit > minWant) {
+                _withdrawExcessCollateral(_targetCollatRatio, deposits, currentBorrowed);
+            }
         }
     }
 

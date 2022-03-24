@@ -57,11 +57,19 @@ rewardDeposit = 6198502.5307997195
 # rewards per second (in dollar) in farm tokens from borrows
 rewardBorrow = 12397005.061599439
 
+poolManagerFund=101766710
+compBorrowStable=15189738
+compBorrowVariable=1519560738
+compDeposit=2363034344
+rFixed=0.107947966979642732282179799
+rewardDeposit=0
+rewardBorrow=0
+
 # params iteravite method
 # tolerance on diff between b on GD
 tolGD = 10**(-1)
 # tolerance on diffbetween b on Newton Raphson
-tolNR = 10**(-1)
+tolNR = 10**(-2)
 # max iteration methods
 maxCount = 30
 
