@@ -102,7 +102,12 @@ library FlashMintLib {
             address[] memory tokens = new address[](2);
             tokens[0] = token;
             tokens[1] = dai;
-            uint256[] memory prices = priceOracle().getAssetsPrices(tokens);
+            uint256[] memory prices = new uint256[](2);
+            if (token == _WETH) {
+                prices[0] = priceOracle().getAssetPrice(dai);
+            } else {
+                prices = priceOracle().getAssetsPrices(tokens);
+            }
             requiredDAI = (toDAI(amount, token, prices[1], prices[0]) * _COLLAT_RATIO_PRECISION) / collatRatioDAI;
 
             uint256 requiredDAIToCloseLTVGap = 0;
@@ -203,6 +208,7 @@ library FlashMintLib {
     }
 
     function toDAI(uint256 _amount, address asset, uint256 daiPrice, uint256 assetPrice) internal view returns (uint256) {
+        // assetPrice is 0 if asset is wETH
         address dai = _DAI;
         if (_amount == 0 || _amount == type(uint256).max || asset == dai) {
             return _amount;
@@ -217,6 +223,7 @@ library FlashMintLib {
     }
 
     function fromDAI(uint256 _amount, address asset, uint256 daiPrice, uint256 assetPrice) internal view returns (uint256) {
+        // assetPrice is 0 if asset is wETH
         address dai = _DAI;
         if (_amount == 0 || _amount == type(uint256).max || asset == dai) {
             return _amount;
