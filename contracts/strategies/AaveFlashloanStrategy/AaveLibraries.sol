@@ -206,10 +206,12 @@ library FlashMintLib {
         if (_amount == 0 || _amount == type(uint256).max || asset == dai) {
             return _amount;
         }
+
         if (asset == _WETH) {
             return
                 _amount * _DAI_DECIMALS / daiPrice;
         }
+        
         return (_amount * assetPrice * _DAI_DECIMALS) / (daiPrice * uint256(10)**uint256(IOptionalERC20(asset).decimals()));
     }
 
