@@ -99,14 +99,15 @@ library FlashMintLib {
         // calculate amount of dai we need
         uint256 requiredDAI;
         {
-            IPriceOracle _priceOracle = priceOracle();
-            uint256 daiPrice = _priceOracle.getAssetPrice(dai);
-            uint256 tokenPrice = _priceOracle.getAssetPrice(token);
-            requiredDAI = (toDAI(amount, token, daiPrice, tokenPrice) * _COLLAT_RATIO_PRECISION) / collatRatioDAI;
+            address[] memory tokens = new address[](2);
+            tokens[0] = token;
+            tokens[1] = dai;
+            uint256[] memory prices = priceOracle().getAssetsPrices(tokens);
+            requiredDAI = (toDAI(amount, token, prices[1], prices[0]) * _COLLAT_RATIO_PRECISION) / collatRatioDAI;
 
             uint256 requiredDAIToCloseLTVGap = 0;
             if (depositToCloseLTVGap > 0) {
-                requiredDAIToCloseLTVGap = toDAI(depositToCloseLTVGap, token, daiPrice, tokenPrice);
+                requiredDAIToCloseLTVGap = toDAI(depositToCloseLTVGap, token, prices[1], prices[0]);
                 requiredDAI = requiredDAI + requiredDAIToCloseLTVGap;
             }
 
@@ -132,7 +133,7 @@ library FlashMintLib {
                 requiredDAI = _maxLiquidity;
                 // NOTE: if we cap amountDAI, we reduce amountToken we are taking too
                 amount =
-                    (fromDAI(requiredDAI - requiredDAIToCloseLTVGap, token, daiPrice, tokenPrice) * collatRatioDAI) /
+                    (fromDAI(requiredDAI - requiredDAIToCloseLTVGap, token, prices[1], prices[0]) * collatRatioDAI) /
                     _COLLAT_RATIO_PRECISION;
             }
         }
