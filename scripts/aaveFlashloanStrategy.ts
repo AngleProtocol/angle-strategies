@@ -80,7 +80,6 @@ rewardBorrow=${(await incentivesController.assets(debtToken.address)).emissionPe
   `);
   };
 
-  await logState();
   await harvest();
   // CR should be 0.81889
   assert((await strategy.targetCollatRatio()).eq(BigNumber.from('0x0b5d4fe1bfd9fd2c')));

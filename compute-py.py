@@ -240,35 +240,46 @@ def newtonRaphson(bInit, tol):
 # print('Gradient descent method: We get in %s from the optimisation :%s', count,bSol)
 
 print("\nFIRST")
-poolManagerFund=101766710
-compBorrowStable=15189738
-compBorrowVariable=1519560738
-compDeposit=2363034344
-rFixed=0.107947966979642732282179799
-rewardDeposit=8497843
-rewardBorrow=16995686
+poolManagerFund=91697278.0
+compBorrowStable=15381762.0
+compBorrowVariable=1799913660.0
+compDeposit=2484109565.0
+rFixed=0.1079448275
+rewardDeposit=9053347.0
+rewardBorrow=18106694.0
 bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]) ,tolNR)
 print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
 
 print("\nSECOND")
-poolManagerFund=101766710
-compBorrowStable=15189738
-compBorrowVariable=1846803919
-compDeposit=2812044235
-rFixed=0.107947966979642732282179799
-rewardDeposit=8497843
-rewardBorrow=16995686
+poolManagerFund=91697277.0
+compBorrowStable=15381762.0
+compBorrowVariable=2214547352.0
+compDeposit=2918743258.0
+rFixed=0.1079448275
+rewardDeposit=9053347.0
+rewardBorrow=18106694.0
 bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]) ,tolNR)
 print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
 
 print("\nTHIRD")
-poolManagerFund=101766710
-compBorrowStable=15189738
-compBorrowVariable=1697642328
-compDeposit=2737882644
-rFixed=0.107947966979642732282179799
-rewardDeposit=8497843
-rewardBorrow=16995686
+poolManagerFund=91697277.0
+compBorrowStable=15381762.0
+compBorrowVariable=2021127370.0
+compDeposit=2800323275.0
+rFixed=0.1079448275
+rewardDeposit=9053347.0
+rewardBorrow=18106694.0
+bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]) ,tolNR)
+print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
+
+print("\nFOURTH")
+poolManagerFund=91697277.0
+compBorrowStable=15381763.0
+compBorrowVariable=2042578920.0
+compDeposit=2821774826.0
+rFixed=0.1079448275
+rewardDeposit=0.0
+rewardBorrow=0.0
 bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]) ,tolNR)
 print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
 
