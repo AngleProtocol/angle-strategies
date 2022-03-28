@@ -7,22 +7,26 @@ import {
   AaveFlashloanStrategy,
   FlashMintLib,
   ERC20,
-  MockToken,
   MockAave,
   MockPoolManager,
   MockProtocolDataProvider,
   ERC20__factory,
-  MockAToken,
   MockLendingPool,
   MockLendingPool__factory,
   IAaveIncentivesController__factory,
   MockProtocolDataProvider__factory,
-  MockToken__factory,
   ComputeProfitability,
   IStakedAave,
   IStakedAave__factory,
   AaveFlashloanStrategy__factory,
+  PoolManager,
+  IProtocolDataProvider,
+  IAaveIncentivesController,
+  ILendingPool,
+  IProtocolDataProvider__factory,
+  ILendingPool__factory,
 } from '../../typechain';
+import { harvest } from '@angleprotocol/sdk';
 
 // HELPER for console.log, to delete
 const logUSDC = (amount: BigNumber) => utils.formatUnits(amount, 6);
@@ -32,12 +36,7 @@ describe('AaveFlashloan Strat', () => {
   let aToken: ERC20, debtToken: ERC20;
 
   // Tokens
-  let wantToken: MockToken,
-    dai: MockToken,
-    aave: MockToken,
-    stkAave: IStakedAave,
-    weth: MockToken,
-    rewardToken: MockToken;
+  let wantToken: ERC20, dai: ERC20, aave: ERC20, stkAave: IStakedAave, weth: ERC20, rewardToken: ERC20;
 
   // Guardians
   let deployer: SignerWithAddress,
@@ -47,10 +46,10 @@ describe('AaveFlashloan Strat', () => {
     user: SignerWithAddress,
     keeper: SignerWithAddress;
 
-  let poolManager: MockPoolManager;
-  let protocolDataProvider: MockProtocolDataProvider;
-  let incentivesController: MockAave;
-  let lendingPool: MockLendingPool;
+  let poolManager: PoolManager;
+  let protocolDataProvider: IProtocolDataProvider;
+  let incentivesController: IAaveIncentivesController;
+  let lendingPool: ILendingPool;
   let flashMintLib: FlashMintLib;
   let computeProfitabilityContract: ComputeProfitability;
 
@@ -63,59 +62,43 @@ describe('AaveFlashloan Strat', () => {
         {
           forking: {
             jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
-            blockNumber: 14391700,
+            blockNumber: 14456160,
           },
         },
       ],
     });
 
-    // aToken = (await deploy('MockAToken', ['aave token', 'aToken', 18])) as MockAToken;
-    // debtToken = (await deploy('MockAToken', ['debt token', 'debtToken', 18])) as MockAToken;
-    // aDai = (await deploy('MockAToken', ['adai token', 'aDai', 18])) as MockAToken;
-
-    wantToken = (await ethers.getContractAt(
-      MockToken__factory.abi,
-      '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-    )) as MockToken;
-    dai = (await ethers.getContractAt(
-      MockToken__factory.abi,
-      '0x6B175474E89094C44Da98b954EedeAC495271d0F',
-    )) as MockToken;
-    aave = (await ethers.getContractAt(
-      MockToken__factory.abi,
-      '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9',
-    )) as MockToken;
+    wantToken = (await ethers.getContractAt(ERC20__factory.abi, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')) as ERC20;
+    dai = (await ethers.getContractAt(ERC20__factory.abi, '0x6B175474E89094C44Da98b954EedeAC495271d0F')) as ERC20;
+    aave = (await ethers.getContractAt(ERC20__factory.abi, '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9')) as ERC20;
     stkAave = (await ethers.getContractAt(
       IStakedAave__factory.abi,
       '0x4da27a545c0c5B758a6BA100e3a049001de870f5',
     )) as IStakedAave;
-    weth = (await ethers.getContractAt(
-      MockToken__factory.abi,
-      '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-    )) as MockToken;
+    weth = (await ethers.getContractAt(ERC20__factory.abi, '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2')) as ERC20;
     rewardToken = (await ethers.getContractAt(
-      MockToken__factory.abi,
+      ERC20__factory.abi,
       '0x31429d1856aD1377A8A0079410B297e1a9e214c2',
-    )) as MockToken;
+    )) as ERC20;
 
     [deployer, proxyAdmin, governor, guardian, user, keeper] = await ethers.getSigners();
 
-    poolManager = (await deploy('MockPoolManager', [wantToken.address, 0])) as MockPoolManager;
+    poolManager = (await deploy('MockPoolManager', [wantToken.address, 0])) as PoolManager;
 
     protocolDataProvider = (await ethers.getContractAt(
-      MockProtocolDataProvider__factory.abi,
+      IProtocolDataProvider__factory.abi,
       '0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d',
-    )) as MockProtocolDataProvider;
+    )) as IProtocolDataProvider;
 
     incentivesController = (await ethers.getContractAt(
       IAaveIncentivesController__factory.abi,
       '0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5',
-    )) as MockAave;
+    )) as IAaveIncentivesController;
 
     lendingPool = (await ethers.getContractAt(
-      MockLendingPool__factory.abi,
+      ILendingPool__factory.abi,
       '0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9',
-    )) as MockLendingPool;
+    )) as ILendingPool;
 
     flashMintLib = (await deploy('FlashMintLib')) as FlashMintLib;
     computeProfitabilityContract = (await deploy('ComputeProfitability')) as ComputeProfitability;
@@ -205,12 +188,12 @@ describe('AaveFlashloan Strat', () => {
       expect(await strategy.computeProfitability()).to.equal(computeProfitabilityContract.address);
       expect(await strategy.maxIterations()).to.equal(6);
       await expect((await strategy.boolParams()).isFlashMintActive).to.be.true;
-      expect(await strategy.discountFactor()).to.equal(1000);
+      expect(await strategy.discountFactor()).to.equal(9000);
       expect(await strategy.minWant()).to.equal(100);
       expect(await strategy.minRatio()).to.equal(utils.parseEther('0.005'));
       await expect((await strategy.boolParams()).automaticallyComputeCollatRatio).to.be.true;
       await expect((await strategy.boolParams()).withdrawCheck).to.be.false;
-      await expect((await strategy.boolParams()).cooldownStkAave).to.be.false;
+      await expect((await strategy.boolParams()).cooldownStkAave).to.be.true;
     });
 
     it('collat ratios', async () => {
@@ -269,28 +252,28 @@ describe('AaveFlashloan Strat', () => {
       await expect((await strategy.boolParams()).isFlashMintActive).to.be.true;
       await expect((await strategy.boolParams()).automaticallyComputeCollatRatio).to.be.true;
       await expect((await strategy.boolParams()).withdrawCheck).to.be.false;
-      await expect((await strategy.boolParams()).cooldownStkAave).to.be.false;
+      await expect((await strategy.boolParams()).cooldownStkAave).to.be.true;
 
       expect(
         strategy.connect(user).setBoolParams({
-          isFlashMintActive: true,
-          automaticallyComputeCollatRatio: true,
-          withdrawCheck: true,
-          cooldownStkAave: true,
+          isFlashMintActive: false,
+          automaticallyComputeCollatRatio: false,
+          withdrawCheck: false,
+          cooldownStkAave: false,
         }),
       ).to.be.revertedWith(`AccessControl: account ${user.address.toLowerCase()} is missing role`);
 
       await strategy.connect(guardian).setBoolParams({
-        isFlashMintActive: true,
-        automaticallyComputeCollatRatio: true,
-        withdrawCheck: true,
-        cooldownStkAave: true,
+        isFlashMintActive: false,
+        automaticallyComputeCollatRatio: false,
+        withdrawCheck: false,
+        cooldownStkAave: false,
       });
 
-      await expect((await strategy.boolParams()).isFlashMintActive).to.be.true;
-      await expect((await strategy.boolParams()).automaticallyComputeCollatRatio).to.be.true;
-      await expect((await strategy.boolParams()).withdrawCheck).to.be.true;
-      await expect((await strategy.boolParams()).cooldownStkAave).to.be.true;
+      await expect((await strategy.boolParams()).isFlashMintActive).to.be.false;
+      await expect((await strategy.boolParams()).automaticallyComputeCollatRatio).to.be.false;
+      await expect((await strategy.boolParams()).withdrawCheck).to.be.false;
+      await expect((await strategy.boolParams()).cooldownStkAave).to.be.false;
     });
 
     it('setMinsAndMaxs', async () => {
@@ -311,6 +294,16 @@ describe('AaveFlashloan Strat', () => {
 
     it('setAavePoolVariables', async () => {
       await strategy.setAavePoolVariables();
+    });
+
+    it('setDiscountFactor', async () => {
+      expect(await strategy.discountFactor()).to.equal(9000);
+      expect(strategy.setDiscountFactor(12000)).to.revertedWith(
+        `AccessControl: account ${deployer.address.toLowerCase()} is missing role ${await strategy.GUARDIAN_ROLE()}`,
+      );
+      expect(strategy.connect(guardian).setDiscountFactor(12000)).to.revertedWith('4');
+      await strategy.connect(guardian).setDiscountFactor(2000);
+      expect(await strategy.discountFactor()).to.equal(2000);
     });
 
     it('addGuardian', async () => {
@@ -361,16 +354,13 @@ describe('AaveFlashloan Strat', () => {
 
     it('estimatedTotalAssets', async () => {
       expect(await strategy.estimatedTotalAssets()).to.equal(0);
-
-      /*
-      sometimes reverts with reason "5"
-      which is error "VL_NOT_ENOUGH_AVAILABLE_USER_BALANCE" here: https://etherscan.io/address/0xc6845a5c768bf8d7681249f8927877efda425baf#code
-      */
       await strategy.harvest();
 
       const { deposits, borrows } = await strategy.getCurrentPosition();
       const totalAssets = (await wantToken.balanceOf(strategy.address)).add(deposits).sub(borrows);
       const debtRatio = (await poolManager.strategies(strategy.address)).debtRatio;
+
+      expect(debtRatio).to.equal(utils.parseUnits('0.75', 9));
       expect(totalAssets).to.equal(_startAmountUSDC.mul(debtRatio).div(utils.parseUnits('1', 9)));
       expect(await strategy.estimatedTotalAssets()).to.equal(totalAssets);
     });
@@ -484,6 +474,19 @@ describe('AaveFlashloan Strat', () => {
       //   .to.be.at.most(timestampPlus1Day)
       //   .least(timestamp);
 
+      console.log(await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address));
+
+      await strategy.harvest();
+      console.log(await aToken.balanceOf(strategy.address));
+      console.log(await debtToken.balanceOf(strategy.address));
+
+      console.log(await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address));
+      console.log(await stkAave.balanceOf(strategy.address));
+
+      // eslint-disable-next-line
+      const payload = "";
+      await strategy.connect(keeper).sellRewards(0, payload, true);
+
       // expect(
       //   await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
       // ).to.equal(0);
@@ -492,7 +495,6 @@ describe('AaveFlashloan Strat', () => {
       // await network.provider.send('evm_mine');
 
       // // TODO: add tests
-      // // await strategy.connect(guardian).sellRewards(0, 'true', true);
 
       // expect(
       //   await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
@@ -530,7 +532,7 @@ describe('AaveFlashloan Strat', () => {
       await strategy.harvest();
       expect(await strategy.estimatedTotalAssets()).to.be.closeTo(
         _startAmountUSDC.mul(newDebtRatio).div(utils.parseUnits('1', 9)),
-        15000,
+        50000,
       );
     });
 
@@ -684,70 +686,48 @@ describe('AaveFlashloan Strat', () => {
       expect(0).to.be.closeTo(await wantToken.balanceOf(strategy.address), 10);
     });
 
-    // it.only('', async () => {});
+    it('emergencyExit', async () => {
+      await impersonate(poolManager.address, async acc => {
+        await network.provider.send('hardhat_setBalance', [
+          poolManager.address,
+          utils.parseEther('1').toHexString().replace('0x0', '0x'),
+        ]);
+        await strategy.connect(acc).setEmergencyExit();
+      });
+
+      expect(await strategy.estimatedTotalAssets()).to.equal(0);
+      await strategy.harvest();
+      expect(await strategy.estimatedTotalAssets()).to.equal(utils.parseUnits('1500000', 6));
+    });
+
+    it('flashloan more than maxLiquidity', async () => {
+      await impersonate('0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3', async acc => {
+        await wantToken.connect(acc).transfer(poolManager.address, utils.parseUnits('400000000', 6));
+      });
+      await strategy.harvest();
+      expect(parseFloat(utils.formatUnits(await strategy.estimatedTotalAssets(), 6))).to.be.closeTo(301_500_000, 100);
+    });
+
+    it('cooldownStkAave', async () => {
+      await strategy.harvest();
+      await expect((await strategy.boolParams()).cooldownStkAave).to.be.true;
+
+      await network.provider.send('evm_increaseTime', [3600 * 24]);
+      await network.provider.send('evm_mine');
+      await strategy.harvest();
+
+      await network.provider.send('evm_increaseTime', [3600 * 24 * 10.5]); // forward 11 days
+      await network.provider.send('evm_mine');
+
+      const stkAaveBalanceBefore = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address), 18));
+      await strategy.harvest();
+      const aaveBalanceAfterRedeem = parseFloat(utils.formatUnits(await aave.balanceOf(strategy.address), 18));
+
+      expect(stkAaveBalanceBefore).to.be.closeTo(aaveBalanceAfterRedeem, 0.1);
+    });
   });
 
   // describe("", () => {
   // it.only('', async () => {});
   // })
-
-  // it('basic test', async () => {
-  //   await (await poolManager.addStrategy(strategy.address, utils.parseUnits('0.75', 9))).wait();
-  //   // await strategy.connect(guardian).setIsFlashMintActive(false);
-  //   // expect(await poolManager.strategyList(0)).to.equal(strategy.address);
-
-  //   // console.log('strategy', strategy.address);
-  //   // const total = await strategy.estimatedTotalAssets();
-  //   // console.log('total', total, total.toString());
-  //   // console.log(await strategy.harvestTrigger());
-  //   // console.log(await strategy.isActive());
-
-  //   const amount = utils.parseUnits('10000', 6);
-
-  //   await impersonate('0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3', async acc => {
-  //     await wantToken.connect(acc).transfer(user.address, amount);
-  //     await wantToken.connect(acc).transfer(user.address, amount);
-  //   });
-  //   console.log('balance', utils.formatUnits(await wantToken.balanceOf(user.address), 6));
-
-  //   await wantToken.connect(user).transfer(poolManager.address, amount);
-  //   await wantToken.connect(user).transfer(strategy.address, amount);
-
-  //   console.log('\ntotal2', await strategy.estimatedTotalAssets());
-  //   console.log('total2', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
-  //   console.log('total2', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
-
-  //   console.log('emergencyExit', await strategy.emergencyExit());
-  //   console.log('getCurrentCollatRatio', await strategy.getCurrentCollatRatio());
-  //   console.log('isFlashMintActive', await strategy.isFlashMintActive());
-
-  //   await strategy.harvest();
-  //   console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
-  //   console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
-
-  //   console.log('\nLENDING BALANCE', (await wantToken.balanceOf(lendingPool.address)).toString());
-  //   console.log('BALANCE aToken\n', (await aToken.balanceOf(strategy.address)).toString());
-
-  //   await strategy.harvest();
-  //   console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
-  //   console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
-  //   console.log('balance aToken', utils.formatUnits(await aToken.balanceOf(strategy.address), 6), '\n');
-  //   console.log('balance debtToken', utils.formatUnits(await debtToken.balanceOf(strategy.address), 6), '\n');
-
-  //   await strategy.harvest();
-  //   console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
-  //   console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
-  //   console.log('balance aToken', utils.formatUnits(await aToken.balanceOf(strategy.address), 6), '\n');
-  //   console.log('balance debtToken', utils.formatUnits(await debtToken.balanceOf(strategy.address), 6), '\n');
-
-  //   await strategy.harvest();
-  //   console.log('balance PM', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
-  //   console.log('balance STRAT', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6), '\n');
-  //   console.log('balance aToken', utils.formatUnits(await aToken.balanceOf(strategy.address), 6), '\n');
-  //   console.log('balance debtToken', utils.formatUnits(await debtToken.balanceOf(strategy.address), 6), '\n');
-
-  //   console.log('\ntotal3', await strategy.estimatedTotalAssets());
-  //   console.log('total3', utils.formatUnits(await wantToken.balanceOf(poolManager.address), 6));
-  //   console.log('total3', utils.formatUnits(await wantToken.balanceOf(strategy.address), 6));
-  // });
 });

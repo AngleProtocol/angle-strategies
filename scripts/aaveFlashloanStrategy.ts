@@ -103,6 +103,15 @@ rewardBorrow=${(await incentivesController.assets(debtToken.address)).emissionPe
   await harvest();
   // CR should be 0
   assert((await strategy.targetCollatRatio()).eq(0));
+
+  await impersonate('0xee56e2b3d491590b5b31738cc34d5232f378a8d5', async emissionManager => {
+    await network.provider.send('hardhat_setBalance', [emissionManager.address, '0x8ac7230489e80000']);
+    await incentivesController.connect(emissionManager).configureAssets([aToken.address], ['5903258773510960']);
+    await incentivesController.connect(emissionManager).configureAssets([debtToken.address], ['9806517547021920']);
+  });
+  await harvest();
+  // CR should be 0.845
+  assert((await strategy.targetCollatRatio()).eq(BigNumber.from('0x0bba0b05e3348000')));
 }
 
 main();
