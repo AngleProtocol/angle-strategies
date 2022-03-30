@@ -21,6 +21,8 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
     bytes32 public constant POOLMANAGER_ROLE = keccak256("POOLMANAGER_ROLE");
     /// @notice Role for guardians and governors
     bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
+    /// @notice Role for keepers
+    bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
     // ======================== References to contracts ============================
 
@@ -54,7 +56,8 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
     function _initialize(
         address _poolManager,
         address governor,
-        address guardian
+        address guardian,
+        address[] memory keepers
     ) internal initializer {
         poolManager = IPoolManager(_poolManager);
         want = IERC20(poolManager.token());
@@ -67,6 +70,14 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
         _setupRole(POOLMANAGER_ROLE, address(_poolManager));
         _setRoleAdmin(POOLMANAGER_ROLE, POOLMANAGER_ROLE);
         _setRoleAdmin(GUARDIAN_ROLE, POOLMANAGER_ROLE);
+
+        // Initializing roles first
+        for (uint256 i = 0; i < keepers.length; i++) {
+            require(keepers[i] != address(0), "0");
+            _setupRole(KEEPER_ROLE, keepers[i]);
+        }
+        _setRoleAdmin(KEEPER_ROLE, GUARDIAN_ROLE);
+
         debtThreshold = 100 * BASE;
         emergencyExit = false;
         // Give `PoolManager` unlimited access (might save gas)
@@ -77,44 +88,20 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
 
     /// @notice Harvests the Strategy, recognizing any profits or losses and adjusting
     /// the Strategy's position.
-    /// @dev In the rare case the Strategy is in emergency shutdown, this will exit
-    /// the Strategy's position.
-    /// @dev  When `harvest()` is called, the Strategy reports to the Manager (via
-    /// `poolManager.report()`), so in some cases `harvest()` must be called in order
-    /// to take in profits, to borrow newly available funds from the Manager, or
-    /// otherwise adjust its position. In other cases `harvest()` must be
-    /// called to report to the Manager on the Strategy's position, especially if
-    /// any losses have occurred.
-    /// @dev As keepers may directly profit from this function, there may be front-running problems with miners bots,
-    /// we may have to put an access control logic for this function to only allow white-listed addresses to act
-    /// as keepers for the protocol
     function harvest() external {
-        uint256 profit = 0;
-        uint256 loss = 0;
-        uint256 debtOutstanding = poolManager.debtOutstanding();
-        uint256 debtPayment = 0;
-        if (emergencyExit) {
-            // Free up as much capital as possible
-            uint256 amountFreed = _liquidateAllPositions();
-            if (amountFreed < debtOutstanding) {
-                loss = debtOutstanding - amountFreed;
-            } else if (amountFreed > debtOutstanding) {
-                profit = amountFreed - debtOutstanding;
-            }
-            debtPayment = debtOutstanding - loss;
-        } else {
-            // Free up returns for Manager to pull
-            (profit, loss, debtPayment) = _prepareReturn(debtOutstanding);
-        }
-        emit Harvested(profit, loss, debtPayment, debtOutstanding);
-
-        // Allows Manager to take up to the "harvested" balance of this contract,
-        // which is the amount it has earned since the last time it reported to
-        // the Manager.
-        poolManager.report(profit, loss, debtPayment);
-
+        _report();
         // Check if free returns are left, and re-invest them
         _adjustPosition();
+    }
+
+    /// @notice Harvests the Strategy, recognizing any profits or losses and adjusting
+    /// the Strategy's position.
+    /// @param borrowInit Approximate optimal borrows to have faster convergence on the NR method
+    function harvest(uint256 borrowInit) external onlyRole(KEEPER_ROLE) {
+        _report();
+        // Check if free returns are left, and re-invest them, gives an hint on the borrow amount to the NR method
+        // to maximise revenue
+        _adjustPosition(borrowInit);
     }
 
     /// @notice Withdraws `_amountNeeded` to `poolManager`.
@@ -162,6 +149,44 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
 
     // ============================ Internal Functions =============================
 
+    /// @notice PrepareReturn the Strategy, recognizing any profits or losses
+    /// @dev In the rare case the Strategy is in emergency shutdown, this will exit
+    /// the Strategy's position.
+    /// @dev  When `_report()` is called, the Strategy reports to the Manager (via
+    /// `poolManager.report()`), so in some cases `harvest()` must be called in order
+    /// to take in profits, to borrow newly available funds from the Manager, or
+    /// otherwise adjust its position. In other cases `harvest()` must be
+    /// called to report to the Manager on the Strategy's position, especially if
+    /// any losses have occurred.
+    /// @dev As keepers may directly profit from this function, there may be front-running problems with miners bots,
+    /// we may have to put an access control logic for this function to only allow white-listed addresses to act
+    /// as keepers for the protocol
+    function _report() internal {
+        uint256 profit = 0;
+        uint256 loss = 0;
+        uint256 debtOutstanding = poolManager.debtOutstanding();
+        uint256 debtPayment = 0;
+        if (emergencyExit) {
+            // Free up as much capital as possible
+            uint256 amountFreed = _liquidateAllPositions();
+            if (amountFreed < debtOutstanding) {
+                loss = debtOutstanding - amountFreed;
+            } else if (amountFreed > debtOutstanding) {
+                profit = amountFreed - debtOutstanding;
+            }
+            debtPayment = debtOutstanding - loss;
+        } else {
+            // Free up returns for Manager to pull
+            (profit, loss, debtPayment) = _prepareReturn(debtOutstanding);
+        }
+        emit Harvested(profit, loss, debtPayment, debtOutstanding);
+
+        // Allows Manager to take up to the "harvested" balance of this contract,
+        // which is the amount it has earned since the last time it reported to
+        // the Manager.
+        poolManager.report(profit, loss, debtPayment);
+    }
+
     /// @notice Performs any Strategy unwinding or other calls necessary to capture the
     /// "free return" this Strategy has generated since the last time its core
     /// position(s) were adjusted. Examples include unwrapping extra rewards.
@@ -199,6 +224,9 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
     /// was made is available for reinvestment. Also note that this number
     /// could be 0, and you should handle that scenario accordingly.
     function _adjustPosition() internal virtual;
+
+    /// @notice same as _adjustPosition but with an initial parameters
+    function _adjustPosition(uint256) internal virtual;
 
     /// @notice Liquidates up to `_amountNeeded` of `want` of this strategy's positions,
     /// irregardless of slippage. Any excess will be re-invested with `_adjustPosition()`.
@@ -254,7 +282,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
     /// being required.
     /// @param _debtThreshold How big of a loss this Strategy may carry without
     /// @dev By default this is 0, meaning any losses would cause a harvest which
-    /// will subsequently report the loss to the Manager for tracking. 
+    /// will subsequently report the loss to the Manager for tracking.
     function setDebtThreshold(uint256 _debtThreshold) external onlyRole(GUARDIAN_ROLE) {
         debtThreshold = _debtThreshold;
         emit UpdatedDebtThreshold(_debtThreshold);

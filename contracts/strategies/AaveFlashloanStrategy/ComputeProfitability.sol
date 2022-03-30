@@ -15,7 +15,7 @@ library ComputeProfitability {
         int256 rewardDeposit;
         int256 rewardBorrow;
         int256 strategyAssets;
-        int256 borrowedAssets;
+        int256 guessedBorrowAssets;
         int256 slope1;
         int256 slope2;
         int256 r0;
@@ -173,7 +173,7 @@ library ComputeProfitability {
         int256 borrowInit;
         int256 grad;
         int256 grad2nd;
-        borrow = parameters.borrowedAssets;
+        borrow = parameters.guessedBorrowAssets;
         // Tolerance is 1% in this method: indeed we're stopping: `_abs(borrowInit - borrow)/ borrowInit < 10**(-2)`
         while (count < 10 && (count == 0 || _abs(borrowInit - borrow) * (10**2 / 5) > borrowInit)) {
             (, grad, grad2nd) = _revenuePrimes(borrow, parameters, false);
