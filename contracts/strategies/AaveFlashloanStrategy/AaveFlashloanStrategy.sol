@@ -273,7 +273,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     }
 
     /// @notice Function called by _adjustPosition()
-    /// @param initBorrow First guess to the borrow amount to maximise revenue
+    /// @param guessedBorrow First guess to the borrow amount to maximise revenue
     /// @dev It computes the optimal collateral ratio and adjusts deposits/borrows accordingly
     function _adjustPosition(uint256 guessedBorrow) internal override {
         uint256 _debtOutstanding = poolManager.debtOutstanding();
