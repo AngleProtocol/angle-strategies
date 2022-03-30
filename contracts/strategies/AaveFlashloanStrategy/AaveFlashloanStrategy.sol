@@ -112,10 +112,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     IAToken private _aToken;
     IVariableDebtToken private _debtToken;
 
-    // =============================== Reference ===================================
 
-    /// @notice Library to compute the profitability of a leverage operation
-    ComputeProfitability public computeProfitability;
 
     // ============================ Initializer ====================================
 
@@ -124,13 +121,11 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @param governor Governor address of the protocol
     /// @param guardian Address of the guardian
     /// @param keepers List of the addresses with keeper privilege
-    /// @param _computeProfitability Reference to the contract used to compute leverage
     function initialize(
         address _poolManager,
         address governor,
         address guardian,
-        address[] memory keepers,
-        ComputeProfitability _computeProfitability
+        address[] memory keepers
     ) external {
         _initialize(_poolManager, governor, guardian);
         // Initializing roles first
@@ -139,9 +134,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             _setupRole(KEEPER_ROLE, keepers[i]);
         }
         _setRoleAdmin(KEEPER_ROLE, GUARDIAN_ROLE);
-
-        require(address(_computeProfitability) != address(0), "0");
-        computeProfitability = _computeProfitability;
 
         // Then initializing operational state
         maxIterations = 6;
@@ -799,8 +791,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         ComputeProfitability.SCalculateBorrow memory parameters = ComputeProfitability.SCalculateBorrow({
             reserveFactor: _reserveFactor,
             totalStableDebt: int256(totalStableDebt * normalizationFactor),
-            totalVariableDebt: int256(totalVariableDebt * normalizationFactor),
-            totalDeposits: int256((availableLiquidity + totalStableDebt + totalVariableDebt) * normalizationFactor),
+            totalVariableDebt: int256((totalVariableDebt - currentBorrow) * normalizationFactor),
+            totalDeposits: int256((availableLiquidity + totalStableDebt + (totalVariableDebt - currentBorrow)) * normalizationFactor),
             stableBorrowRate: int256(averageStableBorrowRate),
             rewardDeposit: int256((emissionPerSecondAToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase),
             rewardBorrow: int256((emissionPerSecondDebtToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase),
@@ -812,7 +804,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             uOptimal: _uOptimal
         });
 
-        borrow = uint256(computeProfitability.computeProfitability(parameters)) / normalizationFactor;
+        borrow = uint256(ComputeProfitability.computeProfitability(parameters)) / normalizationFactor;
     }
 
     /// @notice Returns the `want` balance

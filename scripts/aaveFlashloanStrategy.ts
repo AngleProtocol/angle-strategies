@@ -2,7 +2,7 @@ import { ethers, network } from 'hardhat';
 import { utils, BigNumber } from 'ethers';
 import { impersonate } from '../test/test-utils';
 
-import { setup, assert } from './setup_tests';
+import { setup, assert, assertAlmostEq } from './setup_tests';
 
 async function main() {
   const {
@@ -81,18 +81,35 @@ rewardBorrow=${(await incentivesController.assets(debtToken.address)).emissionPe
   };
 
   await harvest();
-  // CR should be 0.81889
-  assert((await strategy.targetCollatRatio()).eq(BigNumber.from('0x0b5d4fe1bfd9fd2c')));
+  // CR should be 0.81886
+  assertAlmostEq(await strategy.targetCollatRatio(), BigNumber.from('0x0b5d2e700bbfcd97'), 0.01);
 
   await lendingPool.connect(richUSDCUser).deposit(USDC, utils.parseUnits('20000000', 6), richUSDCUser.address, 0);
   await harvest();
-  // CR should be 0.70695
-  assert((await strategy.targetCollatRatio()).eq(BigNumber.from('0x09cf9b037a403616')));
+  // CR should be 0.70699
+  assertAlmostEq(await strategy.targetCollatRatio(), BigNumber.from('0x09cfc2f833b69c67'), 0.01);
+
+  await network.provider.send('evm_increaseTime', [3600 * 24 * 2]); // forward 2 days
+  await network.provider.send('evm_mine');
 
   await lendingPool.connect(richUSDCUser).deposit(USDC, utils.parseUnits('75000000', 6), richUSDCUser.address, 0);
   await harvest();
-  // CR should be 0.72575
-  assert((await strategy.targetCollatRatio()).eq(BigNumber.from('0x0a126640bb4b797f')));
+  assertAlmostEq(await strategy.targetCollatRatio(), BigNumber.from('0x0a11f41c8c66d742'), 0.01);
+
+  await network.provider.send('evm_increaseTime', [3600 * 24 * 2]); // forward 2 days
+  await network.provider.send('evm_mine');
+
+  await lendingPool.connect(richUSDCUser).withdraw(USDC, utils.parseUnits('90000000', 6), richUSDCUser.address);
+  await harvest();
+  assertAlmostEq(await strategy.targetCollatRatio(), BigNumber.from('0x0ab92e61fede1b00'), 0.01);
+
+  await lendingPool.connect(richUSDCUser).deposit(USDC, utils.parseUnits('120000000', 6), richUSDCUser.address, 0);
+  await harvest();
+  assertAlmostEq(await strategy.targetCollatRatio(), BigNumber.from('0x092c91fc24e75bcd'), 0.01);
+
+  await lendingPool.connect(richUSDCUser).withdraw(USDC, utils.parseUnits('125000000', 6), richUSDCUser.address);
+  await harvest();
+  assertAlmostEq(await strategy.targetCollatRatio(), BigNumber.from('0x0af3f0f0305cfa5e'), 0.01);
 
   // // set rewards to 0
   await impersonate('0xee56e2b3d491590b5b31738cc34d5232f378a8d5', async emissionManager => {
@@ -104,6 +121,9 @@ rewardBorrow=${(await incentivesController.assets(debtToken.address)).emissionPe
   // CR should be 0
   assert((await strategy.targetCollatRatio()).eq(0));
 
+  await network.provider.send('evm_increaseTime', [3600 * 24 * 3]); // forward 2 days
+  await network.provider.send('evm_mine');
+
   await impersonate('0xee56e2b3d491590b5b31738cc34d5232f378a8d5', async emissionManager => {
     await network.provider.send('hardhat_setBalance', [emissionManager.address, '0x8ac7230489e80000']);
     await incentivesController.connect(emissionManager).configureAssets([aToken.address], ['5903258773510960']);
@@ -111,7 +131,12 @@ rewardBorrow=${(await incentivesController.assets(debtToken.address)).emissionPe
   });
   await harvest();
   // CR should be 0.845
-  assert((await strategy.targetCollatRatio()).eq(BigNumber.from('0x0bba0b05e3348000')));
+  assertAlmostEq(await strategy.targetCollatRatio(), BigNumber.from('0x0bba0b05e3348000'), 0.01);
+
+  await lendingPool.connect(richUSDCUser).deposit(USDC, utils.parseUnits('120000000', 6), richUSDCUser.address, 0);
+  await harvest();
+  // CR should be 0.845
+  assertAlmostEq(await strategy.targetCollatRatio(), BigNumber.from('0x0bba0b05e3348000'), 0.01);
 }
 
 main();

@@ -16,27 +16,6 @@ import {
   ILendingPool,
 } from '../typechain';
 
-async function randomDeposit(_lendingPool: string, _user: string, _asset: string) {
-  const lendingPool = (await ethers.getContractAt(ILendingPool__factory.abi, _lendingPool)) as ILendingPool;
-
-  const min = 100_000;
-  const max = 100_000_000;
-  const amount = utils.parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), 6);
-  await impersonate(_user, async user => {
-    await lendingPool.connect(user).deposit(_asset, amount, _user, 0);
-  });
-}
-async function randomWithdraw(_lendingPool: string, _user: string, _asset: string) {
-  const lendingPool = (await ethers.getContractAt(ILendingPool__factory.abi, _lendingPool)) as ILendingPool;
-
-  const min = 100_000;
-  const max = 100_000_000;
-  const amount = utils.parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), 6);
-  await impersonate(_user, async user => {
-    await lendingPool.connect(user).withdraw(_asset, amount, _user);
-  });
-}
-
 async function main() {
   const [deployer, guardian, governor, user] = await ethers.getSigners();
 

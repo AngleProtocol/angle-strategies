@@ -41,6 +41,17 @@ export const advanceTime = async (hours: number) => {
 export function assert(assertion: boolean, message = 'Assertion failed') {
   if (!assertion) throw new Error(message);
 }
+export function assertAlmostEq(bn1: BigNumber, bn2: BigNumber, percentage = 10) {
+  const addedPercentage = percentage * 100;
+
+  const base = bn1.sub(bn2).lt(0) ? bn1 : bn2;
+  const other = base === bn1 ? bn2 : bn1;
+
+  const plus10 = base.mul(BigNumber.from(10000).add(BigNumber.from(addedPercentage))).div(BigNumber.from(10000));
+  const minus10 = base.mul(BigNumber.from(10000).sub(BigNumber.from(addedPercentage))).div(BigNumber.from(10000));
+  assert(other.lt(plus10));
+  assert(other.gt(minus10));
+}
 
 export async function setup(startBlocknumber?: number) {
   if (startBlocknumber) {
@@ -92,7 +103,7 @@ export async function setup(startBlocknumber?: number) {
   )) as IAaveIncentivesController;
 
   const flashMintLib = (await deploy('FlashMintLib')) as FlashMintLib;
-  const computeProfitabilityContract = (await deploy('ComputeProfitability')) as ComputeProfitability;
+  const computeProfitabilityLib = (await deploy('ComputeProfitability')) as ComputeProfitability;
 
   const oldStrategy = (await ethers.getContractAt(
     Strategy__factory.abi,
@@ -102,18 +113,15 @@ export async function setup(startBlocknumber?: number) {
   // === INIT STRATEGY ===
 
   const strategyImplementation = (await deploy('AaveFlashloanStrategy', [], {
-    libraries: { FlashMintLib: flashMintLib.address },
+    libraries: {
+      FlashMintLib: flashMintLib.address,
+      ComputeProfitability: computeProfitabilityLib.address,
+    },
   })) as AaveFlashloanStrategy;
   const proxy = await deploy('TransparentUpgradeableProxy', [strategyImplementation.address, proxyAdmin.address, '0x']);
   const strategy = new Contract(proxy.address, AaveFlashloanStrategy__factory.abi, deployer) as AaveFlashloanStrategy;
 
-  await strategy.initialize(
-    poolManager.address,
-    governor.address,
-    guardian.address,
-    [keeper.address],
-    computeProfitabilityContract.address,
-  );
+  await strategy.initialize(poolManager.address, governor.address, guardian.address, [keeper.address]);
 
   // === AAVE TOKENS ===
   const aToken = (await ethers.getContractAt(

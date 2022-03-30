@@ -89,7 +89,7 @@ const config: HardhatUserConfig = {
             interval: 1000,
           }
         : { auto: true },
-      chainId: 1337,
+      chainId: 1,
     },
     kovan: {
       live: false,
