@@ -81,6 +81,8 @@ library FlashMintLib {
 
     uint16 private constant _referral = 0; // TODO: get our own referral code
 
+    uint256 private constant RAY = 10**27;
+
     function doFlashMint(
         bool deficit,
         uint256 amountDesired,
@@ -106,6 +108,18 @@ library FlashMintLib {
             }
 
             uint256 _maxLiquidity = maxLiquidity();
+            
+            /*
+            When depositing/withdrawing in the `lendingPool` the amounts are scaled by a `liquidityIndex` and rounded with the functions rayDiv and rayMul (in the aDAI contract)
+            Weirdly, 2 different indexes are used: `liquidityIndex` is used when depositing and `getReserveNormalizedIncome` when withdrawing
+            Therefore, we need to round `requiredDAI`, or we may get some rounding errors and revert
+            because the amount we try to withdraw (to pay back the flashloan) is not equal to the amount deposited
+            */
+            uint256 liquidityIndex = _lendingPool.getReserveData(dai).liquidityIndex;
+            uint256 getReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(dai);
+            uint256 rayDiv = ((requiredDAI * RAY + liquidityIndex/2) / liquidityIndex);
+            requiredDAI = (rayDiv * getReserveNormalizedIncome + (RAY / 2)) / RAY;
+
             if (requiredDAI > _maxLiquidity) {
                 requiredDAI = _maxLiquidity;
                 // NOTE: if we cap amountDAI, we reduce amountToken we are taking too
@@ -114,7 +128,7 @@ library FlashMintLib {
                     _COLLAT_RATIO_PRECISION;
             }
         }
-
+        
         bytes memory data = abi.encode(deficit, amount);
         uint256 _fee = IERC3156FlashLender(LENDER).flashFee(dai, requiredDAI);
         // Check that fees have not been increased without us knowing

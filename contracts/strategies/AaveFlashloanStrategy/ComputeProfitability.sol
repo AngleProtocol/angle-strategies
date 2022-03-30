@@ -5,7 +5,7 @@ pragma solidity 0.8.7;
 /// @title ComputeProfitability
 /// @author Angle Core Team
 /// @notice Helper contract to get the optimal borrow amount from a set of provided parameters from Aave
-contract ComputeProfitability {
+library ComputeProfitability {
     struct SCalculateBorrow {
         int256 reserveFactor;
         int256 totalStableDebt;
@@ -21,8 +21,6 @@ contract ComputeProfitability {
         int256 r0;
         int256 uOptimal;
     }
-
-    constructor() {}
 
     int256 private constant _BASE_RAY = 10**27;
 
@@ -177,7 +175,7 @@ contract ComputeProfitability {
         int256 grad2nd;
         borrow = parameters.borrowedAssets;
         // Tolerance is 1% in this method: indeed we're stopping: `_abs(borrowInit - borrow)/ borrowInit < 10**(-2)`
-        while (count < 30 && (count == 0 || _abs(borrowInit - borrow) * 10**2 > borrowInit)) {
+        while (count < 10 && (count == 0 || _abs(borrowInit - borrow) * (10**2 / 5) > borrowInit)) {
             (, grad, grad2nd) = _revenuePrimes(borrow, parameters, false);
             borrowInit = borrow;
             borrow = borrowInit - (grad * _BASE_RAY) / grad2nd;

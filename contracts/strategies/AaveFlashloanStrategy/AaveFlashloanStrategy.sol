@@ -92,8 +92,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     uint256 public discountFactor;
     /// @notice Max number of iterations possible for the computation of the optimal lever
     uint8 public maxIterations;
-    /// @notice Signal whether a position adjustment was done in `prepareReturn`
-    bool private _alreadyAdjusted;
 
     struct BoolParams {
         // Whether collateral ratio will be automatically computed
@@ -114,10 +112,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     IAToken private _aToken;
     IVariableDebtToken private _debtToken;
 
-    // =============================== Reference ===================================
 
-    /// @notice Library to compute the profitability of a leverage operation
-    ComputeProfitability public computeProfitability;
 
     // ============================ Initializer ====================================
 
@@ -126,13 +121,11 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @param governor Governor address of the protocol
     /// @param guardian Address of the guardian
     /// @param keepers List of the addresses with keeper privilege
-    /// @param _computeProfitability Reference to the contract used to compute leverage
     function initialize(
         address _poolManager,
         address governor,
         address guardian,
-        address[] memory keepers,
-        ComputeProfitability _computeProfitability
+        address[] memory keepers
     ) external {
         _initialize(_poolManager, governor, guardian);
         // Initializing roles first
@@ -141,9 +134,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             _setupRole(KEEPER_ROLE, keepers[i]);
         }
         _setRoleAdmin(KEEPER_ROLE, GUARDIAN_ROLE);
-
-        require(address(_computeProfitability) != address(0), "0");
-        computeProfitability = _computeProfitability;
 
         // Then initializing operational state
         maxIterations = 6;
@@ -159,7 +149,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             cooldownStkAave: true
         });
 
-        _alreadyAdjusted = false;
+
         // Setting reward params
         _setAavePoolVariables();
 
@@ -258,9 +248,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             // but it is possible for the strategy to unwind full position
             (amountAvailable, ) = _liquidatePosition(amountRequired, amountAvailable, deposits, borrows);
 
-            // Don't do a redundant adjustment in adjustPosition
-            _alreadyAdjusted = true;
-
             if (amountAvailable >= amountRequired) {
                 _debtPayment = _debtOutstanding;
                 // profit remains unchanged unless there is not enough to pay it
@@ -294,11 +281,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @notice Function called by harvest() to adjust the position
     /// @dev It computes the optimal collateral ratio and adjusts deposits/borrows accordingly
     function _adjustPosition() internal override {
-        if (_alreadyAdjusted) {
-            _alreadyAdjusted = false; // reset for next time
-            return;
-        }
-
         uint256 _debtOutstanding = poolManager.debtOutstanding();
 
         uint256 wantBalance = _balanceOfWant();
@@ -466,18 +448,15 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         _withdrawCollateral(amount);
     }
 
-    /// @notice Adds a new guardian address and echoes the change to the contracts
-    /// that interact with this collateral `PoolManager`
+    /// @notice Adds a new guardian address
     /// @param _guardian New guardian address
-    /// @dev This internal function has to be put in this file because `AccessControl` is not defined
-    /// in `PoolManagerInternal`
     function addGuardian(address _guardian) external override onlyRole(POOLMANAGER_ROLE) {
         // Granting the new role
         // Access control for this contract
         _grantRole(GUARDIAN_ROLE, _guardian);
     }
 
-    /// @notice Revokes the guardian role and propagates the change to other contracts
+    /// @notice Revokes the guardian role
     /// @param guardian Old guardian address to revoke
     function revokeGuardian(address guardian) external override onlyRole(POOLMANAGER_ROLE) {
         _revokeRole(GUARDIAN_ROLE, guardian);
@@ -675,7 +654,9 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
                 _depositCollateral(Math.min(toDeposit, _balanceOfWant()));
             }
         } else {
-            _withdrawExcessCollateral(_targetCollatRatio, deposits, currentBorrowed);
+            if (deposits - targetDeposit > minWant) {
+                _withdrawExcessCollateral(_targetCollatRatio, deposits, currentBorrowed);
+            }
         }
     }
 
@@ -810,8 +791,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         ComputeProfitability.SCalculateBorrow memory parameters = ComputeProfitability.SCalculateBorrow({
             reserveFactor: _reserveFactor,
             totalStableDebt: int256(totalStableDebt * normalizationFactor),
-            totalVariableDebt: int256(totalVariableDebt * normalizationFactor),
-            totalDeposits: int256((availableLiquidity + totalStableDebt + totalVariableDebt) * normalizationFactor),
+            totalVariableDebt: int256((totalVariableDebt - currentBorrow) * normalizationFactor),
+            totalDeposits: int256((availableLiquidity + totalStableDebt + (totalVariableDebt - currentBorrow)) * normalizationFactor),
             stableBorrowRate: int256(averageStableBorrowRate),
             rewardDeposit: int256((emissionPerSecondAToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase),
             rewardBorrow: int256((emissionPerSecondDebtToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase),
@@ -823,7 +804,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             uOptimal: _uOptimal
         });
 
-        borrow = uint256(computeProfitability.computeProfitability(parameters)) / normalizationFactor;
+        borrow = uint256(ComputeProfitability.computeProfitability(parameters)) / normalizationFactor;
     }
 
     /// @notice Returns the `want` balance
