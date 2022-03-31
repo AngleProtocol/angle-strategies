@@ -204,7 +204,7 @@ export async function setup(startBlocknumber?: number) {
     console.log('harvesting...');
 
     // console.log('estimate', await strategy.estimateGas.harvest());
-    const receipt = await (await strategy.harvest({ gasLimit: 3e6 })).wait();
+    const receipt = await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
     console.log('gasUsed', receipt.gasUsed.toString());
 
     const aTokenAfter = await aToken.balanceOf(strategy.address);

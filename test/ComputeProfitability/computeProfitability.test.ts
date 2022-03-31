@@ -2,8 +2,14 @@ import { expect } from 'chai';
 import { BigNumber } from 'ethers';
 import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { ethers } from 'hardhat';
-import { ComputeProfitabilityTest, ComputeProfitabilityTest__factory } from '../../typechain';
+import {
+  ComputeProfitability,
+  ComputeProfitabilityTest,
+  ComputeProfitabilityTest__factory,
+  ComputeProfitability__factory,
+} from '../../typechain';
 import { expectApproxDelta } from '../../utils/bignumber';
+import { deploy } from '../test-utils';
 
 const PRECISION = 5;
 let computeProfitabilityContract: ComputeProfitabilityTest;
@@ -19,7 +25,7 @@ export type SCalculateBorrow = {
   rewardDeposit: BigNumber;
   rewardBorrow: BigNumber;
   strategyAssets: BigNumber;
-  borrowedAssets: BigNumber;
+  guessedBorrowAssets: BigNumber;
   slope1: BigNumber;
   slope2: BigNumber;
   r0: BigNumber;
@@ -29,9 +35,16 @@ export type SCalculateBorrow = {
 describe('AaveFlashLoanStrategy - ComputeProfitability', () => {
   before(async () => {
     const [deployer] = await ethers.getSigners();
-    computeProfitabilityContract = (await new ComputeProfitabilityTest__factory(
+
+    const computeProfitabilityLibrary = (await new ComputeProfitability__factory(
       deployer,
-    ).deploy()) as ComputeProfitabilityTest;
+    ).deploy()) as ComputeProfitability;
+
+    computeProfitabilityContract = (await deploy('ComputeProfitabilityTest', [], {
+      libraries: {
+        ComputeProfitability: computeProfitabilityLibrary.address,
+      },
+    })) as ComputeProfitabilityTest;
   });
 
   describe('Testing Optim', () => {
@@ -56,7 +69,7 @@ describe('AaveFlashLoanStrategy - ComputeProfitability', () => {
         rewardDeposit: parseUnits(rewardDeposit.toString(), 27 - 18),
         rewardBorrow: parseUnits(rewardBorrow.toString(), 27 - 18),
         strategyAssets: parseUnits('1000000', 27),
-        borrowedAssets: BigNumber.from(0),
+        guessedBorrowAssets: BigNumber.from(0),
         slope1: parseUnits('0.04', 27),
         slope2: parseUnits('0.6', 27),
         r0: parseUnits('0', 27),
@@ -130,7 +143,7 @@ describe('AaveFlashLoanStrategy - ComputeProfitability', () => {
         rewardDeposit: parseUnits(rewardDeposit.toString(), 27 - 18),
         rewardBorrow: parseUnits(rewardBorrow.toString(), 27 - 18),
         strategyAssets: parseUnits('27000000', 27),
-        borrowedAssets: BigNumber.from(0),
+        guessedBorrowAssets: BigNumber.from(0),
         slope1: parseUnits('0.04', 27),
         slope2: parseUnits('0.6', 27),
         r0: parseUnits('0', 27),
