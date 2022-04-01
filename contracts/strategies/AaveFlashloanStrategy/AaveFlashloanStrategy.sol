@@ -609,8 +609,9 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             amount = canBorrow;
         }
 
+        _depositCollateral(wantBalance);
         _borrowWant(amount);
-        _depositCollateral(wantBalance + amount);
+        _depositCollateral(amount);
 
         return amount;
     }
