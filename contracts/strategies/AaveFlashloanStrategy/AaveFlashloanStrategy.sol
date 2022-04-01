@@ -292,7 +292,12 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         guessedBorrow = (guessedBorrow == type(uint256).max) ? borrows : guessedBorrow;
         uint256 _targetCollatRatio;
         if (boolParams.automaticallyComputeCollatRatio) {
-            _targetCollatRatio = _computeOptimalCollatRatio(wantBalance + deposits - borrows, borrows, guessedBorrow);
+            _targetCollatRatio = _computeOptimalCollatRatio(
+                wantBalance + deposits - borrows,
+                deposits,
+                borrows,
+                guessedBorrow
+            );
         } else {
             _targetCollatRatio = targetCollatRatio;
         }
@@ -728,10 +733,16 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @notice It modifies the state by updating the `targetCollatRatio`
     function _computeOptimalCollatRatio(
         uint256 balanceExcludingRewards,
+        uint256 deposits,
         uint256 currentBorrowed,
         uint256 guessedBorrow
     ) internal returns (uint256) {
-        uint256 borrow = _computeMostProfitableBorrow(balanceExcludingRewards, currentBorrowed, guessedBorrow);
+        uint256 borrow = _computeMostProfitableBorrow(
+            balanceExcludingRewards,
+            deposits,
+            currentBorrowed,
+            guessedBorrow
+        );
         uint256 _collatRatio = _getCollatRatio(balanceExcludingRewards + borrow, borrow);
         uint256 _maxCollatRatio = maxCollatRatio;
         if (_collatRatio > _maxCollatRatio) {
@@ -766,47 +777,68 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @dev Returns optimal `borrow` amount in base of `want`
     function _computeMostProfitableBorrow(
         uint256 balanceExcludingRewards,
+        uint256 deposits,
         uint256 currentBorrow,
         uint256 guessedBorrow
     ) internal view returns (uint256 borrow) {
-        (
-            uint256 availableLiquidity,
-            uint256 totalStableDebt,
-            uint256 totalVariableDebt,
-            ,
-            ,
-            ,
-            uint256 averageStableBorrowRate,
-            ,
-            ,
-
-        ) = _protocolDataProvider.getReserveData(address(want));
-
-        uint256 stkAavePriceInWant = _estimatedStkAaveToWant(1 ether);
         // This works if `wantBase < 10**27` which we should expect to be very the case for the strategies we are
         // launching at the moment
         uint256 normalizationFactor = 10**27 / wantBase;
 
-        (uint256 emissionPerSecondAToken, , ) = _incentivesController.assets(address(_aToken));
-        (uint256 emissionPerSecondDebtToken, , ) = _incentivesController.assets(address(_debtToken));
+        ComputeProfitability.SCalculateBorrow memory parameters;
 
-        ComputeProfitability.SCalculateBorrow memory parameters = ComputeProfitability.SCalculateBorrow({
-            reserveFactor: _reserveFactor,
-            totalStableDebt: int256(totalStableDebt * normalizationFactor),
-            totalVariableDebt: int256((totalVariableDebt - currentBorrow) * normalizationFactor),
-            totalDeposits: int256(
-                (availableLiquidity + totalStableDebt + (totalVariableDebt - currentBorrow)) * normalizationFactor
-            ),
-            stableBorrowRate: int256(averageStableBorrowRate),
-            rewardDeposit: int256((emissionPerSecondAToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase),
-            rewardBorrow: int256((emissionPerSecondDebtToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase),
-            strategyAssets: int256(balanceExcludingRewards * normalizationFactor),
-            guessedBorrowAssets: int256(guessedBorrow * normalizationFactor),
-            slope1: _slope1,
-            slope2: _slope2,
-            r0: _r0,
-            uOptimal: _uOptimal
-        });
+        {
+            (
+                uint256 availableLiquidity,
+                uint256 totalStableDebt,
+                uint256 totalVariableDebt,
+                ,
+                ,
+                ,
+                uint256 averageStableBorrowRate,
+                ,
+                ,
+
+            ) = _protocolDataProvider.getReserveData(address(want));
+
+            parameters = ComputeProfitability.SCalculateBorrow({
+                reserveFactor: _reserveFactor,
+                totalStableDebt: int256(totalStableDebt * normalizationFactor),
+                totalVariableDebt: int256((totalVariableDebt - currentBorrow) * normalizationFactor),
+                totalDeposits: int256(
+                    (availableLiquidity +
+                        totalStableDebt +
+                        totalVariableDebt +
+                        // to adapt to our future balance
+                        // add the wantBalance and remove the currentBorrowed from the optimisation
+                        balanceExcludingRewards -
+                        deposits) * normalizationFactor
+                ),
+                stableBorrowRate: int256(averageStableBorrowRate),
+                rewardDeposit: 0,
+                rewardBorrow: 0,
+                strategyAssets: int256(balanceExcludingRewards * normalizationFactor),
+                guessedBorrowAssets: int256(guessedBorrow * normalizationFactor),
+                slope1: _slope1,
+                slope2: _slope2,
+                r0: _r0,
+                uOptimal: _uOptimal
+            });
+        }
+
+        {
+            uint256 stkAavePriceInWant = _estimatedStkAaveToWant(1 ether);
+
+            (uint256 emissionPerSecondAToken, , ) = _incentivesController.assets(address(_aToken));
+            (uint256 emissionPerSecondDebtToken, , ) = _incentivesController.assets(address(_debtToken));
+
+            parameters.rewardDeposit = int256(
+                (emissionPerSecondAToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase
+            );
+            parameters.rewardBorrow = int256(
+                (emissionPerSecondDebtToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase
+            );
+        }
 
         borrow = uint256(ComputeProfitability.computeProfitability(parameters)) / normalizationFactor;
     }
