@@ -10,11 +10,11 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
-import "./AaveLibraries.sol";
-import "./AaveInterfaces.sol";
-import "./UniswapInterfaces.sol";
-import "../BaseStrategyUpgradeable.sol";
-import "./ComputeProfitability.sol";
+import "../AaveLibraries.sol";
+import "../AaveInterfaces.sol";
+import "../UniswapInterfaces.sol";
+import "../../BaseStrategyUpgradeable.sol";
+import "../ComputeProfitability.sol";
 
 /// @title AaveFlashloanStrategy
 /// @author Yearn Finance (https://etherscan.io/address/0xd4E94061183b2DBF24473F28A3559cf4dE4459Db#code)
@@ -23,7 +23,7 @@ import "./ComputeProfitability.sol";
 /// by borrowing to maximize Aave rewards
 /// @dev Angle strategies computes the optimal collateral ratio based on AAVE rewards for deposits and borrows
 // solhint-disable-next-line max-states-count
-contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower {
+contract AaveFlashloanStrategyDAI is BaseStrategyUpgradeable, IERC3156FlashBorrower {
     using SafeERC20 for IERC20;
     using Address for address;
 
@@ -43,7 +43,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     IProtocolDataProvider private constant _protocolDataProvider =
         IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
     IReserveInterestRateStrategy private constant _interestRateStrategyAddress =
-        IReserveInterestRateStrategy(0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27);
+        IReserveInterestRateStrategy(0xfffE32106A68aA3eD39CcCE673B646423EEaB62a);
 
     // ============================== Token Addresses ==============================
 

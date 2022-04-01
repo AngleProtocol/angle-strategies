@@ -1,26 +1,5 @@
-// poolManagerFund=302000000.0
-// compBorrowStable=15381762.0
-// compBorrowVariable=1799913660.0
-// compDeposit=2694449721.0
-// rFixed=0.107944827
-// rewardDeposit=9053347.0
-// rewardBorrow=18106694.0
-// uOptimal = 0.9
-// rf = 0.1
-// r0 = 0
-// slope1 = 0.04
-// slope2 = 0.6
-
-// compBorrowStable=15381762.0
-// compBorrowVariable=2198043415.0
-// compDeposit=3092579477.0
-// rFixed=0.107944827
-// rewardDeposit=9053347.0
-// rewardBorrow=18106694.0
-// poolManagerFund=302000000.0
-
-import { BigNumber, BigNumberish, ethers } from 'ethers';
-import { parseUnits } from 'ethers/lib/utils';
+import { BigNumber, ethers } from 'ethers';
+import { formatUnits, parseUnits } from 'ethers/lib/utils';
 
 export type SCalculateBorrow = {
   reserveFactor: BigNumber;
@@ -88,7 +67,7 @@ export function computeUtilizationPrimes(borrow: BigNumber, parameters: SCalcula
 export function computeInterestPrimes(borrow: BigNumber, parameters: SCalculateBorrow): Interest {
   let returnInterest: Interest = {} as Interest;
   const utilizationPrimes = computeUtilizationPrimes(borrow, parameters);
-  if (utilizationPrimes.utilisation < parameters.uOptimal) {
+  if (utilizationPrimes.utilisation.lt(parameters.uOptimal)) {
     returnInterest.interest = parameters.r0.add(
       parameters.slope1.mul(utilizationPrimes.utilisation).div(parameters.uOptimal),
     );
@@ -201,19 +180,21 @@ export function computeRevenuePrimes(borrow: BigNumber, parameters: SCalculateBo
 
 /// @notice Performs a newton Raphson approximation to get the zero point of the derivative of the
 /// revenue function of the protocol depending on the amount borrowed
-export function computeProfitability(parameters: SCalculateBorrow): BigNumber {
+export function getOptimalBorrow(parameters: SCalculateBorrow): BigNumber {
   const revenuesOnlyDeposit = computeRevenuePrimes(ethers.constants.Zero, parameters);
   const revenuesWithSmallBorrow = computeRevenuePrimes(_BASE_RAY, parameters);
-  if (revenuesWithSmallBorrow.revenue <= revenuesOnlyDeposit.revenue) {
+
+  if (revenuesWithSmallBorrow.revenue.lte(revenuesOnlyDeposit.revenue)) {
     return ethers.constants.Zero;
   }
+
   let count = 0;
   let borrowInit: BigNumber = BigNumber.from(0);
   let revenueGrad: Revenues;
   let borrow = parameters.currentBorrow;
-  const tolerance = BigNumber.from(10 ** 2).div(BigNumber.from(5));
+  const tolerance = BigNumber.from(10 ** 3).div(BigNumber.from(1));
   // Tolerance is 1% in this method: indeed we're stopping: `_abs(borrowInit - borrow)/ borrowInit < 10**(-2)`
-  while (count < 10 && borrowInit.sub(borrow).abs().mul(tolerance).gt(borrowInit)) {
+  while (count < 10 && (count == 0 || borrowInit.sub(borrow).abs().mul(tolerance).gt(borrowInit))) {
     revenueGrad = computeRevenuePrimes(borrow, parameters);
     borrowInit = borrow;
     borrow = borrowInit.sub(revenueGrad.revenuePrime.mul(_BASE_RAY).div(revenueGrad.revenuePrime2nd));
@@ -221,9 +202,38 @@ export function computeProfitability(parameters: SCalculateBorrow): BigNumber {
   }
 
   const supposedOptimalRevenue = computeRevenuePrimes(borrow, parameters);
-  if (supposedOptimalRevenue.revenue <= revenuesOnlyDeposit.revenue) {
+
+  if (supposedOptimalRevenue.revenue.lte(revenuesOnlyDeposit.revenue)) {
     borrow = ethers.constants.Zero;
   }
 
   return borrow;
+}
+
+/// @notice Computes the position collateral ratio from deposits and borrows
+export function getCollatRatio(deposits: BigNumber, borrows: BigNumber): BigNumber {
+  let currentCollatRatio = ethers.constants.MaxUint256;
+  if (deposits.gt(BigNumber.from(0))) {
+    currentCollatRatio = borrows.mul(parseUnits('1', 18)).div(deposits);
+  }
+  return currentCollatRatio;
+}
+
+function getBorrowFromSupply(supply: BigNumber, collatRatio: BigNumber): BigNumber {
+  return supply.mul(collatRatio).div(parseUnits('1', 18).sub(collatRatio));
+}
+
+/// @notice Performs a newton Raphson approximation to get the zero point of the derivative of the
+/// revenue function of the protocol depending on the amount borrowed
+export function getConstrainedBorrow(
+  optimalBorrow: BigNumber,
+  strategyAssets: BigNumber,
+  maxCollatRatio: BigNumber,
+): BigNumber {
+  const collatRatio = getCollatRatio(strategyAssets.add(optimalBorrow), optimalBorrow);
+  if (collatRatio.gt(maxCollatRatio)) {
+    optimalBorrow = getBorrowFromSupply(strategyAssets, maxCollatRatio);
+  }
+
+  return optimalBorrow;
 }
