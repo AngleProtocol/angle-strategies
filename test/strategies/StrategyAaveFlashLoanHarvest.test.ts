@@ -174,6 +174,11 @@ describe('AaveFlashloan Strat', () => {
 
   let keeperError: string;
 
+  // ReserveInterestRateStrategy for USDC
+  const reserveInterestRateStrategyUSDC = '0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27';
+  // ReserveInterestRateStrategy for DAI
+  const reserveInterestRateStrategyDAI = '0xfffE32106A68aA3eD39CcCE673B646423EEaB62a';
+
   beforeEach(async () => {
     await network.provider.request({
       method: 'hardhat_reset',
@@ -228,6 +233,20 @@ describe('AaveFlashloan Strat', () => {
     flashMintLib = (await deploy('FlashMintLib')) as FlashMintLib;
     computeProfitabilityLib = (await deploy('ComputeProfitability')) as ComputeProfitability;
 
+    const strategyImplementation = (await deploy('AaveFlashloanStrategy', [], {
+      libraries: {
+        FlashMintLib: flashMintLib.address,
+        ComputeProfitability: computeProfitabilityLib.address,
+      },
+    })) as AaveFlashloanStrategy;
+
+    const proxy = await deploy('TransparentUpgradeableProxy', [
+      strategyImplementation.address,
+      proxyAdmin.address,
+      '0x',
+    ]);
+    strategy = new Contract(proxy.address, AaveFlashloanStrategy__factory.abi, deployer) as AaveFlashloanStrategy;
+
     aToken = (await ethers.getContractAt(ERC20__factory.abi, '0xBcca60bB61934080951369a648Fb03DF4F96263C')) as ERC20;
     debtToken = (await ethers.getContractAt(ERC20__factory.abi, '0x619beb58998eD2278e08620f97007e1116D5D25b')) as ERC20;
 
@@ -247,20 +266,13 @@ describe('AaveFlashloan Strat', () => {
     const _startAmountUSDC = utils.parseUnits((500_000_000).toString(), 6);
 
     beforeEach(async () => {
-      const strategyImplementation = (await deploy('AaveFlashloanStrategy', [], {
-        libraries: {
-          FlashMintLib: flashMintLib.address,
-          ComputeProfitability: computeProfitabilityLib.address,
-        },
-      })) as AaveFlashloanStrategy;
-
-      const proxy = await deploy('TransparentUpgradeableProxy', [
-        strategyImplementation.address,
-        proxyAdmin.address,
-        '0x',
-      ]);
-      strategy = new Contract(proxy.address, AaveFlashloanStrategy__factory.abi, deployer) as AaveFlashloanStrategy;
-      await strategy.initialize(poolManager.address, governor.address, guardian.address, [keeper.address]);
+      await strategy.initialize(
+        poolManager.address,
+        reserveInterestRateStrategyUSDC,
+        governor.address,
+        guardian.address,
+        [keeper.address],
+      );
 
       maxCollatRatio = await strategy.maxCollatRatio();
 
@@ -462,21 +474,13 @@ describe('AaveFlashloan Strat', () => {
     const _startAmountDAI = utils.parseUnits((300_000_000).toString(), 18);
 
     beforeEach(async () => {
-      const strategyImplementation = (await deploy('AaveFlashloanStrategyDAI', [], {
-        libraries: {
-          FlashMintLib: flashMintLib.address,
-          ComputeProfitability: computeProfitabilityLib.address,
-        },
-      })) as AaveFlashloanStrategy;
-
-      const proxy = await deploy('TransparentUpgradeableProxy', [
-        strategyImplementation.address,
-        proxyAdmin.address,
-        '0x',
-      ]);
-      strategy = new Contract(proxy.address, AaveFlashloanStrategyDAI__factory.abi, deployer) as AaveFlashloanStrategy;
-
-      await strategy.initialize(poolManagerDAI.address, governor.address, guardian.address, [keeper.address]);
+      await strategy.initialize(
+        poolManagerDAI.address,
+        reserveInterestRateStrategyDAI,
+        governor.address,
+        guardian.address,
+        [keeper.address],
+      );
       maxCollatRatio = await strategy.maxCollatRatio();
 
       await (await poolManagerDAI.addStrategy(strategy.address, utils.parseUnits('0.75', 9))).wait();

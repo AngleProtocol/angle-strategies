@@ -119,7 +119,11 @@ export async function setup(startBlocknumber?: number) {
   const proxy = await deploy('TransparentUpgradeableProxy', [strategyImplementation.address, proxyAdmin.address, '0x']);
   const strategy = new Contract(proxy.address, AaveFlashloanStrategy__factory.abi, deployer) as AaveFlashloanStrategy;
 
-  await strategy.initialize(poolManager.address, governor.address, guardian.address, [keeper.address]);
+  // ReserveInterestRateStrategy for USDC
+  const reserveInterestRateStrategyUSDC = '0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27';
+  await strategy.initialize(poolManager.address, reserveInterestRateStrategyUSDC, governor.address, guardian.address, [
+    keeper.address,
+  ]);
 
   // === AAVE TOKENS ===
   const aToken = (await ethers.getContractAt(

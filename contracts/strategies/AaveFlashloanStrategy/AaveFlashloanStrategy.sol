@@ -42,8 +42,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     ILendingPool private constant _lendingPool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
     IProtocolDataProvider private constant _protocolDataProvider =
         IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
-    IReserveInterestRateStrategy private constant _interestRateStrategyAddress =
-        IReserveInterestRateStrategy(0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27);
 
     // ============================== Token Addresses ==============================
 
@@ -63,6 +61,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
     // ========================= Aave Protocol Parameters ==========================
 
+    IReserveInterestRateStrategy private _interestRateStrategyAddress;
     uint256 private _cooldownSeconds;
     uint256 private _unstakeWindow;
     int256 private _reserveFactor;
@@ -114,11 +113,13 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
     /// @notice Constructor of the `Strategy`
     /// @param _poolManager Address of the `PoolManager` lending to this strategy
+    /// @param interestRateStrategyAddress_ Address of the `InterestRateStrategy` defining borrow rates for the collateral
     /// @param governor Governor address of the protocol
     /// @param guardian Address of the guardian
     /// @param keepers List of the addresses with keeper privilege
     function initialize(
         address _poolManager,
+        IReserveInterestRateStrategy interestRateStrategyAddress_,
         address governor,
         address guardian,
         address[] memory keepers
@@ -139,6 +140,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             cooldownStkAave: true
         });
 
+        _interestRateStrategyAddress = interestRateStrategyAddress_;
         // Setting reward params
         _setAavePoolVariables();
 

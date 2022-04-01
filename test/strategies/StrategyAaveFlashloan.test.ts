@@ -47,6 +47,11 @@ describe('AaveFlashloan Strat', () => {
 
   let strategy: AaveFlashloanStrategy;
 
+  // ReserveInterestRateStrategy for USDC
+  const reserveInterestRateStrategyUSDC = '0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27';
+  // ReserveInterestRateStrategy for DAI
+  const reserveInterestRateStrategyDAI = '0xfffE32106A68aA3eD39CcCE673B646423EEaB62a';
+
   beforeEach(async () => {
     await network.provider.request({
       method: 'hardhat_reset',
@@ -104,7 +109,13 @@ describe('AaveFlashloan Strat', () => {
     ]);
     strategy = new Contract(proxy.address, AaveFlashloanStrategy__factory.abi, deployer) as AaveFlashloanStrategy;
 
-    await strategy.initialize(poolManager.address, governor.address, guardian.address, [keeper.address]);
+    await strategy.initialize(
+      poolManager.address,
+      reserveInterestRateStrategyUSDC,
+      governor.address,
+      guardian.address,
+      [keeper.address],
+    );
 
     aToken = (await ethers.getContractAt(ERC20__factory.abi, '0xBcca60bB61934080951369a648Fb03DF4F96263C')) as ERC20;
     debtToken = (await ethers.getContractAt(ERC20__factory.abi, '0x619beb58998eD2278e08620f97007e1116D5D25b')) as ERC20;
@@ -113,7 +124,9 @@ describe('AaveFlashloan Strat', () => {
   describe('Constructor', () => {
     it('initialize', async () => {
       expect(
-        strategy.initialize(poolManager.address, governor.address, guardian.address, [keeper.address]),
+        strategy.initialize(poolManager.address, reserveInterestRateStrategyUSDC, governor.address, guardian.address, [
+          keeper.address,
+        ]),
       ).to.revertedWith('Initializable: contract is already initialized');
 
       expect(strategy.connect(proxyAdmin).boolParams()).to.revertedWith(
