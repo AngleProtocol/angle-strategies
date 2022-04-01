@@ -13,7 +13,6 @@ import {
   IStakedAave,
   IStakedAave__factory,
   AaveFlashloanStrategy__factory,
-  AaveFlashloanStrategyDAI,
   AaveFlashloanStrategyDAI__factory,
   PoolManager,
   IProtocolDataProvider,
@@ -23,7 +22,7 @@ import {
   ILendingPool__factory,
 } from '../../typechain';
 import { getOptimalBorrow, getConstrainedBorrow, SCalculateBorrow } from '../../utils/optimization';
-import { formatUnits, parseUnits } from 'ethers/lib/utils';
+import { parseUnits } from 'ethers/lib/utils';
 import { expectApproxDelta } from '../../utils/bignumber';
 
 const PRECISION = 3;
@@ -364,11 +363,6 @@ describe('AaveFlashloan Strat', () => {
       );
 
       const guessedBorrowed1st = toOriginalBase(getOptimalBorrow(paramOptimBorrow1st), wantDecimals);
-      const constrainedBorrow1st = getConstrainedBorrow(
-        guessedBorrowed1st,
-        toOriginalBase(paramOptimBorrow1st.strategyAssets, wantDecimals),
-        maxCollatRatio,
-      );
 
       await impersonate('0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3', async acc => {
         await wantToken.connect(acc).approve(lendingPool.address, ethers.constants.MaxUint256);
@@ -423,11 +417,6 @@ describe('AaveFlashloan Strat', () => {
       );
 
       const guessedBorrowed1st = toOriginalBase(getOptimalBorrow(paramOptimBorrow1st), wantDecimals);
-      const constrainedBorrow1st = getConstrainedBorrow(
-        guessedBorrowed1st,
-        toOriginalBase(paramOptimBorrow1st.strategyAssets, wantDecimals),
-        maxCollatRatio,
-      );
 
       await network.provider.send('hardhat_setBalance', [
         '0x3DdfA8eC3052539b6C9549F12cEA2C295cfF5296',
@@ -562,11 +551,6 @@ describe('AaveFlashloan Strat', () => {
       );
 
       const guessedBorrowed1st = toOriginalBase(getOptimalBorrow(paramOptimBorrow1st), daiDecimals);
-      const constrainedBorrow1st = getConstrainedBorrow(
-        guessedBorrowed1st,
-        toOriginalBase(paramOptimBorrow1st.strategyAssets, daiDecimals),
-        maxCollatRatio,
-      );
 
       await impersonate('0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7', async acc => {
         await dai.connect(acc).approve(lendingPool.address, ethers.constants.MaxUint256);
@@ -619,11 +603,6 @@ describe('AaveFlashloan Strat', () => {
       );
 
       const guessedBorrowed1st = toOriginalBase(getOptimalBorrow(paramOptimBorrow1st), daiDecimals);
-      const constrainedBorrow1st = getConstrainedBorrow(
-        guessedBorrowed1st,
-        toOriginalBase(paramOptimBorrow1st.strategyAssets, daiDecimals),
-        maxCollatRatio,
-      );
 
       await network.provider.send('hardhat_setBalance', [
         '0xa13C0c8eB109F5A13c6c90FC26AFb23bEB3Fb04a',

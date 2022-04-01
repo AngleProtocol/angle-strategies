@@ -1,13 +1,7 @@
-import { expect } from 'chai';
 import { BigNumber, Contract } from 'ethers';
 import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { ethers } from 'hardhat';
-import {
-  ComputeProfitability,
-  ComputeProfitabilityTest,
-  ComputeProfitabilityTest__factory,
-  ComputeProfitability__factory,
-} from '../../typechain';
+import { ComputeProfitability, ComputeProfitability__factory } from '../../typechain';
 import { expectApproxDelta } from '../../utils/bignumber';
 import { deploy } from '../test-utils';
 

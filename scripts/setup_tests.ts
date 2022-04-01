@@ -1,13 +1,11 @@
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { ethers, deployments, network } from 'hardhat';
-import { utils, Wallet, constants, Contract, BigNumber, providers } from 'ethers';
-import { impersonate, deploy } from '../test/test-utils';
+import { ethers, network } from 'hardhat';
+import { utils, constants, Contract, BigNumber } from 'ethers';
+import { deploy } from '../test/test-utils';
 import {
   AaveFlashloanStrategy,
   ERC20,
   ERC20__factory,
   PoolManager__factory,
-  MockPoolManager,
   Strategy,
   Strategy__factory,
   ILendingPool__factory,
