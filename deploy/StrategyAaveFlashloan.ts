@@ -9,13 +9,16 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
 
   const governor = CONTRACTS_ADDRESSES[1].GovernanceMultiSig as string;
   const guardian = CONTRACTS_ADDRESSES[1].Guardian as string;
-  const keeper = '';
+
+  // TODO: change to real keeper
+  const keeper = '0xC2ad4f9799Dc7Cbc88958d1165bC43507664f3E0';
+  // const keeper = '0xcC617C6f9725eACC993ac626C7efC6B96476916E';
 
   const flashMintLib = await deploy('FlashMintLib', {
     contract: 'FlashMintLib',
     from: deployer.address,
   });
-  const computeProfitabilityContract = await deploy('ComputeProfitability', {
+  const computeProfitabilityLib = await deploy('ComputeProfitability', {
     contract: 'ComputeProfitability',
     from: deployer.address,
   });
@@ -48,7 +51,10 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     contract: 'AaveFlashloanStrategy',
     from: deployer.address,
     args: [],
-    libraries: { FlashMintLib: flashMintLib.address },
+    libraries: {
+      FlashMintLib: flashMintLib.address,
+      ComputeProfitability: computeProfitabilityLib.address,
+    },
   });
 
   const initializeData = AaveFlashloanStrategy__factory.createInterface().encodeFunctionData('initialize', [
@@ -56,10 +62,9 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     governor,
     guardian,
     [keeper],
-    computeProfitabilityContract.address,
   ]);
 
-  const proxyAdmin = '';
+  const proxyAdmin = '0x1D941EF0D3Bba4ad67DBfBCeE5262F4CEE53A32b';
   const proxy = await deploy('TransparentUpgradeableProxy', {
     contract: 'TransparentUpgradeableProxy',
     from: deployer.address,
@@ -70,10 +75,9 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
   console.log('Strategy (proxy) successfully deployed at address: ', proxy.address);
 
   // CHANGE DEBT RATIOS
-  const oldStrategy = '0x5fE0E497Ac676d8bA78598FC8016EBC1E6cE14a3';
-
-  poolManager.updateStrategyDebtRatio(oldStrategy, utils.parseUnits('0.8', 9));
-  poolManager.addStrategy(proxy.address, utils.parseUnits('0.1', 9));
+  // const oldStrategy = '0x5fE0E497Ac676d8bA78598FC8016EBC1E6cE14a3';
+  // await poolManager.updateStrategyDebtRatio(oldStrategy, utils.parseUnits('0.85', 9));
+  // await poolManager.addStrategy(proxy.address, utils.parseUnits('0.1', 9));
 };
 
 func.tags = ['aave_flashloan_strategy'];

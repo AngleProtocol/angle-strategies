@@ -2,15 +2,17 @@
 # yarn lockfile v1
 
 
-"@angleprotocol/sdk@1.0.38":
-  version "1.0.38"
-  resolved "https://registry.yarnpkg.com/@angleprotocol/sdk/-/sdk-1.0.38.tgz#ae32ba3c63038a285903daa5ed3857315ffe77af"
-  integrity sha512-BjR/HMOQu3JI28/nRL10sXJ+JXrdjTPABUeNrSlXcVhMoewEaDkdqWQi43DtD8CINpK/VtORUPAagi3OyMpM0A==
+"@angleprotocol/sdk@1.0.67":
+  version "1.0.67"
+  resolved "https://registry.yarnpkg.com/@angleprotocol/sdk/-/sdk-1.0.67.tgz#98d452201eed975715d5bbd203db846245cc5e98"
+  integrity sha512-y7LJikPJvA3DbnkIhI+WFmM8WznqgPtnF2Oaw2PAevT1+0EL7BNXk3BeJgKV0979eYtK4C1rqi8lE7n0771gQw==
   dependencies:
     "@typechain/ethers-v5" "^8.0.5"
+    "@types/lodash" "^4.14.180"
     ethers "^5.5.1"
     graphql "^15.7.1"
     graphql-request "^3.6.1"
+    lodash "^4.17.21"
     tiny-invariant "^1.1.0"
     typechain "^6.0.5"
 
@@ -1162,6 +1164,11 @@
     "@types/abstract-leveldown" "*"
     "@types/level-errors" "*"
     "@types/node" "*"
+
+"@types/lodash@^4.14.180":
+  version "4.14.181"
+  resolved "https://registry.yarnpkg.com/@types/lodash/-/lodash-4.14.181.tgz#d1d3740c379fda17ab175165ba04e2d03389385d"
+  integrity sha512-n3tyKthHJbkiWhDZs3DkhkCzt2MexYHXlX0td5iMplyfwketaOeKboEVBqzceH7juqvEg3q5oUoBFxSLu7zFag==
 
 "@types/lru-cache@^5.1.0":
   version "5.1.1"
