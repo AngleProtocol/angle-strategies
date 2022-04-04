@@ -1,29 +1,17 @@
 /* eslint-disable camelcase */
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { ethers, deployments, network } from 'hardhat';
-import { utils, Wallet, constants, Contract, BigNumber, providers } from 'ethers';
-import { impersonate, deploy } from '../test/test-utils';
+import { ethers } from 'hardhat';
+import { Contract } from 'ethers';
 import {
   AaveFlashloanStrategy,
-  ERC20,
-  ERC20__factory,
-  PoolManager__factory,
-  MockPoolManager,
-  Strategy,
-  Strategy__factory,
   ILendingPool__factory,
   ILendingPool,
-  FlashMintLib,
   AaveFlashloanStrategy__factory,
-  ComputeProfitability,
-  PoolManager,
   IAaveIncentivesController__factory,
   IAaveIncentivesController,
   IProtocolDataProvider__factory,
   IProtocolDataProvider,
   ILendingPoolAddressesProvider,
   ILendingPoolAddressesProvider__factory,
-  MockAToken__factory,
   IAToken__factory,
   IAToken,
 } from '../typechain';

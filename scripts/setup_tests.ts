@@ -1,13 +1,11 @@
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { ethers, deployments, network } from 'hardhat';
-import { utils, Wallet, constants, Contract, BigNumber, providers } from 'ethers';
-import { impersonate, deploy } from '../test/test-utils';
+import { ethers, network } from 'hardhat';
+import { utils, constants, Contract, BigNumber } from 'ethers';
+import { deploy } from '../test/test-utils';
 import {
   AaveFlashloanStrategy,
   ERC20,
   ERC20__factory,
   PoolManager__factory,
-  MockPoolManager,
   Strategy,
   Strategy__factory,
   ILendingPool__factory,
@@ -121,7 +119,11 @@ export async function setup(startBlocknumber?: number) {
   const proxy = await deploy('TransparentUpgradeableProxy', [strategyImplementation.address, proxyAdmin.address, '0x']);
   const strategy = new Contract(proxy.address, AaveFlashloanStrategy__factory.abi, deployer) as AaveFlashloanStrategy;
 
-  await strategy.initialize(poolManager.address, governor.address, guardian.address, [keeper.address]);
+  // ReserveInterestRateStrategy for USDC
+  const reserveInterestRateStrategyUSDC = '0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27';
+  await strategy.initialize(poolManager.address, reserveInterestRateStrategyUSDC, governor.address, guardian.address, [
+    keeper.address,
+  ]);
 
   // === AAVE TOKENS ===
   const aToken = (await ethers.getContractAt(
@@ -204,7 +206,7 @@ export async function setup(startBlocknumber?: number) {
     console.log('harvesting...');
 
     // console.log('estimate', await strategy.estimateGas.harvest());
-    const receipt = await (await strategy.harvest({ gasLimit: 3e6 })).wait();
+    const receipt = await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
     console.log('gasUsed', receipt.gasUsed.toString());
 
     const aTokenAfter = await aToken.balanceOf(strategy.address);

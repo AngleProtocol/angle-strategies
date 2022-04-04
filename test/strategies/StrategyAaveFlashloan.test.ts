@@ -47,6 +47,11 @@ describe('AaveFlashloan Strat', () => {
 
   let strategy: AaveFlashloanStrategy;
 
+  // ReserveInterestRateStrategy for USDC
+  const reserveInterestRateStrategyUSDC = '0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27';
+  // ReserveInterestRateStrategy for DAI
+  const reserveInterestRateStrategyDAI = '0xfffE32106A68aA3eD39CcCE673B646423EEaB62a';
+
   beforeEach(async () => {
     await network.provider.request({
       method: 'hardhat_reset',
@@ -104,7 +109,13 @@ describe('AaveFlashloan Strat', () => {
     ]);
     strategy = new Contract(proxy.address, AaveFlashloanStrategy__factory.abi, deployer) as AaveFlashloanStrategy;
 
-    await strategy.initialize(poolManager.address, governor.address, guardian.address, [keeper.address]);
+    await strategy.initialize(
+      poolManager.address,
+      reserveInterestRateStrategyUSDC,
+      governor.address,
+      guardian.address,
+      [keeper.address],
+    );
 
     aToken = (await ethers.getContractAt(ERC20__factory.abi, '0xBcca60bB61934080951369a648Fb03DF4F96263C')) as ERC20;
     debtToken = (await ethers.getContractAt(ERC20__factory.abi, '0x619beb58998eD2278e08620f97007e1116D5D25b')) as ERC20;
@@ -113,7 +124,9 @@ describe('AaveFlashloan Strat', () => {
   describe('Constructor', () => {
     it('initialize', async () => {
       expect(
-        strategy.initialize(poolManager.address, governor.address, guardian.address, [keeper.address]),
+        strategy.initialize(poolManager.address, reserveInterestRateStrategyUSDC, governor.address, guardian.address, [
+          keeper.address,
+        ]),
       ).to.revertedWith('Initializable: contract is already initialized');
 
       expect(strategy.connect(proxyAdmin).boolParams()).to.revertedWith(
@@ -316,6 +329,7 @@ describe('AaveFlashloan Strat', () => {
 
   describe('Strategy', () => {
     const _startAmountUSDC = utils.parseUnits((2_000_000).toString(), 6);
+    let _guessedBorrowed = utils.parseUnits((0).toString(), 6);
 
     beforeEach(async () => {
       await (await poolManager.addStrategy(strategy.address, utils.parseUnits('0.75', 9))).wait();
@@ -331,9 +345,25 @@ describe('AaveFlashloan Strat', () => {
 
     it('estimatedTotalAssets', async () => {
       expect(await strategy.estimatedTotalAssets()).to.equal(0);
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
 
       const { deposits, borrows } = await strategy.getCurrentPosition();
+      _guessedBorrowed = borrows;
+      const totalAssets = (await wantToken.balanceOf(strategy.address)).add(deposits).sub(borrows);
+      const debtRatio = (await poolManager.strategies(strategy.address)).debtRatio;
+
+      expect(debtRatio).to.equal(utils.parseUnits('0.75', 9));
+      expect(totalAssets).to.equal(_startAmountUSDC.mul(debtRatio).div(utils.parseUnits('1', 9)));
+      expect(await strategy.estimatedTotalAssets()).to.equal(totalAssets);
+    });
+
+    it('estimatedTotalAssets - check harvest with guessedBorrows', async () => {
+      expect(await strategy.estimatedTotalAssets()).to.equal(0);
+      await strategy.connect(keeper)['harvest(uint256)'](_guessedBorrowed, { gasLimit: 3e6 });
+
+      const { deposits, borrows } = await strategy.getCurrentPosition();
+      console.log(utils.formatUnits(borrows, 6));
+      expect(borrows).to.equal(_guessedBorrowed);
       const totalAssets = (await wantToken.balanceOf(strategy.address)).add(deposits).sub(borrows);
       const debtRatio = (await poolManager.strategies(strategy.address)).debtRatio;
 
@@ -370,10 +400,10 @@ describe('AaveFlashloan Strat', () => {
         `AccessControl: account ${guardian.address.toLowerCase()} is missing role ${await strategy.KEEPER_ROLE()}`,
       );
 
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
       await network.provider.send('evm_increaseTime', [3600 * 24 * 1]); // forward 1 day
       await network.provider.send('evm_mine');
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
 
       expect(parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)))).to.be.closeTo(2.15, 0.1);
 
@@ -427,7 +457,7 @@ describe('AaveFlashloan Strat', () => {
         .mul((await poolManager.strategies(strategy.address)).debtRatio)
         .div(BigNumber.from(1e9));
 
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
 
       const targetCollatRatio = await strategy.targetCollatRatio();
       const expectedBorrows = balance.mul(targetCollatRatio).div(utils.parseEther('1').sub(targetCollatRatio));
@@ -441,7 +471,7 @@ describe('AaveFlashloan Strat', () => {
     });
 
     it('_prepareReturn 2', async () => {
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
       const debtRatio = (await poolManager.strategies(strategy.address)).debtRatio;
       expect(await strategy.estimatedTotalAssets()).to.be.closeTo(
         _startAmountUSDC.mul(debtRatio).div(utils.parseUnits('1', 9)),
@@ -450,7 +480,7 @@ describe('AaveFlashloan Strat', () => {
 
       const newDebtRatio = utils.parseUnits('0.5', 9);
       await poolManager.updateStrategyDebtRatio(strategy.address, newDebtRatio);
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
       expect(await strategy.estimatedTotalAssets()).to.be.closeTo(
         _startAmountUSDC.mul(newDebtRatio).div(utils.parseUnits('1', 9)),
         50000,
@@ -458,14 +488,14 @@ describe('AaveFlashloan Strat', () => {
     });
 
     it('_prepareReturn 3', async () => {
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
 
       // fake profit for strategy
       await impersonate('0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3', async acc => {
         await wantToken.connect(acc).transfer(strategy.address, _startAmountUSDC);
       });
 
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
 
       const balance = (await poolManager.strategies(strategy.address)).totalStrategyDebt;
 
@@ -485,7 +515,7 @@ describe('AaveFlashloan Strat', () => {
       const amount = utils.parseUnits(_amount.toString(), 6);
       await strategy.connect(guardian).manualDeleverage(0);
 
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
 
       const aBefore = await aToken.balanceOf(strategy.address);
       const debtBefore = await debtToken.balanceOf(strategy.address);
@@ -499,7 +529,7 @@ describe('AaveFlashloan Strat', () => {
     });
 
     it('manualReleaseWant', async () => {
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
       await strategy.connect(guardian).manualReleaseWant(0);
 
       const _amount = 10_000;
@@ -517,7 +547,7 @@ describe('AaveFlashloan Strat', () => {
     });
 
     it('_adjustPosition - _leverDownTo', async () => {
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
 
       await strategy.connect(guardian).setBoolParams({
         isFlashMintActive: (await strategy.boolParams()).isFlashMintActive,
@@ -537,7 +567,7 @@ describe('AaveFlashloan Strat', () => {
 
       expect(await strategy.targetCollatRatio()).to.equal(newCollatRatio);
 
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
 
       const borrow = (await poolManager.strategies(strategy.address)).totalStrategyDebt
         .mul(newCollatRatio)
@@ -558,7 +588,7 @@ describe('AaveFlashloan Strat', () => {
         withdrawCheck: (await strategy.boolParams()).withdrawCheck,
         cooldownStkAave: (await strategy.boolParams()).cooldownStkAave,
       });
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
 
       const targetCollatRatioBefore = await strategy.targetCollatRatio();
       const aTokenBefore = await aToken.balanceOf(strategy.address);
@@ -570,7 +600,7 @@ describe('AaveFlashloan Strat', () => {
         withdrawCheck: (await strategy.boolParams()).withdrawCheck,
         cooldownStkAave: (await strategy.boolParams()).cooldownStkAave,
       });
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
 
       expect(targetCollatRatioBefore).to.equal(await strategy.targetCollatRatio());
       expect(aTokenBefore).to.be.lte(await aToken.balanceOf(strategy.address));
@@ -586,7 +616,7 @@ describe('AaveFlashloan Strat', () => {
         cooldownStkAave: (await strategy.boolParams()).cooldownStkAave,
       });
 
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
       const newCollatRatio = utils.parseUnits('0.7', 18);
       await strategy
         .connect(guardian)
@@ -596,7 +626,7 @@ describe('AaveFlashloan Strat', () => {
           await strategy.maxBorrowCollatRatio(),
           await strategy.daiBorrowCollatRatio(),
         );
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
 
       expect(await strategy.targetCollatRatio()).to.equal(newCollatRatio);
 
@@ -617,7 +647,7 @@ describe('AaveFlashloan Strat', () => {
       });
 
       expect(await strategy.estimatedTotalAssets()).to.equal(0);
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
       expect(await strategy.estimatedTotalAssets()).to.be.closeTo(utils.parseUnits('1500000', 6), 10);
     });
 
@@ -637,7 +667,7 @@ describe('AaveFlashloan Strat', () => {
     //   });
     //   await poolManager.updateStrategyDebtRatio(strategy.address, utils.parseUnits('1', 9));
 
-    //   await strategy.harvest({ gasLimit: 3e6 });
+    //   await strategy['harvest()']({ gasLimit: 3e6 });
 
     //   // // expect(parseFloat(utils.formatUnits(await strategy.estimatedTotalAssets(), 6))).to.be.closeTo(301_500_000, 100);
 
@@ -645,7 +675,7 @@ describe('AaveFlashloan Strat', () => {
     //     await lendingPool.connect(acc).deposit(wantToken.address, utils.parseUnits('200000000', 6), acc.address, 0);
     //   });
 
-    //   await strategy.harvest({ gasLimit: 3e6 });
+    //   await strategy['harvest()']({ gasLimit: 3e6 });
     //   console.log('cr', await strategy.targetCollatRatio());
     //   console.log(
     //     utils.formatUnits(await aToken.balanceOf(strategy.address), 6),
@@ -658,18 +688,18 @@ describe('AaveFlashloan Strat', () => {
     // });
 
     it('cooldownStkAave', async () => {
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
       await expect((await strategy.boolParams()).cooldownStkAave).to.be.true;
 
       await network.provider.send('evm_increaseTime', [3600 * 24]);
       await network.provider.send('evm_mine');
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
 
       await network.provider.send('evm_increaseTime', [3600 * 24 * 10.5]); // forward 11 days
       await network.provider.send('evm_mine');
 
       const stkAaveBalanceBefore = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address), 18));
-      await strategy.harvest({ gasLimit: 3e6 });
+      await strategy['harvest()']({ gasLimit: 3e6 });
       const aaveBalanceAfterRedeem = parseFloat(utils.formatUnits(await aave.balanceOf(strategy.address), 18));
 
       expect(stkAaveBalanceBefore).to.be.closeTo(aaveBalanceAfterRedeem, 0.1);

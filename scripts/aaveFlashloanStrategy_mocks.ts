@@ -86,7 +86,7 @@ async function main() {
 
   const want = (await ethers.getContractAt(ERC20__factory.abi, await strategy.want())) as ERC20;
   console.log('balance pm before', utils.formatUnits(await want.balanceOf(poolManager.address), 6));
-  await (await strategy.connect(guardian).harvest()).wait();
+  await (await strategy.connect(guardian)['harvest()']()).wait();
   console.log('balance pm after', utils.formatUnits(await want.balanceOf(poolManager.address), 6));
   console.log('total assets', await strategy.estimatedTotalAssets());
 

@@ -71,7 +71,7 @@ interface IAaveIncentivesController {
             uint256 index,
             uint256 lastUpdateTimestamp
         );
-    
+
     function configureAssets(address[] calldata assets, uint256[] calldata emissionsPerSecond) external;
 }
 

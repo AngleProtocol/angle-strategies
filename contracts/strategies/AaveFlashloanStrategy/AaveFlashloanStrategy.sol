@@ -27,8 +27,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     using SafeERC20 for IERC20;
     using Address for address;
 
-    bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
-
     // =========================== Constant Addresses ==============================
 
     /// @notice Router used for swaps
@@ -44,8 +42,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     ILendingPool private constant _lendingPool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
     IProtocolDataProvider private constant _protocolDataProvider =
         IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
-    IReserveInterestRateStrategy private constant _interestRateStrategyAddress =
-        IReserveInterestRateStrategy(0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27);
 
     // ============================== Token Addresses ==============================
 
@@ -65,6 +61,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
     // ========================= Aave Protocol Parameters ==========================
 
+    IReserveInterestRateStrategy private _interestRateStrategyAddress;
     uint256 private _cooldownSeconds;
     uint256 private _unstakeWindow;
     int256 private _reserveFactor;
@@ -112,28 +109,22 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     IAToken private _aToken;
     IVariableDebtToken private _debtToken;
 
-
-
     // ============================ Initializer ====================================
 
     /// @notice Constructor of the `Strategy`
     /// @param _poolManager Address of the `PoolManager` lending to this strategy
+    /// @param interestRateStrategyAddress_ Address of the `InterestRateStrategy` defining borrow rates for the collateral
     /// @param governor Governor address of the protocol
     /// @param guardian Address of the guardian
     /// @param keepers List of the addresses with keeper privilege
     function initialize(
         address _poolManager,
+        IReserveInterestRateStrategy interestRateStrategyAddress_,
         address governor,
         address guardian,
         address[] memory keepers
     ) external {
-        _initialize(_poolManager, governor, guardian);
-        // Initializing roles first
-        for (uint256 i = 0; i < keepers.length; i++) {
-            require(keepers[i] != address(0), "0");
-            _setupRole(KEEPER_ROLE, keepers[i]);
-        }
-        _setRoleAdmin(KEEPER_ROLE, GUARDIAN_ROLE);
+        _initialize(_poolManager, governor, guardian, keepers);
 
         // Then initializing operational state
         maxIterations = 6;
@@ -149,7 +140,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             cooldownStkAave: true
         });
 
-
+        _interestRateStrategyAddress = interestRateStrategyAddress_;
         // Setting reward params
         _setAavePoolVariables();
 
@@ -181,7 +172,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
     // ======================= Helper View Functions ===============================
 
-    /// @notice Estimates the toal assets controlled by the strategy
+    /// @notice Estimates the total assets controlled by the strategy
     /// @dev It sums the effective deposit amount to the rewards accumulated
     function estimatedTotalAssets() public view override returns (uint256) {
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
@@ -278,9 +269,15 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         }
     }
 
-    /// @notice Function called by harvest() to adjust the position
-    /// @dev It computes the optimal collateral ratio and adjusts deposits/borrows accordingly
+    /// @notice Function called by _harvest()
     function _adjustPosition() internal override {
+        _adjustPosition(type(uint256).max);
+    }
+
+    /// @notice Function called by _adjustPosition()
+    /// @param guessedBorrow First guess to the borrow amount to maximise revenue
+    /// @dev It computes the optimal collateral ratio and adjusts deposits/borrows accordingly
+    function _adjustPosition(uint256 guessedBorrow) internal override {
         uint256 _debtOutstanding = poolManager.debtOutstanding();
 
         uint256 wantBalance = _balanceOfWant();
@@ -292,9 +289,15 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         }
 
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
+        guessedBorrow = (guessedBorrow == type(uint256).max) ? borrows : guessedBorrow;
         uint256 _targetCollatRatio;
         if (boolParams.automaticallyComputeCollatRatio) {
-            _targetCollatRatio = _computeOptimalCollatRatio(wantBalance + deposits - borrows, borrows);
+            _targetCollatRatio = _computeOptimalCollatRatio(
+                wantBalance + deposits - borrows,
+                deposits,
+                borrows,
+                guessedBorrow
+            );
         } else {
             _targetCollatRatio = targetCollatRatio;
         }
@@ -608,6 +611,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
         _depositCollateral(wantBalance);
         _borrowWant(amount);
+        _depositCollateral(amount);
 
         return amount;
     }
@@ -728,8 +732,18 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
     /// @notice Computes the optimal collateral ratio based on current interests and incentives on Aave
     /// @notice It modifies the state by updating the `targetCollatRatio`
-    function _computeOptimalCollatRatio(uint256 balanceExcludingRewards, uint256 currentBorrowed) internal returns (uint256) {
-        uint256 borrow = _computeMostProfitableBorrow(balanceExcludingRewards, currentBorrowed);
+    function _computeOptimalCollatRatio(
+        uint256 balanceExcludingRewards,
+        uint256 deposits,
+        uint256 currentBorrowed,
+        uint256 guessedBorrow
+    ) internal returns (uint256) {
+        uint256 borrow = _computeMostProfitableBorrow(
+            balanceExcludingRewards,
+            deposits,
+            currentBorrowed,
+            guessedBorrow
+        );
         uint256 _collatRatio = _getCollatRatio(balanceExcludingRewards + borrow, borrow);
         uint256 _maxCollatRatio = maxCollatRatio;
         if (_collatRatio > _maxCollatRatio) {
@@ -762,47 +776,70 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
     /// @notice Computes the optimal amounts to borrow based on current interest rates and incentives
     /// @dev Returns optimal `borrow` amount in base of `want`
-    function _computeMostProfitableBorrow(uint256 balanceExcludingRewards, uint256 currentBorrow)
-        internal
-        view
-        returns (uint256 borrow)
-    {
-        (
-            uint256 availableLiquidity,
-            uint256 totalStableDebt,
-            uint256 totalVariableDebt,
-            ,
-            ,
-            ,
-            uint256 averageStableBorrowRate,
-            ,
-            ,
-
-        ) = _protocolDataProvider.getReserveData(address(want));
-
-        uint256 stkAavePriceInWant = _estimatedStkAaveToWant(1 ether);
+    function _computeMostProfitableBorrow(
+        uint256 balanceExcludingRewards,
+        uint256 deposits,
+        uint256 currentBorrow,
+        uint256 guessedBorrow
+    ) internal view returns (uint256 borrow) {
         // This works if `wantBase < 10**27` which we should expect to be very the case for the strategies we are
         // launching at the moment
         uint256 normalizationFactor = 10**27 / wantBase;
 
-        (uint256 emissionPerSecondAToken, , ) = _incentivesController.assets(address(_aToken));
-        (uint256 emissionPerSecondDebtToken, , ) = _incentivesController.assets(address(_debtToken));
+        ComputeProfitability.SCalculateBorrow memory parameters;
 
-        ComputeProfitability.SCalculateBorrow memory parameters = ComputeProfitability.SCalculateBorrow({
-            reserveFactor: _reserveFactor,
-            totalStableDebt: int256(totalStableDebt * normalizationFactor),
-            totalVariableDebt: int256((totalVariableDebt - currentBorrow) * normalizationFactor),
-            totalDeposits: int256((availableLiquidity + totalStableDebt + (totalVariableDebt - currentBorrow)) * normalizationFactor),
-            stableBorrowRate: int256(averageStableBorrowRate),
-            rewardDeposit: int256((emissionPerSecondAToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase),
-            rewardBorrow: int256((emissionPerSecondDebtToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase),
-            strategyAssets: int256(balanceExcludingRewards * normalizationFactor),
-            borrowedAssets: int256(currentBorrow * normalizationFactor),
-            slope1: _slope1,
-            slope2: _slope2,
-            r0: _r0,
-            uOptimal: _uOptimal
-        });
+        {
+            (
+                uint256 availableLiquidity,
+                uint256 totalStableDebt,
+                uint256 totalVariableDebt,
+                ,
+                ,
+                ,
+                uint256 averageStableBorrowRate,
+                ,
+                ,
+
+            ) = _protocolDataProvider.getReserveData(address(want));
+
+            parameters = ComputeProfitability.SCalculateBorrow({
+                reserveFactor: _reserveFactor,
+                totalStableDebt: int256(totalStableDebt * normalizationFactor),
+                totalVariableDebt: int256((totalVariableDebt - currentBorrow) * normalizationFactor),
+                totalDeposits: int256(
+                    (availableLiquidity +
+                        totalStableDebt +
+                        totalVariableDebt +
+                        // to adapt to our future balance
+                        // add the wantBalance and remove the currentBorrowed from the optimisation
+                        balanceExcludingRewards -
+                        deposits) * normalizationFactor
+                ),
+                stableBorrowRate: int256(averageStableBorrowRate),
+                rewardDeposit: 0,
+                rewardBorrow: 0,
+                strategyAssets: int256(balanceExcludingRewards * normalizationFactor),
+                guessedBorrowAssets: int256(guessedBorrow * normalizationFactor),
+                slope1: _slope1,
+                slope2: _slope2,
+                r0: _r0,
+                uOptimal: _uOptimal
+            });
+        }
+
+        {
+            uint256 stkAavePriceInWant = _estimatedStkAaveToWant(1 ether);
+
+            (uint256 emissionPerSecondAToken, , ) = _incentivesController.assets(address(_aToken));
+            (uint256 emissionPerSecondDebtToken, , ) = _incentivesController.assets(address(_debtToken));
+
+            parameters.rewardDeposit = int256(
+                (emissionPerSecondAToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase
+            );
+            parameters.rewardBorrow = int256(
+                (emissionPerSecondDebtToken * 86400 * 365 * stkAavePriceInWant * 10**9) / wantBase
+            );
+        }
 
         borrow = uint256(ComputeProfitability.computeProfitability(parameters)) / normalizationFactor;
     }
@@ -890,7 +927,11 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @param borrow Current total borrowed on Aave
     /// @param collatRatio Collateral ratio to target
     /// @param deposits Current deposit amount: this is what the function should return if the `collatRatio` is null
-    function _getDepositFromBorrow(uint256 borrow, uint256 collatRatio, uint256 deposits) internal pure returns (uint256) {
+    function _getDepositFromBorrow(
+        uint256 borrow,
+        uint256 collatRatio,
+        uint256 deposits
+    ) internal pure returns (uint256) {
         if (collatRatio > 0) return (borrow * _COLLATERAL_RATIO_PRECISION) / collatRatio;
         else return deposits;
     }
@@ -903,11 +944,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     }
 
     /// @notice Computes the position collateral ratio from deposits and borrows
-    function _getCollatRatio(uint256 deposits, uint256 borrows)
-        internal
-        pure
-        returns (uint256 currentCollatRatio)
-    {
+    function _getCollatRatio(uint256 deposits, uint256 borrows) internal pure returns (uint256 currentCollatRatio) {
         if (deposits > 0) {
             currentCollatRatio = (borrows * _COLLATERAL_RATIO_PRECISION) / deposits;
         }

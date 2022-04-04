@@ -37,4 +37,14 @@ contract ComputeProfitabilityTest {
     {
         return ComputeProfitability._revenuePrimes(borrow, parameters, onlyRevenue);
     }
+
+    /// @notice Computes the optimal borrow amount of the strategy depending on Aave protocol parameters
+    /// to maximize folding revenues
+    function computeProfitability(ComputeProfitability.SCalculateBorrow memory parameters)
+        external
+        pure
+        returns (int256)
+    {
+        return ComputeProfitability._newtonRaphson(parameters);
+    }
 }
