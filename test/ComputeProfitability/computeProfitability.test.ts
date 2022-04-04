@@ -30,10 +30,6 @@ describe('AaveFlashLoanStrategy - ComputeProfitability', () => {
   before(async () => {
     const [deployer] = await ethers.getSigners();
 
-    const computeProfitabilityLibrary = (await new ComputeProfitability__factory(
-      deployer,
-    ).deploy()) as ComputeProfitability;
-
     computeProfitabilityContract = await deploy('ComputeProfitabilityTest', [], {});
   });
 

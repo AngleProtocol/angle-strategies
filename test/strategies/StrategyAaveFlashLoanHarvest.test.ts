@@ -13,7 +13,6 @@ import {
   IStakedAave,
   IStakedAave__factory,
   AaveFlashloanStrategy__factory,
-  AaveFlashloanStrategyDAI__factory,
   PoolManager,
   IProtocolDataProvider,
   IAaveIncentivesController,

@@ -172,7 +172,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
     // ======================= Helper View Functions ===============================
 
-    /// @notice Estimates the toal assets controlled by the strategy
+    /// @notice Estimates the total assets controlled by the strategy
     /// @dev It sums the effective deposit amount to the rewards accumulated
     function estimatedTotalAssets() public view override returns (uint256) {
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
