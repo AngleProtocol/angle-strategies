@@ -844,6 +844,27 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         borrow = uint256(ComputeProfitability.computeProfitability(parameters)) / normalizationFactor;
     }
 
+    function estimatedAPR() public view returns(uint256) {
+        (,,uint256 totalVariableDebt, uint256 liquidityRate, uint256 variableBorrowRate,,,,,) = _protocolDataProvider.getReserveData(address(want));
+        (uint256 deposits, uint256 borrows) = getCurrentPosition();
+        uint256 yearlyRewardsATokenInUSDC;
+        uint256 yearlyRewardsDebtTokenInUSDC;
+        {
+            uint256 stkAavePriceInWant = _estimatedStkAaveToWant(1 ether);
+            (uint256 emissionPerSecondAToken,,) = (_aToken.getIncentivesController()).assets(address(_aToken));
+            (uint256 emissionPerSecondDebtToken,,) = (_debtToken.getIncentivesController()).assets(address(_debtToken));
+
+            uint256 yearlyEmissionsAToken = emissionPerSecondAToken * 60 * 60 * 24 * 365; // BASE: 18
+            uint256 yearlyEmissionsDebtToken = emissionPerSecondDebtToken * 60 * 60 * 24 * 365; // BASE: 18
+            yearlyRewardsATokenInUSDC = (deposits * yearlyEmissionsAToken * stkAavePriceInWant * 10**9 / _aToken.totalSupply()); // BASE 33
+            yearlyRewardsDebtTokenInUSDC = (borrows * yearlyEmissionsDebtToken * stkAavePriceInWant * 10**9 / totalVariableDebt); // BASE 33
+        }
+
+        uint256 _totalAssets = _balanceOfWant() + _balanceOfAToken() - _balanceOfDebtToken();
+        return (liquidityRate * deposits + yearlyRewardsATokenInUSDC + yearlyRewardsDebtTokenInUSDC - variableBorrowRate * borrows) / _totalAssets / 10**9; // BASE 18
+    }
+
+
     /// @notice Returns the `want` balance
     function _balanceOfWant() internal view returns (uint256) {
         return want.balanceOf(address(this));
