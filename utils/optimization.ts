@@ -192,7 +192,7 @@ export function getOptimalBorrow(parameters: SCalculateBorrow): BigNumber {
   let borrowInit: BigNumber = BigNumber.from(0);
   let revenueGrad: Revenues;
   let borrow = parameters.currentBorrow;
-  const tolerance = BigNumber.from(10 ** 3).div(BigNumber.from(1));
+  const tolerance = BigNumber.from(10 ** 2).div(BigNumber.from(5));
   // Tolerance is 1% in this method: indeed we're stopping: `_abs(borrowInit - borrow)/ borrowInit < 10**(-2)`
   while (count < 10 && (count == 0 || borrowInit.sub(borrow).abs().mul(tolerance).gt(borrowInit))) {
     revenueGrad = computeRevenuePrimes(borrow, parameters);
