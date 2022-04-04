@@ -21,10 +21,11 @@ import {
   ILendingPool__factory,
 } from '../../typechain';
 import { getOptimalBorrow, getConstrainedBorrow, SCalculateBorrow } from '../../utils/optimization';
-import { parseUnits } from 'ethers/lib/utils';
+import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { expectApproxDelta } from '../../utils/bignumber';
 
 const PRECISION = 3;
+const BASE_PARAMS = parseUnits('1', 9);
 const normalizeToBase27 = (n: BigNumber, base = 6) => n.mul(utils.parseUnits('1', 27)).div(utils.parseUnits('1', base));
 const toOriginalBase = (n: BigNumber, base = 6) => n.mul(utils.parseUnits('1', base)).div(utils.parseUnits('1', 27));
 
@@ -78,6 +79,15 @@ async function getAavePoolVariables(
   };
 }
 
+type StrategyParams = {
+  // Timestamp of last report made by this strategy
+  lastReport: BigNumber;
+  // Total amount the strategy is expected to have
+  totalStrategyDebt: BigNumber;
+  // The share of the total assets in the `PoolManager` contract that the `strategy` can access to.
+  debtRatio: BigNumber;
+};
+
 async function getParamsOptim(
   deployer: SignerWithAddress,
   protocolDataProvider: IProtocolDataProvider,
@@ -87,8 +97,9 @@ async function getParamsOptim(
   debtToken: ERC20,
   aavePriceChainlink: Contract,
   strategy: AaveFlashloanStrategy,
-  tokenAddress: string,
+  token: ERC20,
   tokenDecimals: number,
+  poolManager: PoolManager,
 ): Promise<SCalculateBorrow> {
   const {
     reserveFactor,
@@ -109,10 +120,18 @@ async function getParamsOptim(
     incentivesController,
     aToken,
     debtToken,
-    tokenAddress,
+    token.address,
   );
 
   const { deposits, borrows } = await strategy.getCurrentPosition();
+  const strategyParams: StrategyParams = await poolManager.strategies(strategy.address);
+  const wantBalance = await token.balanceOf(strategy.address);
+  const totalStrategyAssets = wantBalance.add(deposits).sub(borrows);
+  const totalStrategyDebt = strategyParams.totalStrategyDebt;
+  const gainOrLoss = totalStrategyAssets.sub(totalStrategyDebt);
+  const poolManagerTotalAssets = (await poolManager.getTotalAsset()).add(gainOrLoss);
+  const targetStrategyDebt = poolManagerTotalAssets.mul(strategyParams.debtRatio).div(BASE_PARAMS);
+
   const aavePrice = ((await aavePriceChainlink.latestRoundData()).answer as BigNumber).div(100); // BASE 6
   const aavePriceDiscounted = aavePrice.mul(await strategy.discountFactor()).div(10000);
 
@@ -121,7 +140,7 @@ async function getParamsOptim(
     totalStableDebt: normalizeToBase27(totalStableDebt, tokenDecimals),
     totalVariableDebt: normalizeToBase27(totalVariableDebt.sub(borrows), tokenDecimals),
     totalDeposits: normalizeToBase27(
-      availableLiquidity.add(totalStableDebt).add(totalVariableDebt.sub(borrows)),
+      availableLiquidity.add(totalStableDebt).add(totalVariableDebt).add(targetStrategyDebt).sub(deposits),
       tokenDecimals,
     ),
     stableBorrowRate: averageStableBorrowRate,
@@ -130,7 +149,7 @@ async function getParamsOptim(
       .mul(aavePriceDiscounted)
       .mul(utils.parseUnits('1', 9))
       .div(utils.parseUnits('1', 6)),
-    strategyAssets: normalizeToBase27(deposits.sub(borrows), tokenDecimals),
+    strategyAssets: normalizeToBase27(targetStrategyDebt, tokenDecimals),
     currentBorrow: normalizeToBase27(borrows, tokenDecimals),
     slope1,
     slope2,
@@ -262,7 +281,7 @@ describe('AaveFlashloan Strat', () => {
   });
 
   describe('Strategy - USDC', () => {
-    const _startAmountUSDC = utils.parseUnits((500_000_000).toString(), 6);
+    const _startAmountUSDC = utils.parseUnits((111_000_000).toString(), 6);
 
     beforeEach(async () => {
       await strategy.initialize(
@@ -275,7 +294,7 @@ describe('AaveFlashloan Strat', () => {
 
       maxCollatRatio = await strategy.maxCollatRatio();
 
-      await (await poolManager.addStrategy(strategy.address, utils.parseUnits('0.75', 9))).wait();
+      await (await poolManager.addStrategy(strategy.address, utils.parseUnits('0.95', 9))).wait();
 
       await impersonate('0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3', async acc => {
         await wantToken.connect(acc).transfer(user.address, _startAmountUSDC);
@@ -296,18 +315,10 @@ describe('AaveFlashloan Strat', () => {
         debtToken,
         aavePriceChainlink,
         strategy,
-        wantToken.address,
+        wantToken,
         wantDecimals,
+        poolManager,
       );
-
-      const debtRatio = (await poolManager.strategies(strategy.address)).debtRatio;
-
-      // need to update by hand at the beginning as the funds are not directly on the strategy
-      paramOptimBorrow.strategyAssets = normalizeToBase27(
-        _startAmountUSDC.mul(debtRatio).div(utils.parseUnits('1', 9)),
-        wantDecimals,
-      );
-      paramOptimBorrow.totalDeposits = paramOptimBorrow.totalDeposits.add(paramOptimBorrow.strategyAssets);
 
       const guessedBorrowed = toOriginalBase(getOptimalBorrow(paramOptimBorrow), wantDecimals);
 
@@ -328,18 +339,10 @@ describe('AaveFlashloan Strat', () => {
         debtToken,
         aavePriceChainlink,
         strategy,
-        wantToken.address,
+        wantToken,
         wantDecimals,
+        poolManager,
       );
-
-      const debtRatio = (await poolManager.strategies(strategy.address)).debtRatio;
-
-      // need to update by hand at the beginning as the funds are not directly on the strategy
-      paramOptimBorrow.strategyAssets = normalizeToBase27(
-        _startAmountUSDC.mul(debtRatio).div(utils.parseUnits('1', 9)),
-        wantDecimals,
-      );
-      paramOptimBorrow.totalDeposits = paramOptimBorrow.totalDeposits.add(paramOptimBorrow.strategyAssets);
 
       const guessedBorrowed = toOriginalBase(getOptimalBorrow(paramOptimBorrow), wantDecimals);
       const constrainedBorrow = getConstrainedBorrow(
@@ -352,6 +355,11 @@ describe('AaveFlashloan Strat', () => {
       await strategy.connect(keeper)['harvest(uint256)'](guessedBorrowed, { gasLimit: 3e6 });
 
       const { borrows } = await strategy.getCurrentPosition();
+
+      console.log(paramOptimBorrow);
+      console.log('borrows ', formatUnits(borrows, wantDecimals));
+      console.log('guessedBorrowed ', formatUnits(guessedBorrowed, wantDecimals));
+      console.log('constrainedBorrow ', formatUnits(constrainedBorrow, wantDecimals));
 
       expectApproxDelta(borrows, constrainedBorrow, parseUnits('1', PRECISION));
     });
@@ -369,8 +377,9 @@ describe('AaveFlashloan Strat', () => {
         debtToken,
         aavePriceChainlink,
         strategy,
-        wantToken.address,
+        wantToken,
         wantDecimals,
+        poolManager,
       );
 
       const guessedBorrowed1st = toOriginalBase(getOptimalBorrow(paramOptimBorrow1st), wantDecimals);
@@ -392,8 +401,9 @@ describe('AaveFlashloan Strat', () => {
         debtToken,
         aavePriceChainlink,
         strategy,
-        wantToken.address,
+        wantToken,
         wantDecimals,
+        poolManager,
       );
 
       const guessedBorrowed2nd = toOriginalBase(getOptimalBorrow(paramOptimBorrow2nd), wantDecimals);
@@ -406,6 +416,12 @@ describe('AaveFlashloan Strat', () => {
       await strategy.connect(keeper)['harvest(uint256)'](guessedBorrowed1st, { gasLimit: 3e6 });
 
       const { borrows } = await strategy.getCurrentPosition();
+
+      console.log(paramOptimBorrow1st);
+      console.log('borrows ', formatUnits(borrows, wantDecimals));
+      console.log('guessedBorrowed ', formatUnits(guessedBorrowed1st, wantDecimals));
+      console.log('guessedBorrowed 2nd ', formatUnits(guessedBorrowed2nd, wantDecimals));
+      console.log('constrainedBorrow2nd 2nd ', formatUnits(constrainedBorrow2nd, wantDecimals));
 
       expectApproxDelta(borrows, constrainedBorrow2nd, parseUnits('1', PRECISION));
     });
@@ -423,8 +439,9 @@ describe('AaveFlashloan Strat', () => {
         debtToken,
         aavePriceChainlink,
         strategy,
-        wantToken.address,
+        wantToken,
         wantDecimals,
+        poolManager,
       );
 
       const guessedBorrowed1st = toOriginalBase(getOptimalBorrow(paramOptimBorrow1st), wantDecimals);
@@ -451,8 +468,9 @@ describe('AaveFlashloan Strat', () => {
         debtToken,
         aavePriceChainlink,
         strategy,
-        wantToken.address,
+        wantToken,
         wantDecimals,
+        poolManager,
       );
 
       const guessedBorrowed2nd = toOriginalBase(getOptimalBorrow(paramOptimBorrow2nd), wantDecimals);
@@ -465,6 +483,11 @@ describe('AaveFlashloan Strat', () => {
       await strategy.connect(keeper)['harvest(uint256)'](guessedBorrowed1st, { gasLimit: 3e6 });
 
       const { borrows } = await strategy.getCurrentPosition();
+
+      console.log(paramOptimBorrow1st);
+      console.log('borrows ', formatUnits(borrows, wantDecimals));
+      console.log('guessedBorrowed ', formatUnits(guessedBorrowed1st, wantDecimals));
+      console.log('guessedBorrowed 2nd ', formatUnits(guessedBorrowed2nd, wantDecimals));
 
       expectApproxDelta(borrows, constrainedBorrow2nd, parseUnits('1', PRECISION));
     });
@@ -508,18 +531,10 @@ describe('AaveFlashloan Strat', () => {
         debtDAIToken,
         aavePriceChainlink,
         strategy,
-        dai.address,
+        dai,
         daiDecimals,
+        poolManagerDAI,
       );
-
-      const debtRatio = (await poolManagerDAI.strategies(strategy.address)).debtRatio;
-
-      // need to update by hand at the beginning as the funds are not directly on the strategy
-      paramOptimBorrow.strategyAssets = normalizeToBase27(
-        _startAmountDAI.mul(debtRatio).div(utils.parseUnits('1', 9)),
-        daiDecimals,
-      );
-      paramOptimBorrow.totalDeposits = paramOptimBorrow.totalDeposits.add(paramOptimBorrow.strategyAssets);
 
       const guessedBorrowed = toOriginalBase(getOptimalBorrow(paramOptimBorrow), daiDecimals);
       const constrainedBorrow = getConstrainedBorrow(
@@ -549,8 +564,9 @@ describe('AaveFlashloan Strat', () => {
         debtDAIToken,
         aavePriceChainlink,
         strategy,
-        dai.address,
+        dai,
         daiDecimals,
+        poolManagerDAI,
       );
 
       const guessedBorrowed1st = toOriginalBase(getOptimalBorrow(paramOptimBorrow1st), daiDecimals);
@@ -570,8 +586,9 @@ describe('AaveFlashloan Strat', () => {
         debtDAIToken,
         aavePriceChainlink,
         strategy,
-        dai.address,
+        dai,
         daiDecimals,
+        poolManagerDAI,
       );
 
       const guessedBorrowed2nd = toOriginalBase(getOptimalBorrow(paramOptimBorrow2nd), daiDecimals);
@@ -584,6 +601,11 @@ describe('AaveFlashloan Strat', () => {
       await strategy.connect(keeper)['harvest(uint256)'](guessedBorrowed1st, { gasLimit: 3e6 });
 
       const { borrows } = await strategy.getCurrentPosition();
+
+      console.log(paramOptimBorrow1st);
+      console.log('borrows ', formatUnits(borrows, daiDecimals));
+      console.log('guessedBorrowed ', formatUnits(guessedBorrowed1st, daiDecimals));
+      console.log('guessedBorrowed 2nd ', formatUnits(guessedBorrowed2nd, daiDecimals));
 
       expectApproxDelta(borrows, constrainedBorrow2nd, parseUnits('1', PRECISION));
     });
@@ -601,8 +623,9 @@ describe('AaveFlashloan Strat', () => {
         debtDAIToken,
         aavePriceChainlink,
         strategy,
-        dai.address,
+        dai,
         daiDecimals,
+        poolManagerDAI,
       );
 
       const guessedBorrowed1st = toOriginalBase(getOptimalBorrow(paramOptimBorrow1st), daiDecimals);
@@ -627,8 +650,9 @@ describe('AaveFlashloan Strat', () => {
         debtDAIToken,
         aavePriceChainlink,
         strategy,
-        dai.address,
+        dai,
         daiDecimals,
+        poolManagerDAI,
       );
 
       const guessedBorrowed2nd = toOriginalBase(getOptimalBorrow(paramOptimBorrow2nd), daiDecimals);
@@ -641,6 +665,11 @@ describe('AaveFlashloan Strat', () => {
       await strategy.connect(keeper)['harvest(uint256)'](guessedBorrowed1st, { gasLimit: 3e6 });
 
       const { borrows } = await strategy.getCurrentPosition();
+
+      console.log(paramOptimBorrow1st);
+      console.log('borrows ', formatUnits(borrows, daiDecimals));
+      console.log('guessedBorrowed ', formatUnits(guessedBorrowed1st, daiDecimals));
+      console.log('guessedBorrowed 2nd ', formatUnits(guessedBorrowed2nd, daiDecimals));
 
       expectApproxDelta(borrows, constrainedBorrow2nd, parseUnits('1', PRECISION));
     });

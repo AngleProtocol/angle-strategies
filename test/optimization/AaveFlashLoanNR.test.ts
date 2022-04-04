@@ -1,5 +1,5 @@
 import { BigNumber } from 'ethers';
-import { parseUnits } from 'ethers/lib/utils';
+import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import {
   computeInterestPrimes,
   getOptimalBorrow,
@@ -8,7 +8,7 @@ import {
 } from '../../utils/optimization';
 import { expectApproxDelta } from '../../utils/bignumber';
 
-const PRECISION = 5;
+const PRECISION = 4;
 let priceAave: number;
 let paramsBorrow: SCalculateBorrow;
 
