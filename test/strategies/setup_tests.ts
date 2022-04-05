@@ -6,8 +6,6 @@ import {
   ERC20,
   ERC20__factory,
   PoolManager__factory,
-  Strategy,
-  Strategy__factory,
   ILendingPool__factory,
   ILendingPool,
   FlashMintLib,
@@ -103,10 +101,10 @@ export async function setup(startBlocknumber?: number) {
   const flashMintLib = (await deploy('FlashMintLib')) as FlashMintLib;
   const computeProfitabilityLib = (await deploy('ComputeProfitability')) as ComputeProfitability;
 
-  const oldStrategy = (await ethers.getContractAt(
-    Strategy__factory.abi,
+  const oldStrategy = await ethers.getContractAt(
+    ['function harvest() external', 'function estimatedTotalAssets() external view returns(uint)'],
     '0x5fE0E497Ac676d8bA78598FC8016EBC1E6cE14a3',
-  )) as Strategy;
+  );
 
   // === INIT STRATEGY ===
 

@@ -855,8 +855,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
             uint256 yearlyEmissionsAToken = emissionPerSecondAToken * 60 * 60 * 24 * 365; // BASE: 18
             uint256 yearlyEmissionsDebtToken = emissionPerSecondDebtToken * 60 * 60 * 24 * 365; // BASE: 18
-            yearlyRewardsATokenInUSDC = (deposits * yearlyEmissionsAToken * stkAavePriceInWant * 10**9 / _aToken.totalSupply()); // BASE 33
-            yearlyRewardsDebtTokenInUSDC = (borrows * yearlyEmissionsDebtToken * stkAavePriceInWant * 10**9 / totalVariableDebt); // BASE 33
+            yearlyRewardsATokenInUSDC = (deposits * yearlyEmissionsAToken * stkAavePriceInWant * 10**9 / _aToken.totalSupply()); // BASE 27 + want
+            yearlyRewardsDebtTokenInUSDC = (borrows * yearlyEmissionsDebtToken * stkAavePriceInWant * 10**9 / totalVariableDebt); // BASE 27 + want
         }
 
         uint256 _totalAssets = _balanceOfWant() + _balanceOfAToken() - _balanceOfDebtToken();

@@ -709,7 +709,7 @@ describe('AaveFlashloan Strat', () => {
       expect(parseFloat(utils.formatUnits(await aToken.balanceOf(strategy.address), 6))).to.be.closeTo(9677419, 1000);
 
       expect(await wantToken.balanceOf(strategy.address)).to.equal(0);
-      expect(parseFloat(utils.formatEther(await strategy.estimatedAPR()))).to.be.closeTo(0.067, 0.001);
+      expect(parseFloat(utils.formatUnits(await strategy.estimatedAPR(), 9))).to.be.closeTo(0.067, 0.001);
     });
   });
 
