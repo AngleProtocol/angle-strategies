@@ -2,6 +2,8 @@ import { DeployFunction } from 'hardhat-deploy/types';
 import { CONTRACTS_ADDRESSES, Interfaces } from '@angleprotocol/sdk';
 import { Contract, utils } from 'ethers';
 import { AaveFlashloanStrategy__factory, AaveFlashloanStrategy, PoolManager } from '../typechain';
+import { impersonate } from '../test/test-utils';
+import { network } from 'hardhat';
 
 const func: DeployFunction = async ({ deployments, ethers }) => {
   const { deploy } = deployments;
@@ -59,6 +61,7 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
 
   const initializeData = AaveFlashloanStrategy__factory.createInterface().encodeFunctionData('initialize', [
     poolManager.address,
+    '0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27',
     governor,
     guardian,
     [keeper],
@@ -74,10 +77,19 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
   console.log('Implementation deployed at address: ', strategyImplementation.address);
   console.log('Strategy (proxy) successfully deployed at address: ', proxy.address);
 
+  const strategy = new Contract(proxy.address, ['function harvest() external'], deployer);
+  const oldStrategy = '0x5fE0E497Ac676d8bA78598FC8016EBC1E6cE14a3';
+  const _old = new Contract(oldStrategy, ['function harvest() external'], deployer);
+
   // CHANGE DEBT RATIOS
-  // const oldStrategy = '0x5fE0E497Ac676d8bA78598FC8016EBC1E6cE14a3';
-  // await poolManager.updateStrategyDebtRatio(oldStrategy, utils.parseUnits('0.85', 9));
-  // await poolManager.addStrategy(proxy.address, utils.parseUnits('0.1', 9));
+  await impersonate('0xdC4e6DFe07EFCa50a197DF15D9200883eF4Eb1c8', async _governor => {
+    await network.provider.send('hardhat_setBalance', [_governor.address, '0x8ac7230489e80000']);
+    await poolManager.connect(_governor).updateStrategyDebtRatio(oldStrategy, utils.parseUnits('0', 9));
+    await poolManager.connect(_governor).addStrategy(strategy.address, utils.parseUnits('0.95', 9));
+  });
+
+  await _old.harvest();
+  await strategy.harvest();
 };
 
 func.tags = ['aave_flashloan_strategy'];
