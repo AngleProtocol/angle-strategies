@@ -12,7 +12,6 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 import "./AaveLibraries.sol";
 import "./AaveInterfaces.sol";
-import "./UniswapInterfaces.sol";
 import "../BaseStrategyUpgradeable.sol";
 import "./ComputeProfitability.sol";
 
@@ -861,7 +860,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         }
 
         uint256 _totalAssets = _balanceOfWant() + _balanceOfAToken() - _balanceOfDebtToken();
-        return (liquidityRate * deposits + yearlyRewardsATokenInUSDC + yearlyRewardsDebtTokenInUSDC - variableBorrowRate * borrows) / _totalAssets / 10**9; // BASE 18
+        return (liquidityRate * deposits + yearlyRewardsATokenInUSDC + yearlyRewardsDebtTokenInUSDC - variableBorrowRate * borrows) / _totalAssets / 10**18; // BASE 9
     }
 
 

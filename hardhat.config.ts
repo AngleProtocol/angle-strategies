@@ -46,26 +46,6 @@ const config: HardhatUserConfig = {
         },
       },
     ],
-    overrides: {
-      'contracts/strategies/AaveFlashloanStrategy.sol': {
-        version: '0.8.7',
-        settings: {
-          optimizer: {
-            enabled: true,
-            runs: 10,
-          },
-        },
-      },
-      'contracts/stableMaster/StableMasterFront.sol': {
-        version: '0.8.7',
-        settings: {
-          optimizer: {
-            enabled: true,
-            runs: 830,
-          },
-        },
-      },
-    },
   },
   defaultNetwork: 'hardhat',
   networks: {
@@ -73,7 +53,6 @@ const config: HardhatUserConfig = {
       accounts: accounts('mainnet'),
       live: argv.fork || false,
       blockGasLimit: 125e5,
-      allowUnlimitedContractSize: true,
       initialBaseFeePerGas: 0,
       hardfork: 'london',
       forking: {

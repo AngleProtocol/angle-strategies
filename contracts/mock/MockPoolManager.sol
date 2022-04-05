@@ -7,10 +7,8 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import "../../interfaces/IPoolManager.sol";
-import "../../interfaces/IStrategy.sol";
-
-import "hardhat/console.sol";
+import "../interfaces/IPoolManager.sol";
+import "../interfaces/IStrategy.sol";
 
 contract MockPoolManager is AccessControl {
     using SafeERC20 for IERC20;

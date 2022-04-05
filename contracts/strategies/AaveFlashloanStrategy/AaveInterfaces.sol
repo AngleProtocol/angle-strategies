@@ -887,9 +887,9 @@ interface IReserveInterestRateStrategy {
         external
         view
         returns (
-            uint256,
-            uint256,
-            uint256
+            uint256 liquidityRate,
+            uint256 stableBorrowRate,
+            uint256 variableBorrowRate
         );
 
     function calculateInterestRates(
