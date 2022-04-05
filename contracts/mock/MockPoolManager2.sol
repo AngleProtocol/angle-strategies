@@ -2,7 +2,119 @@
 
 pragma solidity ^0.8.7;
 
-import "./PoolManagerInternal.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+
+import "../external/AccessControlUpgradeable.sol";
+
+import "../interfaces/IPoolManager.sol";
+import "../interfaces/IStrategy.sol";
+
+import "../utils/FunctionUtils.sol";
+
+struct SLPData {
+    // Last timestamp at which the `sanRate` has been updated for SLPs
+    uint256 lastBlockUpdated;
+    // Fees accumulated from previous blocks and to be distributed to SLPs
+    uint256 lockedInterests;
+    // Max interests used to update the `sanRate` in a single block
+    // Should be in collateral token base
+    uint256 maxInterestsDistributed;
+    // Amount of fees left aside for SLPs and that will be distributed
+    // when the protocol is collateralized back again
+    uint256 feesAside;
+    // Part of the fees normally going to SLPs that is left aside
+    // before the protocol is collateralized back again (depends on collateral ratio)
+    // Updated by keepers and scaled by `BASE_PARAMS`
+    uint64 slippageFee;
+    // Portion of the fees from users minting and burning
+    // that goes to SLPs (the rest goes to surplus)
+    uint64 feesForSLPs;
+    // Slippage factor that's applied to SLPs exiting (depends on collateral ratio)
+    // If `slippage = BASE_PARAMS`, SLPs can get nothing, if `slippage = 0` they get their full claim
+    // Updated by keepers and scaled by `BASE_PARAMS`
+    uint64 slippage;
+    // Portion of the interests from lending
+    // that goes to SLPs (the rest goes to surplus)
+    uint64 interestsForSLPs;
+}
+
+struct MintBurnData {
+    // Values of the thresholds to compute the minting fees
+    // depending on HA hedge (scaled by `BASE_PARAMS`)
+    uint64[] xFeeMint;
+    // Values of the fees at thresholds (scaled by `BASE_PARAMS`)
+    uint64[] yFeeMint;
+    // Values of the thresholds to compute the burning fees
+    // depending on HA hedge (scaled by `BASE_PARAMS`)
+    uint64[] xFeeBurn;
+    // Values of the fees at thresholds (scaled by `BASE_PARAMS`)
+    uint64[] yFeeBurn;
+    // Max proportion of collateral from users that can be covered by HAs
+    // It is exactly the same as the parameter of the same name in `PerpetualManager`, whenever one is updated
+    // the other changes accordingly
+    uint64 targetHAHedge;
+    // Minting fees correction set by the `FeeManager` contract: they are going to be multiplied
+    // to the value of the fees computed using the hedge curve
+    // Scaled by `BASE_PARAMS`
+    uint64 bonusMalusMint;
+    // Burning fees correction set by the `FeeManager` contract: they are going to be multiplied
+    // to the value of the fees computed using the hedge curve
+    // Scaled by `BASE_PARAMS`
+    uint64 bonusMalusBurn;
+    // Parameter used to limit the number of stablecoins that can be issued using the concerned collateral
+    uint256 capOnStableMinted;
+}
+
+interface IOracle {
+    function read() external view returns (uint256);
+
+    function readAll() external view returns (uint256 lowerRate, uint256 upperRate);
+
+    function readLower() external view returns (uint256);
+
+    function readUpper() external view returns (uint256);
+
+    function readQuote(uint256 baseAmount) external view returns (uint256);
+
+    function readQuoteLower(uint256 baseAmount) external view returns (uint256);
+
+    function inBase() external view returns (uint256);
+}
+
+interface ISanToken is IERC20 {
+    function mint(address account, uint256 amount) external;
+    function burnFrom(
+        uint256 amount,
+        address burner,
+        address sender
+    ) external;
+    function burnSelf(uint256 amount, address burner) external;
+    function stableMaster() external view returns (address);
+    function poolManager() external view returns (address);
+}
+
+interface IStableMaster {
+    function agToken() external view returns (address);
+    function signalLoss(uint256 loss) external;
+    function accumulateInterest(uint256 gain) external;
+    function collateralMap(IPoolManager poolManager)
+        external
+        view
+        returns (
+            IERC20 token,
+            ISanToken sanToken,
+            address perpetualManager,
+            IOracle oracle,
+            uint256 stocksUsers,
+            uint256 sanRate,
+            uint256 collatBase,
+            SLPData memory slpData,
+            MintBurnData memory feeData
+        );
+}
 
 /// @title PoolManager
 /// @author Angle Core Team
@@ -11,119 +123,101 @@ import "./PoolManagerInternal.sol";
 /// to get yield on its collateral
 /// @dev This file contains the functions that are callable by governance or by other contracts of the protocol
 /// @dev References to this contract are called `PoolManager`
-contract PoolManager is PoolManagerInternal, IPoolManagerFunctions {
+contract PoolManager is IPoolManagerFunctions, AccessControlUpgradeable, FunctionUtils {
     using SafeERC20 for IERC20;
 
-    // ============================ Constructor ====================================
+    /// @notice Interface for the underlying token accepted by this contract
+    IERC20 public token;
 
-    /// @notice Constructor of the `PoolManager` contract
-    /// @param _token Address of the collateral
-    /// @param _stableMaster Reference to the master stablecoin (`StableMaster`) interface
-    function initialize(address _token, IStableMaster _stableMaster)
-        external
-        initializer
-        zeroCheck(_token)
-        zeroCheck(address(_stableMaster))
-    {
-        __AccessControl_init();
+    /// @notice Reference to the `StableMaster` contract corresponding to this `PoolManager`
+    IStableMaster public stableMaster;
 
-        // Creating the correct references
-        stableMaster = _stableMaster;
-        token = IERC20(_token);
+    // ============================= Yield Farming =================================
 
-        // Access Control
-        // The roles in this contract can only be modified from the `StableMaster`
-        // For the moment `StableMaster` never uses the `GOVERNOR_ROLE`
-        _setupRole(STABLEMASTER_ROLE, address(stableMaster));
-        _setRoleAdmin(STABLEMASTER_ROLE, STABLEMASTER_ROLE);
-        _setRoleAdmin(GOVERNOR_ROLE, STABLEMASTER_ROLE);
-        _setRoleAdmin(GUARDIAN_ROLE, STABLEMASTER_ROLE);
-        // No admin is set for `STRATEGY_ROLE`, checks are made in the appropriate functions
-        // `addStrategy` and `revokeStrategy`
+    /// @notice Funds currently given to strategies
+    uint256 public totalDebt;
+
+    /// @notice Proportion of the funds managed dedicated to strategies
+    /// Has to be between 0 and `BASE_PARAMS`
+    uint256 public debtRatio;
+
+    /// The struct `StrategyParams` is defined in the interface `IPoolManager`
+    /// @notice Mapping between the address of a strategy contract and its corresponding details
+    mapping(address => StrategyParams) public strategies;
+
+    /// @notice List of the current strategies
+    address[] public strategyList;
+
+    /// @notice Address of the surplus distributor allowed to distribute rewards
+    address public surplusConverter;
+
+    /// @notice Share of the interests going to surplus and share going to SLPs
+    uint64 public interestsForSurplus;
+
+    /// @notice Interests accumulated by the protocol and to be distributed through ANGLE or veANGLE
+    /// token holders
+    uint256 public interestsAccumulated;
+
+    /// @notice Debt that must be paid by admins after a loss on a strategy
+    uint256 public adminDebt;
+
+    event FeesDistributed(uint256 amountDistributed);
+
+    event Recovered(address indexed token, address indexed to, uint256 amount);
+
+    event StrategyAdded(address indexed strategy, uint256 debtRatio);
+
+    event InterestsForSurplusUpdated(uint64 _interestsForSurplus);
+
+    event SurplusConverterUpdated(address indexed newSurplusConverter, address indexed oldSurplusConverter);
+
+    event StrategyRevoked(address indexed strategy);
+
+    event StrategyReported(
+        address indexed strategy,
+        uint256 gain,
+        uint256 loss,
+        uint256 debtPayment,
+        uint256 totalDebt
+    );
+
+    // Roles need to be defined here because there are some internal access control functions
+    // in the `PoolManagerInternal` file
+
+    /// @notice Role for `StableMaster` only
+    bytes32 public constant STABLEMASTER_ROLE = keccak256("STABLEMASTER_ROLE");
+    /// @notice Role for governors only
+    bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
+    /// @notice Role for guardians and governors
+    bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
+    /// @notice Role for `Strategy` only
+    bytes32 public constant STRATEGY_ROLE = keccak256("STRATEGY_ROLE");
+
+    // ============================= Yield Farming =================================
+
+    /// @notice Internal version of `updateStrategyDebtRatio`
+    /// @dev Updates the debt ratio for a strategy
+    function _updateStrategyDebtRatio(address strategy, uint256 _debtRatio) internal {
+        StrategyParams storage params = strategies[strategy];
+        require(params.lastReport != 0, "78");
+        debtRatio = debtRatio + _debtRatio - params.debtRatio;
+        require(debtRatio <= BASE_PARAMS, "76");
+        params.debtRatio = _debtRatio;
+        emit StrategyAdded(strategy, debtRatio);
     }
 
-    /*
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() initializer {}
-    */
+    // ============================ Utils ==========================================
 
-    // ========================= `StableMaster` Functions ==========================
-
-    /// @notice Changes the references to contracts from this protocol with which this collateral `PoolManager` interacts
-    /// and propagates some references to the `perpetualManager` and `feeManager` contracts
-    /// @param governorList List of the governor addresses of protocol
-    /// @param guardian Address of the guardian of the protocol (it can be revoked)
-    /// @param _perpetualManager New reference to the `PerpetualManager` contract containing all the logic for HAs
-    /// @param _feeManager Reference to the `FeeManager` contract that will serve for the `PerpetualManager` contract
-    /// @param _oracle Reference to the `Oracle` contract that will serve for the `PerpetualManager` contract
-    function deployCollateral(
-        address[] memory governorList,
-        address guardian,
-        IPerpetualManager _perpetualManager,
-        IFeeManager _feeManager,
-        IOracle _oracle
-    ) external override onlyRole(STABLEMASTER_ROLE) {
-        // These references need to be stored to be able to propagate changes and maintain
-        // the protocol's integrity when changes are posted from the `StableMaster`
-        perpetualManager = _perpetualManager;
-        feeManager = _feeManager;
-
-        // Access control
-        for (uint256 i = 0; i < governorList.length; i++) {
-            _grantRole(GOVERNOR_ROLE, governorList[i]);
-            _grantRole(GUARDIAN_ROLE, governorList[i]);
-        }
-        _grantRole(GUARDIAN_ROLE, guardian);
-
-        // Propagates the changes to the other involved contracts
-        perpetualManager.deployCollateral(governorList, guardian, _feeManager, _oracle);
-        _feeManager.deployCollateral(governorList, guardian, address(_perpetualManager));
-
-        // `StableMaster` and `PerpetualManager` need to have approval to directly transfer some of
-        // this contract's tokens
-        token.safeIncreaseAllowance(address(stableMaster), type(uint256).max);
-        token.safeIncreaseAllowance(address(_perpetualManager), type(uint256).max);
+    /// @notice Returns this `PoolManager`'s reserve of collateral (not including what has been lent)
+    function _getBalance() internal view returns (uint256) {
+        return token.balanceOf(address(this));
     }
 
-    /// @notice Adds a new governor address and echoes it to other contracts
-    /// @param _governor New governor address
-    function addGovernor(address _governor) external override onlyRole(STABLEMASTER_ROLE) {
-        // Access control for this contract
-        _grantRole(GOVERNOR_ROLE, _governor);
-        // Echoes the change to other contracts interacting with this collateral `PoolManager`
-        // Since the other contracts interacting with this `PoolManager` do not have governor roles,
-        // we just need it to set the new governor as guardian in these contracts
-        _addGuardian(_governor);
-    }
-
-    /// @notice Removes a governor address and echoes it to other contracts
-    /// @param _governor Governor address to remove
-    function removeGovernor(address _governor) external override onlyRole(STABLEMASTER_ROLE) {
-        // Access control for this contract
-        _revokeRole(GOVERNOR_ROLE, _governor);
-        _revokeGuardian(_governor);
-    }
-
-    /// @notice Changes the guardian address and echoes it to other contracts that interact with this `PoolManager`
-    /// @param _guardian New guardian address
-    /// @param guardian Old guardian address to revoke
-    function setGuardian(address _guardian, address guardian) external override onlyRole(STABLEMASTER_ROLE) {
-        _revokeGuardian(guardian);
-        _addGuardian(_guardian);
-    }
-
-    /// @notice Revokes the guardian address and echoes the change to other contracts that interact with this `PoolManager`
-    /// @param guardian Address of the guardian to revoke
-    function revokeGuardian(address guardian) external override onlyRole(STABLEMASTER_ROLE) {
-        _revokeGuardian(guardian);
-    }
-
-    /// @notice Allows to propagate the change of keeper for the collateral/stablecoin pair
-    /// @param _feeManager New `FeeManager` contract
-    function setFeeManager(IFeeManager _feeManager) external override onlyRole(STABLEMASTER_ROLE) {
-        // Changing the reference in the `PerpetualManager` contract where keepers are involved
-        feeManager = _feeManager;
-        perpetualManager.setFeeManager(_feeManager);
+    /// @notice Returns the amount of assets owned by this `PoolManager`
+    /// @dev This sums the current balance of the contract to what has been given to strategies
+    /// @dev This amount can be manipulated by flash loans
+    function _getTotalAsset() internal view returns (uint256) {
+        return _getBalance() + totalDebt;
     }
 
     // ============================= Yield Farming =================================
@@ -298,7 +392,7 @@ contract PoolManager is PoolManagerInternal, IPoolManagerFunctions {
                 uint256 collatBase,
                 ,
 
-            ) = IStableMaster(stableMaster).collateralMap(IPoolManager(address(this)));
+            ) = stableMaster.collateralMap(IPoolManager(address(this)));
 
             // Checking if there are enough reserves for the amount to withdraw
             require(
@@ -327,7 +421,7 @@ contract PoolManager is PoolManagerInternal, IPoolManagerFunctions {
     /// @dev This function is a `governor` function and not a `guardian` one because a `guardian` could add a strategy
     /// enabling the withdraw of the funds of the protocol
     /// @dev The `_debtRatio` should be expressed in `BASE_PARAMS`
-    function addStrategy(address strategy, uint256 _debtRatio) external onlyRole(GOVERNOR_ROLE) zeroCheck(strategy) {
+    function addStrategy(address strategy, uint256 _debtRatio) external onlyRole(GOVERNOR_ROLE) {
         StrategyParams storage params = strategies[strategy];
 
         require(params.lastReport == 0, "73");
@@ -352,28 +446,6 @@ contract PoolManager is PoolManagerInternal, IPoolManagerFunctions {
     }
 
     // =========================== Guardian Functions ==============================
-
-    /// @notice Sets a new surplus distributor to which surplus from the protocol will be pushed
-    /// @param newSurplusConverter Address to which the role needs to be granted
-    /// @dev It is as if the `GUARDIAN_ROLE` was admin of the `SURPLUS_DISTRIBUTOR_ROLE`
-    /// @dev The address can be the zero address in case the protocol revokes the `surplusConverter`
-    function setSurplusConverter(address newSurplusConverter) external onlyRole(GUARDIAN_ROLE) {
-        address oldSurplusConverter = surplusConverter;
-        surplusConverter = newSurplusConverter;
-        emit SurplusConverterUpdated(newSurplusConverter, oldSurplusConverter);
-    }
-
-    /// @notice Sets the share of the interests going directly to the surplus
-    /// @param _interestsForSurplus New value of the interests going directly to the surplus for buybacks
-    /// @dev Guardian should make sure the incentives for SLPs are still high enough for them to enter the protocol
-    function setInterestsForSurplus(uint64 _interestsForSurplus)
-        external
-        onlyRole(GUARDIAN_ROLE)
-        onlyCompatibleFees(_interestsForSurplus)
-    {
-        interestsForSurplus = _interestsForSurplus;
-        emit InterestsForSurplusUpdated(_interestsForSurplus);
-    }
 
     /// @notice Modifies the funds a strategy has access to
     /// @param strategy The address of the Strategy

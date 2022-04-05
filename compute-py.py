@@ -239,50 +239,29 @@ def newtonRaphson(bInit, tol):
 # bSol,count = gradientDescent(np.array([poolManagerFund]), tolGD)
 # print('Gradient descent method: We get in %s from the optimisation :%s', count,bSol)
 
-print("\nFIRST")
-poolManagerFund=91697278.0
-compBorrowStable=15381762.0
-compBorrowVariable=1799913660.0
-compDeposit=2484109565.0
-rFixed=0.1079448275
+poolManagerFund=91697277.0
+compBorrowStable=15390863.0
+compBorrowVariable=1800247931.0
+compDeposit=2579452937.0
+rFixed=0.107944827543602992468882415
 rewardDeposit=9053347.0
 rewardBorrow=18106694.0
 bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]) ,tolNR)
-print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
+print('Newton raphson method: We get in {} from the optimisation :{}'.format(countNR,bSolNR))
+targetCollat = bSolNR / (bSolNR + poolManagerFund)
+print(targetCollat)
 
-print("\nSECOND")
-poolManagerFund=91697277.0
-compBorrowStable=15381762.0
-compBorrowVariable=2214547352.0
-compDeposit=2918743258.0
-rFixed=0.1079448275
+poolManagerFund=91689430.0
+compBorrowStable=15399969.0
+compBorrowVariable=1800571533.0
+compDeposit=2489788261.0
+rFixed=0.107944827543602992468882415
 rewardDeposit=9053347.0
 rewardBorrow=18106694.0
 bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]) ,tolNR)
-print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
-
-print("\nTHIRD")
-poolManagerFund=91697277.0
-compBorrowStable=15381762.0
-compBorrowVariable=2021127370.0
-compDeposit=2800323275.0
-rFixed=0.1079448275
-rewardDeposit=9053347.0
-rewardBorrow=18106694.0
-bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]) ,tolNR)
-print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
-
-print("\nFOURTH")
-poolManagerFund=91697277.0
-compBorrowStable=15381763.0
-compBorrowVariable=2042578920.0
-compDeposit=2821774826.0
-rFixed=0.1079448275
-rewardDeposit=0.0
-rewardBorrow=0.0
-bSolNR,countNR = newtonRaphson(np.array([poolManagerFund]) ,tolNR)
-print('Newton raphson method: We get in {} from the optimisation :{}', countNR,bSolNR)
-
+print('Newton raphson method: We get in {} from the optimisation :{}'.format(countNR,bSolNR))
+targetCollat = bSolNR / (bSolNR + poolManagerFund)
+print(targetCollat)
 
 # fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
 

@@ -1,7 +1,7 @@
 import { DeployFunction } from 'hardhat-deploy/types';
 import { CONTRACTS_ADDRESSES, Interfaces } from '@angleprotocol/sdk';
 import { Contract, utils } from 'ethers';
-import { AaveFlashloanStrategy__factory, AaveFlashloanStrategy, PoolManager } from '../typechain';
+import { AaveFlashloanStrategy__factory, PoolManager } from '../typechain';
 import { impersonate } from '../test/test-utils';
 import { network } from 'hardhat';
 

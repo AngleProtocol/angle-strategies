@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "compile": "hardhat compile",
-    "coverage": "hardhat coverage",
+    "coverage": "FORK=true hardhat coverage",
     "etherscan:mainnet": "hardhat --network mainnet etherscan-verify",
     "etherscan:rinkeby": "hardhat --network rinkeby etherscan-verify",
     "doc": "hardhat docgen",

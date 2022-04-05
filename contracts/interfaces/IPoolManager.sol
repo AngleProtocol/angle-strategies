@@ -2,10 +2,6 @@
 
 pragma solidity ^0.8.7;
 
-import "./IFeeManager.sol";
-import "./IPerpetualManager.sol";
-import "./IOracle.sol";
-
 // Struct for the parameters associated to a strategy interacting with a collateral `PoolManager`
 // contract
 struct StrategyParams {
@@ -24,16 +20,6 @@ struct StrategyParams {
 /// a given stablecoin
 /// @dev Only the functions used in other contracts of the protocol are left here
 interface IPoolManagerFunctions {
-    // ============================ Constructor ====================================
-
-    function deployCollateral(
-        address[] memory governorList,
-        address guardian,
-        IPerpetualManager _perpetualManager,
-        IFeeManager feeManager,
-        IOracle oracle
-    ) external;
-
     // ============================ Yield Farming ==================================
 
     function creditAvailable() external view returns (uint256);
@@ -45,18 +31,6 @@ interface IPoolManagerFunctions {
         uint256 _loss,
         uint256 _debtPayment
     ) external;
-
-    // ============================ Governance =====================================
-
-    function addGovernor(address _governor) external;
-
-    function removeGovernor(address _governor) external;
-
-    function setGuardian(address _guardian, address guardian) external;
-
-    function revokeGuardian(address guardian) external;
-
-    function setFeeManager(IFeeManager _feeManager) external;
 
     // ============================= Getters =======================================
 
@@ -75,8 +49,6 @@ interface IPoolManager is IPoolManagerFunctions {
     function perpetualManager() external view returns (address);
 
     function token() external view returns (address);
-
-    function feeManager() external view returns (address);
 
     function totalDebt() external view returns (uint256);
 

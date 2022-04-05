@@ -7,8 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
 
-// import { IAToken, IVariableDebtToken } from "../strategies/AaveFlashloanStrategy/AaveInterfaces.sol";
-import "../interfaces/external/aave/IAave.sol";
+import "../strategies/AaveFlashloanStrategy/AaveInterfaces.sol";
 
 abstract contract MockAave is
     IAaveIncentivesController,
@@ -118,7 +117,7 @@ abstract contract MockAave is
         stakersCooldownsValue = _stakersCooldownsValue;
     }
 
-    function getPriceOracle() external view returns (address) {
+    function getPriceOracle() external override view returns (address) {
         return address(this);
     }
 
@@ -182,7 +181,7 @@ contract MockAToken is ERC20 {
     }
 }
 
-contract MockLendingPool is ILendingPool {
+abstract contract MockLendingPool is ILendingPool {
     using SafeERC20 for IERC20;
 
     uint256 public constant BASE = 10**27;
@@ -203,7 +202,7 @@ contract MockLendingPool is ILendingPool {
         reserveNormalizedIncomes[underlying] = BASE;
     }
 
-    function getReserveNormalizedIncome(address asset) external view returns (uint256) {
+    function getReserveNormalizedIncome(address asset) external override view returns (uint256) {
         return reserveNormalizedIncomes[asset] / BASE;
     }
 
@@ -265,14 +264,14 @@ contract MockLendingPool is ILendingPool {
         uint256 interestRateMode,
         uint16 referralCode,
         address onBehalfOf
-    ) external {}
+    ) external override {}
 
     function repay(
         address,
         uint256,
         uint256,
         address
-    ) external returns (uint256) {
+    ) external override returns (uint256) {
         compilerMuter = 0;
         return 0;
     }

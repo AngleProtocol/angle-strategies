@@ -59,7 +59,7 @@ describe('AaveFlashloan Strat', () => {
         {
           forking: {
             jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
-            blockNumber: 14456160,
+            blockNumber: 14519530,
           },
         },
       ],
@@ -353,7 +353,7 @@ describe('AaveFlashloan Strat', () => {
       const debtRatio = (await poolManager.strategies(strategy.address)).debtRatio;
 
       expect(debtRatio).to.equal(utils.parseUnits('0.75', 9));
-      expect(totalAssets).to.equal(_startAmountUSDC.mul(debtRatio).div(utils.parseUnits('1', 9)));
+      expect(totalAssets).to.be.closeTo(_startAmountUSDC.mul(debtRatio).div(utils.parseUnits('1', 9)), 10);
       expect(await strategy.estimatedTotalAssets()).to.equal(totalAssets);
     });
 
@@ -362,13 +362,12 @@ describe('AaveFlashloan Strat', () => {
       await strategy.connect(keeper)['harvest(uint256)'](_guessedBorrowed, { gasLimit: 3e6 });
 
       const { deposits, borrows } = await strategy.getCurrentPosition();
-      console.log(utils.formatUnits(borrows, 6));
       expect(borrows).to.equal(_guessedBorrowed);
       const totalAssets = (await wantToken.balanceOf(strategy.address)).add(deposits).sub(borrows);
       const debtRatio = (await poolManager.strategies(strategy.address)).debtRatio;
 
       expect(debtRatio).to.equal(utils.parseUnits('0.75', 9));
-      expect(totalAssets).to.equal(_startAmountUSDC.mul(debtRatio).div(utils.parseUnits('1', 9)));
+      expect(totalAssets).to.be.closeTo(_startAmountUSDC.mul(debtRatio).div(utils.parseUnits('1', 9)), 10);
       expect(await strategy.estimatedTotalAssets()).to.equal(totalAssets);
     });
 
@@ -405,7 +404,7 @@ describe('AaveFlashloan Strat', () => {
       await network.provider.send('evm_mine');
       await strategy['harvest()']({ gasLimit: 3e6 });
 
-      expect(parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)))).to.be.closeTo(2.15, 0.1);
+      expect(parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)))).to.be.closeTo(1.8, 0.1);
 
       // const payloadRevert = (
       //   await axios.get(
@@ -446,9 +445,9 @@ describe('AaveFlashloan Strat', () => {
       const stkAaveAfter = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));
 
       expect(usdcBefore).to.equal(0);
-      expect(stkAaveBefore).to.be.closeTo(2.15, 0.1);
+      expect(stkAaveBefore).to.be.closeTo(1.8, 0.1);
       expect(stkAaveAfter).to.be.closeTo(0, 0.01);
-      expect(usdcAfter).to.be.closeTo(250, 10);
+      expect(usdcAfter).to.be.closeTo(210, 5);
     });
 
     it('_prepareReturn', async () => {
@@ -634,7 +633,7 @@ describe('AaveFlashloan Strat', () => {
         await debtToken.balanceOf(strategy.address),
         5,
       );
-      expect(0).to.be.closeTo(await wantToken.balanceOf(strategy.address), 10);
+      expect(96).to.be.closeTo(await wantToken.balanceOf(strategy.address), 5);
     });
 
     it('emergencyExit', async () => {
@@ -703,6 +702,14 @@ describe('AaveFlashloan Strat', () => {
       const aaveBalanceAfterRedeem = parseFloat(utils.formatUnits(await aave.balanceOf(strategy.address), 18));
 
       expect(stkAaveBalanceBefore).to.be.closeTo(aaveBalanceAfterRedeem, 0.1);
+    });
+
+    it('estimatedApr', async () => {
+      await strategy['harvest()']({ gasLimit: 3e6 });
+      expect(parseFloat(utils.formatUnits(await aToken.balanceOf(strategy.address), 6))).to.be.closeTo(9677419, 1000);
+
+      expect(await wantToken.balanceOf(strategy.address)).to.equal(0);
+      expect(parseFloat(utils.formatUnits(await strategy.estimatedAPR(), 9))).to.be.closeTo(0.067, 0.001);
     });
   });
 

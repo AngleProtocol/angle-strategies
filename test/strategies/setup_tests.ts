@@ -1,13 +1,11 @@
 import { ethers, network } from 'hardhat';
 import { utils, constants, Contract, BigNumber } from 'ethers';
-import { deploy } from '../test/test-utils';
+import { deploy } from '../test-utils';
 import {
   AaveFlashloanStrategy,
   ERC20,
   ERC20__factory,
   PoolManager__factory,
-  Strategy,
-  Strategy__factory,
   ILendingPool__factory,
   ILendingPool,
   FlashMintLib,
@@ -18,7 +16,7 @@ import {
   IAaveIncentivesController,
   IProtocolDataProvider__factory,
   IProtocolDataProvider,
-} from '../typechain';
+} from '../../typechain';
 
 export const logBN = (amount: BigNumber, { base = 6, pad = 20, sign = false } = {}) => {
   const num = parseFloat(utils.formatUnits(amount, base));
@@ -103,10 +101,10 @@ export async function setup(startBlocknumber?: number) {
   const flashMintLib = (await deploy('FlashMintLib')) as FlashMintLib;
   const computeProfitabilityLib = (await deploy('ComputeProfitability')) as ComputeProfitability;
 
-  const oldStrategy = (await ethers.getContractAt(
-    Strategy__factory.abi,
+  const oldStrategy = await ethers.getContractAt(
+    ['function harvest() external', 'function estimatedTotalAssets() external view returns(uint)'],
     '0x5fE0E497Ac676d8bA78598FC8016EBC1E6cE14a3',
-  )) as Strategy;
+  );
 
   // === INIT STRATEGY ===
 
@@ -203,11 +201,10 @@ export async function setup(startBlocknumber?: number) {
     const crBefore = await strategy.targetCollatRatio();
     const ratesBefore = await protocolDataProvider.getReserveData(wantToken.address);
 
-    console.log('harvesting...');
+    // console.log('harvesting...');
 
-    // console.log('estimate', await strategy.estimateGas.harvest());
     const receipt = await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
-    console.log('gasUsed', receipt.gasUsed.toString());
+    // console.log('gasUsed', receipt.gasUsed.toString());
 
     const aTokenAfter = await aToken.balanceOf(strategy.address);
     const debtTokenAfter = await debtToken.balanceOf(strategy.address);
@@ -260,29 +257,29 @@ export async function setup(startBlocknumber?: number) {
     const strategyDebt = (await poolManager.strategies(strategy.address)).totalStrategyDebt;
     const finalRate = totalUSD.div(strategyDebt); // BASE 21
 
-    console.log(`
-    ==========================
-    deposits: ${logBN(aTokenBefore)} -> ${logBN(aTokenAfter)} (${logBN(aTokenAfter.sub(aTokenBefore), { sign: true })})
-    rate: ${utils.formatUnits(ratesBefore.liquidityRate, 25).slice(0, 6)}% -> ${utils
-      .formatUnits(ratesAfter.liquidityRate, 25)
-      .slice(0, 6)}%
+    // console.log(`
+    // ==========================
+    // deposits: ${logBN(aTokenBefore)} -> ${logBN(aTokenAfter)} (${logBN(aTokenAfter.sub(aTokenBefore), { sign: true })})
+    // rate: ${utils.formatUnits(ratesBefore.liquidityRate, 25).slice(0, 6)}% -> ${utils
+    //   .formatUnits(ratesAfter.liquidityRate, 25)
+    //   .slice(0, 6)}%
 
-    borrows: ${logBN(debtTokenBefore)} -> ${logBN(debtTokenAfter)} (${logBN(debtTokenAfter.sub(debtTokenBefore), {
-      sign: true,
-    })})
-    rate: ${utils.formatUnits(ratesBefore.variableBorrowRate, 25).slice(0, 6)}% -> ${utils
-      .formatUnits(ratesAfter.variableBorrowRate, 25)
-      .slice(0, 6)}%
+    // borrows: ${logBN(debtTokenBefore)} -> ${logBN(debtTokenAfter)} (${logBN(debtTokenAfter.sub(debtTokenBefore), {
+    //   sign: true,
+    // })})
+    // rate: ${utils.formatUnits(ratesBefore.variableBorrowRate, 25).slice(0, 6)}% -> ${utils
+    //   .formatUnits(ratesAfter.variableBorrowRate, 25)
+    //   .slice(0, 6)}%
 
-    cr: ${logBN(crBefore, { base: 18 })} -> ${logBN(crAfter, { base: 18 })}
+    // cr: ${logBN(crBefore, { base: 18 })} -> ${logBN(crAfter, { base: 18 })}
 
-    finalRate: ${utils.formatUnits(finalRate, 19).slice(0, 6)}% (aRewards: ${utils
-      .formatUnits(aEmissions.div(aTokenAfter), 19)
-      .slice(0, 6)}% / debtRewards: ${
-      debtTokenAfter.eq(0) ? '0' : utils.formatUnits(debtEmissions.div(debtTokenAfter), 19).slice(0, 6)
-    }%)
-    ==========================
-    `);
+    // finalRate: ${utils.formatUnits(finalRate, 19).slice(0, 6)}% (aRewards: ${utils
+    //   .formatUnits(aEmissions.div(aTokenAfter), 19)
+    //   .slice(0, 6)}% / debtRewards: ${
+    //   debtTokenAfter.eq(0) ? '0' : utils.formatUnits(debtEmissions.div(debtTokenAfter), 19).slice(0, 6)
+    // }%)
+    // ==========================
+    // `);
   };
 
   return {
