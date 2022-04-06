@@ -211,8 +211,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             uint256 _debtPayment
         )
     {
-        _claimRewards();
-
         // account for profit / losses
         uint256 totalDebt = poolManager.strategies(address(this)).totalStrategyDebt;
 
@@ -590,9 +588,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         uint256 deposits,
         uint256 borrows
     ) internal returns (uint256) {
-        if (amount == 0) {
-            return 0;
-        }
         if (deposits == 0 && borrows == 0) (deposits, borrows) = getCurrentPosition();
 
         uint256 wantBalance = _balanceOfWant();
@@ -724,7 +719,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @dev The third variable is the `interestRateMode`
     /// @dev set at 2 which means we will get a variable interest rate on our borrowed tokens
     function _borrowWant(uint256 amount) internal returns (uint256) {
-        if (amount == 0) return 0;
         _lendingPool.borrow(address(want), amount, 2, _referral, address(this));
         return amount;
     }
@@ -843,26 +837,48 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         borrow = uint256(ComputeProfitability.computeProfitability(parameters)) / normalizationFactor;
     }
 
-    function estimatedAPR() public view returns(uint256) {
-        (,,uint256 totalVariableDebt, uint256 liquidityRate, uint256 variableBorrowRate,,,,,) = _protocolDataProvider.getReserveData(address(want));
+    function estimatedAPR() public view returns (uint256) {
+        (
+            ,
+            ,
+            uint256 totalVariableDebt,
+            uint256 liquidityRate,
+            uint256 variableBorrowRate,
+            ,
+            ,
+            ,
+            ,
+
+        ) = _protocolDataProvider.getReserveData(address(want));
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
         uint256 yearlyRewardsATokenInUSDC;
         uint256 yearlyRewardsDebtTokenInUSDC;
         {
             uint256 stkAavePriceInWant = _estimatedStkAaveToWant(1 ether);
-            (uint256 emissionPerSecondAToken,,) = (_aToken.getIncentivesController()).assets(address(_aToken));
-            (uint256 emissionPerSecondDebtToken,,) = (_debtToken.getIncentivesController()).assets(address(_debtToken));
+            (uint256 emissionPerSecondAToken, , ) = (_aToken.getIncentivesController()).assets(address(_aToken));
+            (uint256 emissionPerSecondDebtToken, , ) = (_debtToken.getIncentivesController()).assets(
+                address(_debtToken)
+            );
 
             uint256 yearlyEmissionsAToken = emissionPerSecondAToken * 60 * 60 * 24 * 365; // BASE: 18
             uint256 yearlyEmissionsDebtToken = emissionPerSecondDebtToken * 60 * 60 * 24 * 365; // BASE: 18
-            yearlyRewardsATokenInUSDC = (deposits * yearlyEmissionsAToken * stkAavePriceInWant * 10**9 / _aToken.totalSupply()); // BASE 27 + want
-            yearlyRewardsDebtTokenInUSDC = (borrows * yearlyEmissionsDebtToken * stkAavePriceInWant * 10**9 / totalVariableDebt); // BASE 27 + want
+            yearlyRewardsATokenInUSDC = ((deposits * yearlyEmissionsAToken * stkAavePriceInWant * 10**9) /
+                _aToken.totalSupply()); // BASE 27 + want
+            yearlyRewardsDebtTokenInUSDC = ((borrows * yearlyEmissionsDebtToken * stkAavePriceInWant * 10**9) /
+                totalVariableDebt); // BASE 27 + want
         }
 
         uint256 _totalAssets = _balanceOfWant() + _balanceOfAToken() - _balanceOfDebtToken();
-        return (liquidityRate * deposits + yearlyRewardsATokenInUSDC + yearlyRewardsDebtTokenInUSDC - variableBorrowRate * borrows) / _totalAssets / 10**18; // BASE 9
+        return
+            (liquidityRate *
+                deposits +
+                yearlyRewardsATokenInUSDC +
+                yearlyRewardsDebtTokenInUSDC -
+                variableBorrowRate *
+                borrows) /
+            _totalAssets /
+            10**18; // BASE 9
     }
-
 
     /// @notice Returns the `want` balance
     function _balanceOfWant() internal view returns (uint256) {

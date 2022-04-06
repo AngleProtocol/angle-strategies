@@ -5,9 +5,9 @@ pragma solidity ^0.8.7;
 import "./BaseStrategyEvents.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-/// @title BaseStrategy
+/// @title BaseStrategyUpgradeable
 /// @author Forked from https://github.com/yearn/yearn-managers/blob/master/contracts/BaseStrategy.sol
-/// @notice `BaseStrategy` implements all of the required functionalities to interoperate
+/// @notice `BaseStrategyUpgradeable` implements all of the required functionalities to interoperate
 /// with the `PoolManager` Contract.
 /// @dev This contract should be inherited and the abstract methods implemented to adapt the `Strategy`
 /// to the particular needs it has to create a return.
@@ -49,7 +49,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}
 
-    /// @notice Constructor of the `BaseStrategy`
+    /// @notice Constructor of the `BaseStrategyUpgradeable`
     /// @param _poolManager Address of the `PoolManager` lending collateral to this strategy
     /// @param governor Governor address of the protocol
     /// @param guardian Address of the guardian
