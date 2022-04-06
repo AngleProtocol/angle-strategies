@@ -467,12 +467,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @param payload Bytes needed for 1Inch API. Tokens swapped should be: stkAave -> `want` or Aave -> `want`
     function sellRewards(
         uint256 minAmountOut,
-        bytes memory payload,
-        bool claim
+        bytes memory payload
     ) external onlyRole(KEEPER_ROLE) {
-        if (claim) {
-            _claimRewards();
-        }
         //solhint-disable-next-line
         (bool success, bytes memory result) = _oneInch.call(payload);
         if (!success) _revertBytes(result);
