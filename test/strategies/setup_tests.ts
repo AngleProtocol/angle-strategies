@@ -10,7 +10,6 @@ import {
   ILendingPool,
   FlashMintLib,
   AaveFlashloanStrategy__factory,
-  ComputeProfitability,
   PoolManager,
   IAaveIncentivesController__factory,
   IAaveIncentivesController,
@@ -99,7 +98,6 @@ export async function setup(startBlocknumber?: number) {
   )) as IAaveIncentivesController;
 
   const flashMintLib = (await deploy('FlashMintLib')) as FlashMintLib;
-  const computeProfitabilityLib = (await deploy('ComputeProfitability')) as ComputeProfitability;
 
   const oldStrategy = await ethers.getContractAt(
     ['function harvest() external', 'function estimatedTotalAssets() external view returns(uint)'],
@@ -109,10 +107,7 @@ export async function setup(startBlocknumber?: number) {
   // === INIT STRATEGY ===
 
   const strategyImplementation = (await deploy('AaveFlashloanStrategy', [], {
-    libraries: {
-      FlashMintLib: flashMintLib.address,
-      ComputeProfitability: computeProfitabilityLib.address,
-    },
+    libraries: { FlashMintLib: flashMintLib.address },
   })) as AaveFlashloanStrategy;
   const proxy = await deploy('TransparentUpgradeableProxy', [strategyImplementation.address, proxyAdmin.address, '0x']);
   const strategy = new Contract(proxy.address, AaveFlashloanStrategy__factory.abi, deployer) as AaveFlashloanStrategy;

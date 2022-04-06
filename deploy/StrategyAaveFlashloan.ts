@@ -20,10 +20,6 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     contract: 'FlashMintLib',
     from: deployer.address,
   });
-  const computeProfitabilityLib = await deploy('ComputeProfitability', {
-    contract: 'ComputeProfitability',
-    from: deployer.address,
-  });
 
   const poolManager = new Contract(
     CONTRACTS_ADDRESSES[1].agEUR.collaterals!.USDC.PoolManager as string,
@@ -53,10 +49,7 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     contract: 'AaveFlashloanStrategy',
     from: deployer.address,
     args: [],
-    libraries: {
-      FlashMintLib: flashMintLib.address,
-      ComputeProfitability: computeProfitabilityLib.address,
-    },
+    libraries: { FlashMintLib: flashMintLib.address },
   });
 
   const initializeData = AaveFlashloanStrategy__factory.createInterface().encodeFunctionData('initialize', [

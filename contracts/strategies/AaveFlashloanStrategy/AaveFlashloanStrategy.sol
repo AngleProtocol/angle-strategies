@@ -526,6 +526,10 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         }
     }
 
+    function claimRewards() external onlyRole(KEEPER_ROLE) {
+        _claimRewards();
+    }
+
     /// @notice Reduce exposure by withdrawing funds and repaying debt
     /// @param amountToFree Amount of `want` to withdraw/repay
     /// @return balance Current balance of `want`

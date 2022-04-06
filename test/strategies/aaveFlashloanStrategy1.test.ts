@@ -11,7 +11,6 @@ import {
   ERC20,
   ERC20__factory,
   IAaveIncentivesController__factory,
-  ComputeProfitability,
   IStakedAave,
   IStakedAave__factory,
   AaveFlashloanStrategy__factory,
@@ -94,13 +93,9 @@ describe('AaveFlashloan Strat', () => {
     )) as ILendingPool;
 
     flashMintLib = (await deploy('FlashMintLib')) as FlashMintLib;
-    computeProfitabilityLib = (await deploy('ComputeProfitability')) as ComputeProfitability;
 
     const strategyImplementation = (await deploy('AaveFlashloanStrategy', [], {
-      libraries: {
-        FlashMintLib: flashMintLib.address,
-        ComputeProfitability: computeProfitabilityLib.address,
-      },
+      libraries: { FlashMintLib: flashMintLib.address },
     })) as AaveFlashloanStrategy;
 
     const proxy = await deploy('TransparentUpgradeableProxy', [
