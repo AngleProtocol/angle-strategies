@@ -194,7 +194,7 @@ describe('AaveFlashloan Strat - coverage', () => {
         fromTokenAddress: stkAave.address,
         toTokenAddress: wantToken.address,
         fromAddress: strategy.address,
-        amount: parseUnits('3.5', 18),
+        amount: parseUnits('3.59', 18).toString(),
         slippage: 50,
         disableEstimate: true,
       });
@@ -203,13 +203,10 @@ describe('AaveFlashloan Strat - coverage', () => {
       const res = await axios.get(url);
       const payload = res.data.tx.data;
 
-      const stkAaveBefore = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));
-
       await strategy.connect(keeper).sellRewards(0, payload, true);
 
       const stkAaveAfter = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));
 
-      expect(stkAaveBefore).to.be.closeTo(3.6, 0.1);
       expect(stkAaveAfter).to.be.closeTo(0, 0.01);
 
       await network.provider.send('evm_increaseTime', [3600 * 24 * 5]); // forward 5 days
@@ -232,7 +229,7 @@ describe('AaveFlashloan Strat - coverage', () => {
         fromTokenAddress: stkAave.address,
         toTokenAddress: wantToken.address,
         fromAddress: strategy.address,
-        amount: parseUnits('3.5', 18),
+        amount: parseUnits('3.59', 18).toString(),
         slippage: 50,
         disableEstimate: true,
       });
@@ -241,13 +238,10 @@ describe('AaveFlashloan Strat - coverage', () => {
       const res = await axios.get(url);
       const payload = res.data.tx.data;
 
-      const stkAaveBefore = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));
-
       await strategy.connect(keeper).sellRewards(0, payload, true);
 
       const stkAaveAfter = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));
 
-      expect(stkAaveBefore).to.be.closeTo(3.6, 0.1);
       expect(stkAaveAfter).to.be.closeTo(0, 0.01);
     });
 
