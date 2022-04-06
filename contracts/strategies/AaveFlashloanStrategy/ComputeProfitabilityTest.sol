@@ -45,6 +45,6 @@ contract ComputeProfitabilityTest {
         pure
         returns (int256)
     {
-        return ComputeProfitability._newtonRaphson(parameters);
+        return ComputeProfitability.computeProfitability(parameters);
     }
 }

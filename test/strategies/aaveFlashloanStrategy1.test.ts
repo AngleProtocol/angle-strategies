@@ -266,6 +266,12 @@ describe('AaveFlashloan Strat', () => {
       await expect((await strategy.boolParams()).cooldownStkAave).to.be.false;
     });
 
+    it('setMinsAndMaxs - revert', async () => {
+      await expect(strategy.connect(user).setMinsAndMaxs(1000, utils.parseUnits('0.7', 18), 20)).to.be.revertedWith(
+        '8',
+      );
+    });
+
     it('setMinsAndMaxs', async () => {
       expect(strategy.connect(user).setMinsAndMaxs(1000, utils.parseUnits('0.7', 18), 20)).to.be.revertedWith(
         `AccessControl: account ${user.address.toLowerCase()} is missing role`,
