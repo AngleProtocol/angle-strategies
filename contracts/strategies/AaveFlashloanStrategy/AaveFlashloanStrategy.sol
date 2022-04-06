@@ -211,8 +211,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             uint256 _debtPayment
         )
     {
-        _claimRewards();
-
         // account for profit / losses
         uint256 totalDebt = poolManager.strategies(address(this)).totalStrategyDebt;
 

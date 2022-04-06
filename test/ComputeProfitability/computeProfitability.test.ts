@@ -231,8 +231,6 @@ describe('AaveFlashLoanStrategy - ComputeProfitability', () => {
       const ratesPrimes = await computeProfitabilityContract.calculateInterestPrimes(toBorrow, paramsBorrow);
       const revenuePrimes = await computeProfitabilityContract.revenuePrimes(toBorrow, paramsBorrow, false);
 
-      console.log('revenue prime ', formatUnits(revenuePrimes[1], 0));
-
       expectApproxDelta(ratesPrimes[0], parseUnits('2.646913248201241', 25), parseUnits('1', PRECISION));
       expectApproxDelta(ratesPrimes[1], parseUnits('1.562974975547457', 16), parseUnits('1', PRECISION));
       expectApproxDelta(ratesPrimes[2], parseUnits('-20763286', 0), parseUnits('1', PRECISION));
@@ -258,8 +256,6 @@ describe('AaveFlashLoanStrategy - ComputeProfitability', () => {
     it('1st case - optimal borrow', async () => {
       const optimalBorrow = await computeProfitabilityContract.computeProfitability(paramsBorrow);
       const optimalRevenue = await computeProfitabilityContract.revenuePrimes(optimalBorrow, paramsBorrow, false);
-
-      console.log('optimal borrow solidity ', formatUnits(optimalBorrow, 27));
 
       expectApproxDelta(optimalBorrow, parseUnits('1.46039745', 8 + 27), parseUnits('1', PRECISION));
       expectApproxDelta(optimalRevenue[0], parseUnits('3407109.90120835', 27), parseUnits('1', PRECISION));

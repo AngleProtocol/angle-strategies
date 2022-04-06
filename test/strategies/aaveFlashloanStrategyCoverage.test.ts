@@ -194,7 +194,7 @@ describe('AaveFlashloan Strat - coverage', () => {
         fromTokenAddress: stkAave.address,
         toTokenAddress: wantToken.address,
         fromAddress: strategy.address,
-        amount: (await stkAave.balanceOf(strategy.address)).toString(),
+        amount: parseUnits('3.5', 18),
         slippage: 50,
         disableEstimate: true,
       });
@@ -205,7 +205,7 @@ describe('AaveFlashloan Strat - coverage', () => {
 
       const stkAaveBefore = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));
 
-      await strategy.connect(keeper).sellRewards(0, payload, false);
+      await strategy.connect(keeper).sellRewards(0, payload, true);
 
       const stkAaveAfter = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));
 
@@ -215,7 +215,6 @@ describe('AaveFlashloan Strat - coverage', () => {
       await network.provider.send('evm_increaseTime', [3600 * 24 * 5]); // forward 5 days
       await network.provider.send('evm_mine');
 
-      console.log('stkaave balance ', await stkAave.balanceOf(strategy.address));
       // cooldown triggered
       await strategy.connect(keeper)['harvest()']({ gasLimit: 3e6 });
     });
@@ -233,7 +232,7 @@ describe('AaveFlashloan Strat - coverage', () => {
         fromTokenAddress: stkAave.address,
         toTokenAddress: wantToken.address,
         fromAddress: strategy.address,
-        amount: (await stkAave.balanceOf(strategy.address)).toString(),
+        amount: parseUnits('3.5', 18),
         slippage: 50,
         disableEstimate: true,
       });
@@ -244,7 +243,7 @@ describe('AaveFlashloan Strat - coverage', () => {
 
       const stkAaveBefore = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));
 
-      await strategy.connect(keeper).sellRewards(0, payload, false);
+      await strategy.connect(keeper).sellRewards(0, payload, true);
 
       const stkAaveAfter = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));
 
