@@ -61,13 +61,13 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     // ========================= Aave Protocol Parameters ==========================
 
     IReserveInterestRateStrategy private _interestRateStrategyAddress;
-    uint256 private _cooldownSeconds;
-    uint256 private _unstakeWindow;
-    int256 private _reserveFactor;
-    int256 private _slope1;
-    int256 private _slope2;
-    int256 private _r0;
-    int256 private _uOptimal;
+    uint256 public cooldownSeconds;
+    uint256 public unstakeWindow;
+    int256 public reserveFactor;
+    int256 public slope1;
+    int256 public slope2;
+    int256 public r0;
+    int256 public uOptimal;
 
     // =============================== Parameters and Variables ====================
 
@@ -756,13 +756,13 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @notice Internal version of the `_setAavePoolVariables`
     function _setAavePoolVariables() internal {
         (, , , , uint256 reserveFactor_, , , , , ) = _protocolDataProvider.getReserveConfigurationData(address(want));
-        _cooldownSeconds = IStakedAave(_stkAave).COOLDOWN_SECONDS();
-        _unstakeWindow = IStakedAave(_stkAave).UNSTAKE_WINDOW();
-        _reserveFactor = int256(reserveFactor_ * 10**23);
-        _slope1 = int256(_interestRateStrategyAddress.variableRateSlope1());
-        _slope2 = int256(_interestRateStrategyAddress.variableRateSlope2());
-        _r0 = int256(_interestRateStrategyAddress.baseVariableBorrowRate());
-        _uOptimal = int256(_interestRateStrategyAddress.OPTIMAL_UTILIZATION_RATE());
+        cooldownSeconds = IStakedAave(_stkAave).COOLDOWN_SECONDS();
+        unstakeWindow = IStakedAave(_stkAave).UNSTAKE_WINDOW();
+        reserveFactor = int256(reserveFactor_ * 10**23);
+        slope1 = int256(_interestRateStrategyAddress.variableRateSlope1());
+        slope2 = int256(_interestRateStrategyAddress.variableRateSlope2());
+        r0 = int256(_interestRateStrategyAddress.baseVariableBorrowRate());
+        uOptimal = int256(_interestRateStrategyAddress.OPTIMAL_UTILIZATION_RATE());
     }
 
     // ========================= Internal View Functions ===========================
@@ -796,7 +796,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             ) = _protocolDataProvider.getReserveData(address(want));
 
             parameters = ComputeProfitability.SCalculateBorrow({
-                reserveFactor: _reserveFactor,
+                reserveFactor: reserveFactor,
                 totalStableDebt: int256(totalStableDebt * normalizationFactor),
                 totalVariableDebt: int256((totalVariableDebt - currentBorrow) * normalizationFactor),
                 totalDeposits: int256(
@@ -813,10 +813,10 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
                 rewardBorrow: 0,
                 strategyAssets: int256(balanceExcludingRewards * normalizationFactor),
                 guessedBorrowAssets: int256(guessedBorrow * normalizationFactor),
-                slope1: _slope1,
-                slope2: _slope2,
-                r0: _r0,
-                uOptimal: _uOptimal
+                slope1: slope1,
+                slope2: slope2,
+                r0: r0,
+                uOptimal: uOptimal
             });
         }
 
@@ -921,11 +921,11 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// the strategy should claim
     function _checkCooldown() internal view returns (uint256 cooldownStatus) {
         uint256 cooldownStartTimestamp = IStakedAave(_stkAave).stakersCooldowns(address(this));
-        uint256 nextClaimStartTimestamp = cooldownStartTimestamp + _cooldownSeconds;
+        uint256 nextClaimStartTimestamp = cooldownStartTimestamp + cooldownSeconds;
         if (cooldownStartTimestamp == 0) {
             return 0;
         }
-        if (block.timestamp > nextClaimStartTimestamp && block.timestamp <= nextClaimStartTimestamp + _unstakeWindow) {
+        if (block.timestamp > nextClaimStartTimestamp && block.timestamp <= nextClaimStartTimestamp + unstakeWindow) {
             return 1;
         }
         if (block.timestamp < nextClaimStartTimestamp) {
