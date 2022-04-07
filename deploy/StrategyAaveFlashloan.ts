@@ -68,6 +68,7 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
 
   console.log('Implementation deployed at address: ', strategyImplementation.address);
   console.log('Strategy (proxy) successfully deployed at address: ', proxy.address);
+  console.log('Deploy cost', proxy.receipt?.gasUsed);
 
   // const strategy = new Contract(proxy.address, ['function harvest() external'], deployer);
   // const oldStrategy = new Contract(

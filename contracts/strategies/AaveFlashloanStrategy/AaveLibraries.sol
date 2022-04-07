@@ -121,7 +121,9 @@ library FlashMintLib {
             requiredDAI = (rayDiv * getReserveNormalizedIncome + (_RAY / 2)) / _RAY;
 
             if (requiredDAI > _maxLiquidity) {
-                requiredDAI = _maxLiquidity;
+                requiredDAI = (_maxLiquidity * _RAY - (_RAY / 2)) / getReserveNormalizedIncome;
+                requiredDAI = (requiredDAI * liquidityIndex - liquidityIndex / 2) / _RAY;
+
                 // NOTE: if we cap amountDAI, we reduce amountToken we are taking too
                 amount =
                     (fromDAI(requiredDAI - requiredDAIToCloseLTVGap, token) * collatRatioDAI) /
