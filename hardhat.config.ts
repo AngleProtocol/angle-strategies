@@ -18,6 +18,7 @@ import '@nomiclabs/hardhat-solhint';
 import '@openzeppelin/hardhat-upgrades';
 import 'solidity-coverage';
 import '@typechain/hardhat';
+import '@nomiclabs/hardhat-etherscan';
 
 const argv = yargs
   .env('')
@@ -165,6 +166,11 @@ const config: HardhatUserConfig = {
   typechain: {
     outDir: 'typechain',
     target: 'ethers-v5',
+  },
+  etherscan: {
+    apiKey: {
+      mainnet: process.env.ETHERSCAN_API_KEY,
+    },
   },
 };
 
