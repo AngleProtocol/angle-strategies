@@ -11,7 +11,6 @@ import {
   ERC20,
   ERC20__factory,
   IAaveIncentivesController__factory,
-  ComputeProfitability,
   IStakedAave,
   IStakedAave__factory,
   AaveFlashloanStrategy__factory,
@@ -44,7 +43,6 @@ describe('AaveFlashloan Strat - coverage', () => {
   let incentivesController: IAaveIncentivesController;
   let lendingPool: ILendingPool;
   let flashMintLib: FlashMintLib;
-  let computeProfitabilityLib: ComputeProfitability;
 
   let strategy: AaveFlashloanStrategy;
 
@@ -94,12 +92,10 @@ describe('AaveFlashloan Strat - coverage', () => {
     )) as ILendingPool;
 
     flashMintLib = (await deploy('FlashMintLib')) as FlashMintLib;
-    computeProfitabilityLib = (await deploy('ComputeProfitability')) as ComputeProfitability;
 
     const strategyImplementation = (await deploy('AaveFlashloanStrategy', [], {
       libraries: {
         FlashMintLib: flashMintLib.address,
-        ComputeProfitability: computeProfitabilityLib.address,
       },
     })) as AaveFlashloanStrategy;
 
@@ -124,7 +120,7 @@ describe('AaveFlashloan Strat - coverage', () => {
 
   describe('Strategy', () => {
     const _startAmountUSDC = utils.parseUnits((2_000_000).toString(), 6);
-    let _guessedBorrowed = utils.parseUnits((0).toString(), 6);
+    const _guessedBorrowed = utils.parseUnits((0).toString(), 6);
 
     beforeEach(async () => {
       await (await poolManager.addStrategy(strategy.address, utils.parseUnits('0.75', 9))).wait();
@@ -203,7 +199,8 @@ describe('AaveFlashloan Strat - coverage', () => {
       const res = await axios.get(url);
       const payload = res.data.tx.data;
 
-      await strategy.connect(keeper).sellRewards(0, payload, true);
+      await strategy.connect(keeper).claimRewards();
+      await strategy.connect(keeper).sellRewards(0, payload);
 
       const stkAaveAfter = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));
 
@@ -238,7 +235,8 @@ describe('AaveFlashloan Strat - coverage', () => {
       const res = await axios.get(url);
       const payload = res.data.tx.data;
 
-      await strategy.connect(keeper).sellRewards(0, payload, true);
+      await strategy.connect(keeper).claimRewards();
+      await strategy.connect(keeper).sellRewards(0, payload);
 
       const stkAaveAfter = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));
 

@@ -165,7 +165,7 @@ library ComputeProfitability {
     /// to maximize folding revenues
     /// @dev Performs a newton Raphson approximation to get the zero point of the derivative of the
     /// revenue function of the protocol depending on the amount borrowed
-    function computeProfitability(SCalculateBorrow memory parameters) external pure returns (int256 borrow) {
+    function computeProfitability(SCalculateBorrow memory parameters) internal pure returns (int256 borrow) {
         (int256 y, , ) = _revenuePrimes(0, parameters, true);
         (int256 revenueWithBorrow, , ) = _revenuePrimes(_BASE_RAY, parameters, true);
 

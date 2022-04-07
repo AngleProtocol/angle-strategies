@@ -42,7 +42,6 @@ describe('AaveFlashloan strategy', () => {
     await (await oldStrategy.harvest()).wait();
 
     // we check that values are in the correct state
-    expect(await ethers.provider.getBlockNumber()).to.equal(14456170);
     expect((await poolManager.getTotalAsset()).mul(3).div(4)).to.be.closeTo(BigNumber.from('0x5365efafcf9b'), 1000);
 
     let _data = await protocolDataProvider.getReserveData(USDC);

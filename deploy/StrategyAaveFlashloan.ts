@@ -1,6 +1,6 @@
 import { DeployFunction } from 'hardhat-deploy/types';
 import { CONTRACTS_ADDRESSES, Interfaces } from '@angleprotocol/sdk';
-import { Contract, utils } from 'ethers';
+import { BigNumber, Contract, utils } from 'ethers';
 import { AaveFlashloanStrategy__factory, PoolManager } from '../typechain';
 import { impersonate } from '../test/test-utils';
 import { network } from 'hardhat';
@@ -12,16 +12,11 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
   const governor = CONTRACTS_ADDRESSES[1].GovernanceMultiSig as string;
   const guardian = CONTRACTS_ADDRESSES[1].Guardian as string;
 
-  // TODO: change to real keeper
-  const keeper = '0xC2ad4f9799Dc7Cbc88958d1165bC43507664f3E0';
-  // const keeper = '0xcC617C6f9725eACC993ac626C7efC6B96476916E';
+  // const keeper = '0xC2ad4f9799Dc7Cbc88958d1165bC43507664f3E0';
+  const keeper = '0xcC617C6f9725eACC993ac626C7efC6B96476916E';
 
   const flashMintLib = await deploy('FlashMintLib', {
     contract: 'FlashMintLib',
-    from: deployer.address,
-  });
-  const computeProfitabilityLib = await deploy('ComputeProfitability', {
-    contract: 'ComputeProfitability',
     from: deployer.address,
   });
 
@@ -53,10 +48,7 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     contract: 'AaveFlashloanStrategy',
     from: deployer.address,
     args: [],
-    libraries: {
-      FlashMintLib: flashMintLib.address,
-      ComputeProfitability: computeProfitabilityLib.address,
-    },
+    libraries: { FlashMintLib: flashMintLib.address },
   });
 
   const initializeData = AaveFlashloanStrategy__factory.createInterface().encodeFunctionData('initialize', [
@@ -76,20 +68,27 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
 
   console.log('Implementation deployed at address: ', strategyImplementation.address);
   console.log('Strategy (proxy) successfully deployed at address: ', proxy.address);
+  console.log(
+    'Deploy cost',
+    (strategyImplementation.receipt?.gasUsed as BigNumber)?.add(proxy.receipt?.gasUsed as BigNumber)?.toString(),
+  );
 
-  const strategy = new Contract(proxy.address, ['function harvest() external'], deployer);
-  const oldStrategy = '0x5fE0E497Ac676d8bA78598FC8016EBC1E6cE14a3';
-  const _old = new Contract(oldStrategy, ['function harvest() external'], deployer);
+  // const strategy = new Contract(proxy.address, ['function harvest() external'], deployer);
+  // const oldStrategy = new Contract(
+  //   '0x5fE0E497Ac676d8bA78598FC8016EBC1E6cE14a3',
+  //   ['function harvest() external'],
+  //   deployer,
+  // );
 
-  // CHANGE DEBT RATIOS
-  await impersonate('0xdC4e6DFe07EFCa50a197DF15D9200883eF4Eb1c8', async _governor => {
-    await network.provider.send('hardhat_setBalance', [_governor.address, '0x8ac7230489e80000']);
-    await poolManager.connect(_governor).updateStrategyDebtRatio(oldStrategy, utils.parseUnits('0', 9));
-    await poolManager.connect(_governor).addStrategy(strategy.address, utils.parseUnits('0.95', 9));
-  });
+  // // CHANGE DEBT RATIOS
+  // await impersonate('0xdC4e6DFe07EFCa50a197DF15D9200883eF4Eb1c8', async _governor => {
+  //   await network.provider.send('hardhat_setBalance', [_governor.address, '0x8ac7230489e80000']);
+  //   await poolManager.connect(_governor).updateStrategyDebtRatio(oldStrategy.address, utils.parseUnits('0', 9));
+  //   await poolManager.connect(_governor).addStrategy(strategy.address, utils.parseUnits('0.95', 9));
+  // });
 
-  await _old.harvest();
-  await strategy.harvest();
+  // await oldStrategy.harvest();
+  // await strategy.harvest();
 };
 
 func.tags = ['aave_flashloan_strategy'];
