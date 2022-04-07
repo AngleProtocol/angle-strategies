@@ -199,7 +199,8 @@ describe('AaveFlashloan Strat - coverage', () => {
       const res = await axios.get(url);
       const payload = res.data.tx.data;
 
-      await strategy.connect(keeper).sellRewards(0, payload, true);
+      await strategy.connect(keeper).claimRewards();
+      await strategy.connect(keeper).sellRewards(0, payload);
 
       const stkAaveAfter = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));
 
@@ -234,7 +235,8 @@ describe('AaveFlashloan Strat - coverage', () => {
       const res = await axios.get(url);
       const payload = res.data.tx.data;
 
-      await strategy.connect(keeper).sellRewards(0, payload, true);
+      await strategy.connect(keeper).claimRewards();
+      await strategy.connect(keeper).sellRewards(0, payload);
 
       const stkAaveAfter = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));
 

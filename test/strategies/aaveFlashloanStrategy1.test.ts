@@ -43,7 +43,6 @@ describe('AaveFlashloan Strat', () => {
   let incentivesController: IAaveIncentivesController;
   let lendingPool: ILendingPool;
   let flashMintLib: FlashMintLib;
-  let computeProfitabilityLib: ComputeProfitability;
 
   let strategy: AaveFlashloanStrategy;
 
@@ -397,7 +396,8 @@ describe('AaveFlashloan Strat', () => {
       expect(await stkAave.stakersCooldowns(strategy.address)).to.equal(0);
       expect(await wantToken.balanceOf(strategy.address)).to.equal(0);
 
-      expect(strategy.connect(guardian).sellRewards(0, '0x', true)).to.be.revertedWith(
+      await strategy.connect(keeper).claimRewards();
+      expect(strategy.connect(guardian).sellRewards(0, '0x')).to.be.revertedWith(
         `AccessControl: account ${guardian.address.toLowerCase()} is missing role ${await strategy.KEEPER_ROLE()}`,
       );
 
@@ -422,7 +422,8 @@ describe('AaveFlashloan Strat', () => {
       // ).data.tx.data;
       // await strategy.connect(keeper).sellRewards(0, payloadRevert, true);
 
-      await expect(strategy.connect(keeper).sellRewards(0, '0x', true)).to.be.reverted;
+      await strategy.connect(keeper).claimRewards();
+      await expect(strategy.connect(keeper).sellRewards(0, '0x')).to.be.reverted;
 
       const chainId = 1;
       const oneInchParams = qs.stringify({
@@ -440,7 +441,8 @@ describe('AaveFlashloan Strat', () => {
 
       const usdcBefore = await wantToken.balanceOf(strategy.address);
 
-      await strategy.connect(keeper).sellRewards(0, payload, true);
+      await strategy.connect(keeper).claimRewards();
+      await strategy.connect(keeper).sellRewards(0, payload);
 
       const usdcAfter = parseFloat(utils.formatUnits(await wantToken.balanceOf(strategy.address), 6));
       const stkAaveAfter = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));

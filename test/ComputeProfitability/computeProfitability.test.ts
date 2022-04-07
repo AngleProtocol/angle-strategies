@@ -1,7 +1,5 @@
 import { BigNumber, Contract } from 'ethers';
-import { formatUnits, parseUnits } from 'ethers/lib/utils';
-import { ethers } from 'hardhat';
-import { ComputeProfitability, ComputeProfitability__factory } from '../../typechain';
+import { parseUnits } from 'ethers/lib/utils';
 import { expectApproxDelta } from '../../utils/bignumber';
 import { deploy } from '../test-utils';
 
@@ -28,15 +26,7 @@ export type SCalculateBorrow = {
 
 describe('AaveFlashLoanStrategy - ComputeProfitability', () => {
   before(async () => {
-    const [deployer] = await ethers.getSigners();
-
-    const computeProfitabilityLib = (await deploy('ComputeProfitability')) as ComputeProfitability;
-
-    computeProfitabilityContract = await deploy('ComputeProfitabilityTest', [], {
-      libraries: {
-        ComputeProfitability: computeProfitabilityLib.address,
-      },
-    });
+    computeProfitabilityContract = await deploy('ComputeProfitabilityTest', []);
   });
 
   describe('Testing Optim', () => {
