@@ -1,6 +1,6 @@
 import { DeployFunction } from 'hardhat-deploy/types';
 import { CONTRACTS_ADDRESSES, Interfaces } from '@angleprotocol/sdk';
-import { Contract, utils } from 'ethers';
+import { BigNumber, Contract, utils } from 'ethers';
 import { AaveFlashloanStrategy__factory, PoolManager } from '../typechain';
 import { impersonate } from '../test/test-utils';
 import { network } from 'hardhat';
@@ -68,7 +68,10 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
 
   console.log('Implementation deployed at address: ', strategyImplementation.address);
   console.log('Strategy (proxy) successfully deployed at address: ', proxy.address);
-  console.log('Deploy cost', proxy.receipt?.gasUsed);
+  console.log(
+    'Deploy cost',
+    (strategyImplementation.receipt?.gasUsed as BigNumber)?.add(proxy.receipt?.gasUsed as BigNumber)?.toString(),
+  );
 
   // const strategy = new Contract(proxy.address, ['function harvest() external'], deployer);
   // const oldStrategy = new Contract(
