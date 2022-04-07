@@ -20,6 +20,8 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     from: deployer.address,
   });
 
+  console.log('success: deployed flashminlib', flashMintLib.address);
+
   const poolManager = new Contract(
     CONTRACTS_ADDRESSES[1].agEUR.collaterals!.USDC.PoolManager as string,
     Interfaces.PoolManager_Interface,
@@ -50,6 +52,8 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     args: [],
     libraries: { FlashMintLib: flashMintLib.address },
   });
+
+  console.log('success: deployed strategy implementation', strategyImplementation.address);
 
   const initializeData = AaveFlashloanStrategy__factory.createInterface().encodeFunctionData('initialize', [
     poolManager.address,
