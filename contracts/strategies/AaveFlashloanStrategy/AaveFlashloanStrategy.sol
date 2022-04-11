@@ -838,9 +838,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     }
 
     function estimatedAPR() public view returns (uint256) {
-        uint256 _totalAssets = _balanceOfWant() + _balanceOfAToken() - _balanceOfDebtToken();
-        if (_totalAssets == 0) return 0;
-        
         (
             ,
             ,
@@ -853,6 +850,10 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
             ,
 
         ) = _protocolDataProvider.getReserveData(address(want));
+
+        uint256 _totalAssets = _balanceOfWant() + _balanceOfAToken() - _balanceOfDebtToken();
+        if (_totalAssets == 0 || totalVariableDebt == 0 || _aToken.totalSupply() == 0) return 0;
+
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
         uint256 yearlyRewardsATokenInUSDC;
         uint256 yearlyRewardsDebtTokenInUSDC;
