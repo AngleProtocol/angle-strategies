@@ -41,7 +41,7 @@ const config: HardhatUserConfig = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 3500,
+            runs: 3000,
           },
           // debug: { revertStrings: 'strip' },
         },
@@ -61,7 +61,7 @@ const config: HardhatUserConfig = {
         url: nodeUrl('fork'),
         // This is the last block before the deployer role is removed
         // blockNumber: 14370000, // Mar-12-2022 05:09:27 AM +UTC
-        blockNumber: 14519530,
+        blockNumber: 14563630,
       },
       mining: argv.disableAutoMining
         ? {
