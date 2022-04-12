@@ -35,7 +35,7 @@
   },
   "homepage": "https://github.com/AngleProtocol/Angle_Solidity#readme",
   "devDependencies": {
-    "@angleprotocol/sdk": "1.0.67",
+    "@angleprotocol/sdk": "1.0.68",
     "@nomiclabs/hardhat-ethers": "npm:hardhat-deploy-ethers",
     "@nomiclabs/hardhat-solhint": "2.0.0",
     "@nomiclabs/hardhat-web3": "2.0.0",

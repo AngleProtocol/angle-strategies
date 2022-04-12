@@ -16,6 +16,7 @@ import {
   IProtocolDataProvider__factory,
   IProtocolDataProvider,
 } from '../../typechain';
+import { CONTRACTS_ADDRESSES, ALL_TOKENS } from '@angleprotocol/sdk';
 
 export const logBN = (amount: BigNumber, { base = 6, pad = 20, sign = false } = {}) => {
   const num = parseFloat(utils.formatUnits(amount, base));
@@ -48,7 +49,7 @@ export function assertAlmostEq(bn1: BigNumber, bn2: BigNumber, percentage = 10) 
   assert(other.gt(minus10));
 }
 
-export async function setup(startBlocknumber?: number) {
+export async function setup(startBlocknumber?: number, collat = 'USDC') {
   if (startBlocknumber) {
     await network.provider.request({
       method: 'hardhat_reset',
@@ -66,20 +67,21 @@ export async function setup(startBlocknumber?: number) {
   const [deployer, proxyAdmin, governor, guardian, user, keeper] = await ethers.getSigners();
 
   // === TOKENS ===
-  const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+  const _wantToken = Object.values(ALL_TOKENS[1][1]).find(_tok => _tok.symbol === collat)?.address as string;
 
   const stkAave = (await ethers.getContractAt(
     ERC20__factory.abi,
     '0x4da27a545c0c5B758a6BA100e3a049001de870f5',
   )) as ERC20;
-  const wantToken = (await ethers.getContractAt(ERC20__factory.abi, USDC)) as ERC20;
+  const wantToken = (await ethers.getContractAt(ERC20__factory.abi, _wantToken)) as ERC20;
+  const wantTokenBase = await wantToken.decimals();
 
   // === CONTRACTS ===
 
   // const poolManager = (await deploy('MockPoolManager', [wantToken.address, 0])) as MockPoolManager;
   const poolManager = (await ethers.getContractAt(
     PoolManager__factory.abi,
-    '0xe9f183FC656656f1F17af1F2b0dF79b8fF9ad8eD',
+    CONTRACTS_ADDRESSES[1].agEUR.collaterals?.[collat].PoolManager as string,
   )) as PoolManager;
 
   const lendingPool = (await ethers.getContractAt(
@@ -101,7 +103,7 @@ export async function setup(startBlocknumber?: number) {
 
   const oldStrategy = await ethers.getContractAt(
     ['function harvest() external', 'function estimatedTotalAssets() external view returns(uint)'],
-    '0x5fE0E497Ac676d8bA78598FC8016EBC1E6cE14a3',
+    CONTRACTS_ADDRESSES[1].agEUR.collaterals?.[collat].Strategies?.GenericOptimisedLender as string,
   );
 
   // === INIT STRATEGY ===
@@ -119,14 +121,9 @@ export async function setup(startBlocknumber?: number) {
   ]);
 
   // === AAVE TOKENS ===
-  const aToken = (await ethers.getContractAt(
-    ERC20__factory.abi,
-    '0xBcca60bB61934080951369a648Fb03DF4F96263C',
-  )) as ERC20;
-  const debtToken = (await ethers.getContractAt(
-    ERC20__factory.abi,
-    '0x619beb58998eD2278e08620f97007e1116D5D25b',
-  )) as ERC20;
+  const aaveTokens = await protocolDataProvider.getReserveTokensAddresses(_wantToken);
+  const aToken = (await ethers.getContractAt(ERC20__factory.abi, aaveTokens.aTokenAddress)) as ERC20;
+  const debtToken = (await ethers.getContractAt(ERC20__factory.abi, aaveTokens.variableDebtTokenAddress)) as ERC20;
 
   // === SIGNERS ===
   const realGuardian = await ethers.getSigner('0xdc4e6dfe07efca50a197df15d9200883ef4eb1c8');
@@ -147,7 +144,7 @@ export async function setup(startBlocknumber?: number) {
 
   const logBalances = async () =>
     console.log(`
-  Balance USDC:     ${logBN(await wantToken.balanceOf(strategy.address))}
+  Balance USDC:     ${logBN(await wantToken.balanceOf(strategy.address), { base: wantTokenBase })}
   Balance stkAave:  ${logBN(await stkAave.balanceOf(strategy.address), { base: 18 })}
   Rewards:          ${logBN(
     await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
@@ -158,17 +155,17 @@ export async function setup(startBlocknumber?: number) {
   const logPosition = async () =>
     console.log(`
   Position:
-   deposits:  ${logBN(await aToken.balanceOf(strategy.address))}
-   borrows:   ${logBN(await debtToken.balanceOf(strategy.address))}
+   deposits:  ${logBN(await aToken.balanceOf(strategy.address), { base: wantTokenBase })}
+   borrows:   ${logBN(await debtToken.balanceOf(strategy.address), { base: wantTokenBase })}
    target cr: ${logBN(await strategy.targetCollatRatio(), { base: 18 })}
   `);
 
   const logAssets = async () =>
     console.log(`
   Assets:
-    PM:           ${logBN(await poolManager.getTotalAsset())}
-    old strategy: ${logBN(await oldStrategy.estimatedTotalAssets())}
-    strategy:     ${logBN(await strategy.estimatedTotalAssets())}
+    PM:           ${logBN(await poolManager.getTotalAsset(), { base: wantTokenBase })}
+    old strategy: ${logBN(await oldStrategy.estimatedTotalAssets(), { base: wantTokenBase })}
+    strategy:     ${logBN(await strategy.estimatedTotalAssets(), { base: wantTokenBase })}
   `);
 
   const logRates = async () => {
@@ -278,7 +275,7 @@ export async function setup(startBlocknumber?: number) {
   };
 
   return {
-    USDC,
+    _wantToken,
     strategy,
     lendingPool,
     protocolDataProvider,

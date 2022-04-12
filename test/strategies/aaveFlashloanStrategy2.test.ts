@@ -18,7 +18,7 @@ describe('AaveFlashloan strategy', () => {
       harvest,
       lendingPool,
       richUSDCUser,
-      USDC,
+      _wantToken,
       protocolDataProvider,
       aavePrice,
       wantToken,
@@ -44,7 +44,7 @@ describe('AaveFlashloan strategy', () => {
     // we check that values are in the correct state
     expect((await poolManager.getTotalAsset()).mul(3).div(4)).to.be.closeTo(BigNumber.from('0x5365efafcf9b'), 1000);
 
-    let _data = await protocolDataProvider.getReserveData(USDC);
+    let _data = await protocolDataProvider.getReserveData(_wantToken);
     expect(_data.availableLiquidity).to.equal(BigNumber.from('0x020ce27db56962'));
     expect(_data.totalStableDebt).to.equal(BigNumber.from('0x0dfd587ea04e'));
     expect(_data.totalVariableDebt).to.equal(BigNumber.from('0x0665030e3803a1'));
@@ -54,7 +54,7 @@ describe('AaveFlashloan strategy', () => {
       const normalizationFactor = utils.parseUnits('1', 27).div(1e6);
       const ray = utils.parseUnits('1', 27);
 
-      _data = await protocolDataProvider.getReserveData(USDC);
+      _data = await protocolDataProvider.getReserveData(_wantToken);
       const borrow = await debtToken.balanceOf(strategy.address);
 
       console.log(`
@@ -99,14 +99,18 @@ rewardBorrow=${(await incentivesController.assets(debtToken.address)).emissionPe
     await harvest();
     expect(parseFloat(utils.formatEther(await strategy.targetCollatRatio()))).to.be.closeTo(0.8188, 0.01);
 
-    await lendingPool.connect(richUSDCUser).deposit(USDC, utils.parseUnits('20000000', 6), richUSDCUser.address, 0);
+    await lendingPool
+      .connect(richUSDCUser)
+      .deposit(_wantToken, utils.parseUnits('20000000', 6), richUSDCUser.address, 0);
     await harvest();
     expect(parseFloat(utils.formatEther(await strategy.targetCollatRatio()))).to.be.closeTo(0.812, 0.01);
 
     await network.provider.send('evm_increaseTime', [3600 * 24 * 2]); // forward 2 days
     await network.provider.send('evm_mine');
 
-    await lendingPool.connect(richUSDCUser).deposit(USDC, utils.parseUnits('75000000', 6), richUSDCUser.address, 0);
+    await lendingPool
+      .connect(richUSDCUser)
+      .deposit(_wantToken, utils.parseUnits('75000000', 6), richUSDCUser.address, 0);
     // logState();
     await harvest();
     expect(parseFloat(utils.formatEther(await strategy.targetCollatRatio()))).to.be.closeTo(0.785, 0.01);
@@ -114,15 +118,19 @@ rewardBorrow=${(await incentivesController.assets(debtToken.address)).emissionPe
     await network.provider.send('evm_increaseTime', [3600 * 24 * 2]); // forward 2 days
     await network.provider.send('evm_mine');
 
-    await lendingPool.connect(richUSDCUser).withdraw(USDC, utils.parseUnits('90000000', 6), richUSDCUser.address);
+    await lendingPool.connect(richUSDCUser).withdraw(_wantToken, utils.parseUnits('90000000', 6), richUSDCUser.address);
     await harvest();
     expect(parseFloat(utils.formatEther(await strategy.targetCollatRatio()))).to.be.closeTo(0.817, 0.01);
 
-    await lendingPool.connect(richUSDCUser).deposit(USDC, utils.parseUnits('120000000', 6), richUSDCUser.address, 0);
+    await lendingPool
+      .connect(richUSDCUser)
+      .deposit(_wantToken, utils.parseUnits('120000000', 6), richUSDCUser.address, 0);
     await harvest();
     expect(parseFloat(utils.formatEther(await strategy.targetCollatRatio()))).to.be.closeTo(0.7747, 0.01);
 
-    await lendingPool.connect(richUSDCUser).withdraw(USDC, utils.parseUnits('125000000', 6), richUSDCUser.address);
+    await lendingPool
+      .connect(richUSDCUser)
+      .withdraw(_wantToken, utils.parseUnits('125000000', 6), richUSDCUser.address);
     await harvest();
     expect(parseFloat(utils.formatEther(await strategy.targetCollatRatio()))).to.be.closeTo(0.8188, 0.01);
 
@@ -147,7 +155,9 @@ rewardBorrow=${(await incentivesController.assets(debtToken.address)).emissionPe
     await harvest();
     expect(parseFloat(utils.formatEther(await strategy.targetCollatRatio()))).to.be.closeTo(0.845, 0.01);
 
-    await lendingPool.connect(richUSDCUser).deposit(USDC, utils.parseUnits('120000000', 6), richUSDCUser.address, 0);
+    await lendingPool
+      .connect(richUSDCUser)
+      .deposit(_wantToken, utils.parseUnits('120000000', 6), richUSDCUser.address, 0);
     await harvest();
     expect(parseFloat(utils.formatEther(await strategy.targetCollatRatio()))).to.be.closeTo(0.845, 0.01);
   });

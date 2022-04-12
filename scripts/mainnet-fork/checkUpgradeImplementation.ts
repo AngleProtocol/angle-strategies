@@ -4,8 +4,9 @@ import {
   TransparentUpgradeableProxy,
   AaveFlashloanStrategy,
   AaveFlashloanStrategy__factory,
-} from '../typechain';
+} from '../../typechain';
 import { network, ethers } from 'hardhat';
+import { expect } from 'chai';
 
 export async function deploy(
   contractName: string,
@@ -47,12 +48,17 @@ async function main() {
   const strategyImplementation = await strategyImplementationFactory.connect(deployer).deploy();
 
   await proxyAdmin.connect(governor).upgrade(proxy.address, strategyImplementation.address);
-  console.log('cooldownSeconds: ', (await strategy.cooldownSeconds()).toString());
-  console.log('boolParams: ', await strategy.boolParams());
-  console.log('targetCollatRatio: ', utils.formatEther(await strategy.targetCollatRatio()));
-  console.log('maxCollatRatio: ', utils.formatEther(await strategy.maxCollatRatio()));
-  console.log('discountFactor: ', utils.formatUnits(await strategy.discountFactor(), 4));
-  console.log('want: ', await strategy.want());
+
+  expect((await strategy.cooldownSeconds()).toString()).to.equal('864000');
+  expect(await strategy.boolParams()).to.include.any.keys([
+    'automaticallyComputeCollatRatio',
+    'isFlashMintActive',
+    'withdrawCheck',
+    'cooldownStkAave',
+  ]);
+  expect(utils.formatEther(await strategy.maxCollatRatio())).to.equal('0.845');
+  expect(utils.formatUnits(await strategy.discountFactor(), 4)).to.equal('0.9');
+  expect(await strategy.want()).to.equal('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48');
 }
 
 main();

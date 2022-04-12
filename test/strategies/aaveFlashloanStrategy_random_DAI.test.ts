@@ -1,12 +1,24 @@
 /* eslint-disable camelcase */
-import { ethers, network } from 'hardhat';
+import { network } from 'hardhat';
 import { utils } from 'ethers';
-import { logBN, setup } from './setup_tests';
+import { setup } from './setup_tests';
 
-describe('AaveFlashloan strategy random (USDC)', () => {
+async function setDaiBalanceFor(account: string, amount: number) {
+  const balanceStorage = utils.solidityKeccak256(['uint256', 'uint256'], [account, 2]);
+
+  await network.provider.send('hardhat_setStorageAt', [
+    '0x6B175474E89094C44Da98b954EedeAC495271d0F',
+    balanceStorage.replace('0x0', '0x'),
+    utils.hexZeroPad(utils.parseUnits(amount.toString(), 18).toHexString(), 32),
+  ]);
+}
+
+describe('AaveFlashloan strategy random (DAI)', () => {
   it('scenario random', async () => {
     const { _wantToken, strategy, lendingPool, poolManager, oldStrategy, realGuardian, richUSDCUser, aToken, harvest } =
-      await setup(14456160);
+      await setup(14456160, 'DAI');
+
+    await setDaiBalanceFor(richUSDCUser.address, 1_000_000_000);
 
     // === SETUP ===
     await (

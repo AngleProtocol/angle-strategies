@@ -10,6 +10,7 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
   const governor = CONTRACTS_ADDRESSES[1].GovernanceMultiSig as string;
   const guardian = CONTRACTS_ADDRESSES[1].Guardian as string;
   const proxyAdmin = '0x1D941EF0D3Bba4ad67DBfBCeE5262F4CEE53A32b';
+  const flashMintLib = '0x169487a55dE79476125A56B07C36cA8dbF37a373'; // (await deployments.getOrNull('FlashMintLib')).address
 
   const collats: { [key: string]: { interestRateStrategyAddress: string } } = {
     DAI: {
@@ -21,13 +22,20 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
   };
 
   const keeper = '0xcC617C6f9725eACC993ac626C7efC6B96476916E';
-  const strategyImplementation = await deploy('AaveFlashloanStrategy_Implementation', {
-    contract: 'AaveFlashloanStrategy',
-    from: deployer.address,
-    args: [],
-    libraries: { FlashMintLib: '0x169487a55dE79476125A56B07C36cA8dbF37a373' },
-  });
-  console.log('success: deployed strategy implementation', strategyImplementation.address);
+
+  let strategyImplementation = await deployments.getOrNull('AaveFlashloanStrategy_Implementation');
+
+  if (!strategyImplementation) {
+    strategyImplementation = await deploy('AaveFlashloanStrategy_Implementation', {
+      contract: 'AaveFlashloanStrategy',
+      from: deployer.address,
+      args: [],
+      libraries: { FlashMintLib: flashMintLib },
+    });
+    console.log('success: deployed strategy implementation', strategyImplementation.address);
+  } else {
+    console.log('strategy implementation already deployed: ', strategyImplementation.address);
+  }
 
   for (const collat in collats) {
     const poolManager = new Contract(
