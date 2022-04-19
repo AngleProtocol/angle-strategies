@@ -707,6 +707,8 @@ describe('AaveFlashloan Strat', () => {
     });
 
     it('estimatedApr', async () => {
+      expect(await strategy.estimatedAPR()).to.equal(0);
+
       await strategy['harvest()']({ gasLimit: 3e6 });
       expect(parseFloat(utils.formatUnits(await aToken.balanceOf(strategy.address), 6))).to.be.closeTo(9677419, 1000);
 
