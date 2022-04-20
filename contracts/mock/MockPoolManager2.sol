@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.7;
+pragma solidity ^0.8.12;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -199,6 +199,10 @@ contract PoolManager is IPoolManagerFunctions, AccessControlUpgradeable, Functio
     bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
     /// @notice Role for `Strategy` only
     bytes32 public constant STRATEGY_ROLE = keccak256("STRATEGY_ROLE");
+
+    constructor(address _token) {
+        token = IERC20(_token);
+    }
 
     // ============================= Yield Farming =================================
 

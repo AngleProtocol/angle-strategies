@@ -2,78 +2,64 @@
 
 pragma solidity 0.8.12;
 
-import { DataTypes } from "./AaveLibraries.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { DataTypes } from "./IAave.sol";
 
-interface IAaveIncentivesController {
-    /**
-     * @dev Returns the total of rewards of an user, already accrued + not yet accrued
-     * @param user The address of the user
-     * @return The rewards
-     **/
-    function getRewardsBalance(address[] calldata assets, address user) external view returns (uint256);
+/**
+ * @title LendingPoolAddressesProvider contract
+ * @dev Main registry of addresses part of or connected to the protocol, including permissioned roles
+ * - Acting also as factory of proxies and admin of those, so with right to change its implementations
+ * - Owned by the Aave Governance
+ * @author Aave
+ **/
+interface ILendingPoolAddressesProvider {
+    event MarketIdSet(string newMarketId);
+    event LendingPoolUpdated(address indexed newAddress);
+    event ConfigurationAdminUpdated(address indexed newAddress);
+    event EmergencyAdminUpdated(address indexed newAddress);
+    event LendingPoolConfiguratorUpdated(address indexed newAddress);
+    event LendingPoolCollateralManagerUpdated(address indexed newAddress);
+    event PriceOracleUpdated(address indexed newAddress);
+    event LendingRateOracleUpdated(address indexed newAddress);
+    event ProxyCreated(bytes32 id, address indexed newAddress);
+    event AddressSet(bytes32 id, address indexed newAddress, bool hasProxy);
 
-    /**
-     * @dev Claims reward for an user, on all the assets of the lending pool, accumulating the pending rewards
-     * @param amount Amount of rewards to claim
-     * @param to Address that will be receiving the rewards
-     * @return Rewards claimed
-     **/
-    function claimRewards(
-        address[] calldata assets,
-        uint256 amount,
-        address to
-    ) external returns (uint256);
+    function getMarketId() external view returns (string memory);
 
-    /**
-     * @dev Claims reward for an user on behalf, on all the assets of the lending pool, accumulating the pending rewards. The caller must
-     * be whitelisted via "allowClaimOnBehalf" function by the RewardsAdmin role manager
-     * @param amount Amount of rewards to claim
-     * @param user Address to check and claim rewards
-     * @param to Address that will be receiving the rewards
-     * @return Rewards claimed
-     **/
-    function claimRewardsOnBehalf(
-        address[] calldata assets,
-        uint256 amount,
-        address user,
-        address to
-    ) external returns (uint256);
+    function setMarketId(string calldata marketId) external;
 
-    /**
-     * @dev returns the unclaimed rewards of the user
-     * @param user the address of the user
-     * @return the unclaimed user rewards
-     */
-    function getUserUnclaimedRewards(address user) external view returns (uint256);
+    function setAddress(bytes32 id, address newAddress) external;
 
-    /**
-     * @dev for backward compatibility with previous implementation of the Incentives controller
-     */
-    //solhint-disable-next-line
-    function REWARD_TOKEN() external view returns (address);
+    function setAddressAsProxy(bytes32 id, address impl) external;
 
-    function getDistributionEnd() external view returns (uint256);
+    function getAddress(bytes32 id) external view returns (address);
 
-    function getAssetData(address asset)
-        external
-        view
-        returns (
-            uint256,
-            uint256,
-            uint256
-        );
+    function getLendingPool() external view returns (address);
 
-    function assets(address asset)
-        external
-        view
-        returns (
-            uint256 emissionPerSecond,
-            uint256 index,
-            uint256 lastUpdateTimestamp
-        );
+    function setLendingPoolImpl(address pool) external;
 
-    function configureAssets(address[] calldata assets, uint256[] calldata emissionsPerSecond) external;
+    function getLendingPoolConfigurator() external view returns (address);
+
+    function setLendingPoolConfiguratorImpl(address configurator) external;
+
+    function getLendingPoolCollateralManager() external view returns (address);
+
+    function setLendingPoolCollateralManager(address manager) external;
+
+    function getPoolAdmin() external view returns (address);
+
+    function setPoolAdmin(address admin) external;
+
+    function getEmergencyAdmin() external view returns (address);
+
+    function setEmergencyAdmin(address admin) external;
+
+    function getPriceOracle() external view returns (address);
+
+    function setPriceOracle(address priceOracle) external;
+
+    function getLendingRateOracle() external view returns (address);
+
+    function setLendingRateOracle(address lendingRateOracle) external;
 }
 
 interface ILendingPool {
@@ -466,453 +452,4 @@ interface ILendingPool {
     function setPause(bool val) external;
 
     function paused() external view returns (bool);
-}
-
-interface IProtocolDataProvider {
-    struct TokenData {
-        string symbol;
-        address tokenAddress;
-    }
-
-    //solhint-disable-next-line
-    function ADDRESSES_PROVIDER() external view returns (ILendingPoolAddressesProvider);
-
-    function getAllReservesTokens() external view returns (TokenData[] memory);
-
-    function getAllATokens() external view returns (TokenData[] memory);
-
-    function getReserveConfigurationData(address asset)
-        external
-        view
-        returns (
-            uint256 decimals,
-            uint256 ltv,
-            uint256 liquidationThreshold,
-            uint256 liquidationBonus,
-            uint256 reserveFactor,
-            bool usageAsCollateralEnabled,
-            bool borrowingEnabled,
-            bool stableBorrowRateEnabled,
-            bool isActive,
-            bool isFrozen
-        );
-
-    function getReserveData(address asset)
-        external
-        view
-        returns (
-            uint256 availableLiquidity,
-            uint256 totalStableDebt,
-            uint256 totalVariableDebt,
-            uint256 liquidityRate,
-            uint256 variableBorrowRate,
-            uint256 stableBorrowRate,
-            uint256 averageStableBorrowRate,
-            uint256 liquidityIndex,
-            uint256 variableBorrowIndex,
-            uint40 lastUpdateTimestamp
-        );
-
-    function getUserReserveData(address asset, address user)
-        external
-        view
-        returns (
-            uint256 currentATokenBalance,
-            uint256 currentStableDebt,
-            uint256 currentVariableDebt,
-            uint256 principalStableDebt,
-            uint256 scaledVariableDebt,
-            uint256 stableBorrowRate,
-            uint256 liquidityRate,
-            uint40 stableRateLastUpdated,
-            bool usageAsCollateralEnabled
-        );
-
-    function getReserveTokensAddresses(address asset)
-        external
-        view
-        returns (
-            address aTokenAddress,
-            address stableDebtTokenAddress,
-            address variableDebtTokenAddress
-        );
-}
-
-interface IScaledBalanceToken {
-    /**
-     * @dev Returns the scaled balance of the user. The scaled balance is the sum of all the
-     * updated stored balance divided by the reserve's liquidity index at the moment of the update
-     * @param user The user whose balance is calculated
-     * @return The scaled balance of the user
-     **/
-    function scaledBalanceOf(address user) external view returns (uint256);
-
-    /**
-     * @dev Returns the scaled balance of the user and the scaled total supply.
-     * @param user The address of the user
-     * @return The scaled balance of the user
-     * @return The scaled balance and the scaled total supply
-     **/
-    function getScaledUserBalanceAndSupply(address user) external view returns (uint256, uint256);
-
-    /**
-     * @dev Returns the scaled total supply of the variable debt token. Represents sum(debt/index)
-     * @return The scaled total supply
-     **/
-    function scaledTotalSupply() external view returns (uint256);
-}
-
-/**
- * @title IVariableDebtToken
- * @author Aave
- * @notice Defines the basic interface for a variable debt token.
- **/
-interface IVariableDebtToken is IERC20, IScaledBalanceToken {
-    /**
-     * @dev Emitted after the mint action
-     * @param from The address performing the mint
-     * @param onBehalfOf The address of the user on which behalf minting has been performed
-     * @param value The amount to be minted
-     * @param index The last index of the reserve
-     **/
-    event Mint(address indexed from, address indexed onBehalfOf, uint256 value, uint256 index);
-
-    /**
-     * @dev Mints debt token to the `onBehalfOf` address
-     * @param user The address receiving the borrowed underlying, being the delegatee in case
-     * of credit delegate, or same as `onBehalfOf` otherwise
-     * @param onBehalfOf The address receiving the debt tokens
-     * @param amount The amount of debt being minted
-     * @param index The variable debt index of the reserve
-     * @return `true` if the the previous balance of the user is 0
-     **/
-    function mint(
-        address user,
-        address onBehalfOf,
-        uint256 amount,
-        uint256 index
-    ) external returns (bool);
-
-    /**
-     * @dev Emitted when variable debt is burnt
-     * @param user The user which debt has been burned
-     * @param amount The amount of debt being burned
-     * @param index The index of the user
-     **/
-    event Burn(address indexed user, uint256 amount, uint256 index);
-
-    /**
-     * @dev Burns user variable debt
-     * @param user The user which debt is burnt
-     * @param index The variable debt index of the reserve
-     **/
-    function burn(
-        address user,
-        uint256 amount,
-        uint256 index
-    ) external;
-
-    /**
-     * @dev Returns the address of the incentives controller contract
-     **/
-    function getIncentivesController() external view returns (IAaveIncentivesController);
-}
-
-/**
- * @title LendingPoolAddressesProvider contract
- * @dev Main registry of addresses part of or connected to the protocol, including permissioned roles
- * - Acting also as factory of proxies and admin of those, so with right to change its implementations
- * - Owned by the Aave Governance
- * @author Aave
- **/
-interface ILendingPoolAddressesProvider {
-    event MarketIdSet(string newMarketId);
-    event LendingPoolUpdated(address indexed newAddress);
-    event ConfigurationAdminUpdated(address indexed newAddress);
-    event EmergencyAdminUpdated(address indexed newAddress);
-    event LendingPoolConfiguratorUpdated(address indexed newAddress);
-    event LendingPoolCollateralManagerUpdated(address indexed newAddress);
-    event PriceOracleUpdated(address indexed newAddress);
-    event LendingRateOracleUpdated(address indexed newAddress);
-    event ProxyCreated(bytes32 id, address indexed newAddress);
-    event AddressSet(bytes32 id, address indexed newAddress, bool hasProxy);
-
-    function getMarketId() external view returns (string memory);
-
-    function setMarketId(string calldata marketId) external;
-
-    function setAddress(bytes32 id, address newAddress) external;
-
-    function setAddressAsProxy(bytes32 id, address impl) external;
-
-    function getAddress(bytes32 id) external view returns (address);
-
-    function getLendingPool() external view returns (address);
-
-    function setLendingPoolImpl(address pool) external;
-
-    function getLendingPoolConfigurator() external view returns (address);
-
-    function setLendingPoolConfiguratorImpl(address configurator) external;
-
-    function getLendingPoolCollateralManager() external view returns (address);
-
-    function setLendingPoolCollateralManager(address manager) external;
-
-    function getPoolAdmin() external view returns (address);
-
-    function setPoolAdmin(address admin) external;
-
-    function getEmergencyAdmin() external view returns (address);
-
-    function setEmergencyAdmin(address admin) external;
-
-    function getPriceOracle() external view returns (address);
-
-    function setPriceOracle(address priceOracle) external;
-
-    function getLendingRateOracle() external view returns (address);
-
-    function setLendingRateOracle(address lendingRateOracle) external;
-}
-
-interface IOptionalERC20 {
-    function decimals() external view returns (uint8);
-}
-
-interface IPriceOracle {
-    function getAssetPrice(address _asset) external view returns (uint256);
-
-    function getAssetsPrices(address[] calldata _assets) external view returns (uint256[] memory);
-
-    function getSourceOfAsset(address _asset) external view returns (address);
-
-    function getFallbackOracle() external view returns (address);
-}
-
-interface IStakedAave is IERC20 {
-    function stake(address to, uint256 amount) external;
-
-    function redeem(address to, uint256 amount) external;
-
-    function cooldown() external;
-
-    function claimRewards(address to, uint256 amount) external;
-
-    function getTotalRewardsBalance(address) external view returns (uint256);
-
-    //solhint-disable-next-line
-    function COOLDOWN_SECONDS() external view returns (uint256);
-
-    function stakersCooldowns(address) external view returns (uint256);
-
-    //solhint-disable-next-line
-    function UNSTAKE_WINDOW() external view returns (uint256);
-}
-
-/**
- * @title IInitializableAToken
- * @notice Interface for the initialize function on AToken
- * @author Aave
- **/
-interface IInitializableAToken {
-    /**
-     * @dev Emitted when an aToken is initialized
-     * @param underlyingAsset The address of the underlying asset
-     * @param pool The address of the associated lending pool
-     * @param treasury The address of the treasury
-     * @param incentivesController The address of the incentives controller for this aToken
-     * @param aTokenDecimals the decimals of the underlying
-     * @param aTokenName the name of the aToken
-     * @param aTokenSymbol the symbol of the aToken
-     * @param params A set of encoded parameters for additional initialization
-     **/
-    event Initialized(
-        address indexed underlyingAsset,
-        address indexed pool,
-        address treasury,
-        address incentivesController,
-        uint8 aTokenDecimals,
-        string aTokenName,
-        string aTokenSymbol,
-        bytes params
-    );
-
-    /**
-     * @dev Initializes the aToken
-     * @param pool The address of the lending pool where this aToken will be used
-     * @param treasury The address of the Aave treasury, receiving the fees on this aToken
-     * @param underlyingAsset The address of the underlying asset of this aToken (E.g. WETH for aWETH)
-     * @param incentivesController The smart contract managing potential incentives distribution
-     * @param aTokenDecimals The decimals of the aToken, same as the underlying asset's
-     * @param aTokenName The name of the aToken
-     * @param aTokenSymbol The symbol of the aToken
-     */
-    function initialize(
-        ILendingPool pool,
-        address treasury,
-        address underlyingAsset,
-        IAaveIncentivesController incentivesController,
-        uint8 aTokenDecimals,
-        string calldata aTokenName,
-        string calldata aTokenSymbol,
-        bytes calldata params
-    ) external;
-}
-
-interface IAToken is IERC20, IScaledBalanceToken, IInitializableAToken {
-    /**
-     * @dev Emitted after the mint action
-     * @param from The address performing the mint
-     * @param value The amount being
-     * @param index The new liquidity index of the reserve
-     **/
-    event Mint(address indexed from, uint256 value, uint256 index);
-
-    /**
-     * @dev Mints `amount` aTokens to `user`
-     * @param user The address receiving the minted tokens
-     * @param amount The amount of tokens getting minted
-     * @param index The new liquidity index of the reserve
-     * @return `true` if the the previous balance of the user was 0
-     */
-    function mint(
-        address user,
-        uint256 amount,
-        uint256 index
-    ) external returns (bool);
-
-    /**
-     * @dev Emitted after aTokens are burned
-     * @param from The owner of the aTokens, getting them burned
-     * @param target The address that will receive the underlying
-     * @param value The amount being burned
-     * @param index The new liquidity index of the reserve
-     **/
-    event Burn(address indexed from, address indexed target, uint256 value, uint256 index);
-
-    /**
-     * @dev Emitted during the transfer action
-     * @param from The user whose tokens are being transferred
-     * @param to The recipient
-     * @param value The amount being transferred
-     * @param index The new liquidity index of the reserve
-     **/
-    event BalanceTransfer(address indexed from, address indexed to, uint256 value, uint256 index);
-
-    /**
-     * @dev Burns aTokens from `user` and sends the equivalent amount of underlying to `receiverOfUnderlying`
-     * @param user The owner of the aTokens, getting them burned
-     * @param receiverOfUnderlying The address that will receive the underlying
-     * @param amount The amount being burned
-     * @param index The new liquidity index of the reserve
-     **/
-    function burn(
-        address user,
-        address receiverOfUnderlying,
-        uint256 amount,
-        uint256 index
-    ) external;
-
-    /**
-     * @dev Mints aTokens to the reserve treasury
-     * @param amount The amount of tokens getting minted
-     * @param index The new liquidity index of the reserve
-     */
-    function mintToTreasury(uint256 amount, uint256 index) external;
-
-    /**
-     * @dev Transfers aTokens in the event of a borrow being liquidated, in case the liquidators reclaims the aToken
-     * @param from The address getting liquidated, current owner of the aTokens
-     * @param to The recipient
-     * @param value The amount of tokens getting transferred
-     **/
-    function transferOnLiquidation(
-        address from,
-        address to,
-        uint256 value
-    ) external;
-
-    /**
-     * @dev Transfers the underlying asset to `target`. Used by the LendingPool to transfer
-     * assets in borrow(), withdraw() and flashLoan()
-     * @param user The recipient of the underlying
-     * @param amount The amount getting transferred
-     * @return The amount transferred
-     **/
-    function transferUnderlyingTo(address user, uint256 amount) external returns (uint256);
-
-    /**
-     * @dev Invoked to execute actions on the aToken side after a repayment.
-     * @param user The user executing the repayment
-     * @param amount The amount getting repaid
-     **/
-    function handleRepayment(address user, uint256 amount) external;
-
-    /**
-     * @dev Returns the address of the incentives controller contract
-     **/
-    function getIncentivesController() external view returns (IAaveIncentivesController);
-
-    /**
-     * @dev Returns the address of the underlying asset of this aToken (E.g. WETH for aWETH)
-     **/
-    //solhint-disable-next-line
-    function UNDERLYING_ASSET_ADDRESS() external view returns (address);
-}
-
-/**
- * @title IReserveInterestRateStrategyInterface interface
- * @dev Interface for the calculation of the interest rates
- * @author Aave
- */
-interface IReserveInterestRateStrategy {
-    function baseVariableBorrowRate() external view returns (uint256);
-
-    function getMaxVariableBorrowRate() external view returns (uint256);
-
-    function stableRateSlope1() external view returns (uint256);
-
-    function stableRateSlope2() external view returns (uint256);
-
-    function variableRateSlope1() external view returns (uint256);
-
-    function variableRateSlope2() external view returns (uint256);
-
-    //solhint-disable-next-line
-    function OPTIMAL_UTILIZATION_RATE() external view returns (uint256);
-
-    function calculateInterestRates(
-        address reserve,
-        uint256 availableLiquidity,
-        uint256 totalStableDebt,
-        uint256 totalVariableDebt,
-        uint256 averageStableBorrowRate,
-        uint256 reserveFactor
-    )
-        external
-        view
-        returns (
-            uint256 liquidityRate,
-            uint256 stableBorrowRate,
-            uint256 variableBorrowRate
-        );
-
-    function calculateInterestRates(
-        address reserve,
-        address aToken,
-        uint256 liquidityAdded,
-        uint256 liquidityTaken,
-        uint256 totalStableDebt,
-        uint256 totalVariableDebt,
-        uint256 averageStableBorrowRate,
-        uint256 reserveFactor
-    )
-        external
-        view
-        returns (
-            uint256 liquidityRate,
-            uint256 stableBorrowRate,
-            uint256 variableBorrowRate
-        );
 }

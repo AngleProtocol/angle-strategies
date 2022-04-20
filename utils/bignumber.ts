@@ -13,7 +13,7 @@ function formatGwei(number: BigNumberish): string {
   return utils.formatUnits(number, 'gwei');
 }
 
-function ether(number: BigNumberish): BigNumber {
+export function ether(number: BigNumberish): BigNumber {
   return utils.parseUnits(number.toString(), 'ether');
 }
 function formatEther(number: BigNumberish): string {

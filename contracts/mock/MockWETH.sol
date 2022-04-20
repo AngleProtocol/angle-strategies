@@ -4,24 +4,30 @@ pragma solidity ^0.8.12;
 
 import "./MockToken.sol";
 
-contract MockStETH is MockToken {
+contract MockWETH is MockToken {
     event Deposit(address indexed dst, uint256 wad);
     event Withdrawal(address indexed src, uint256 wad);
+
+    receive() external payable {}
 
     /// @notice stablecoin constructor
     /// @param name_ the stablecoin name (example 'agEUR')
     /// @param symbol_ the stablecoin symbol ('agEUR')
-    /// @dev To account for the fact that the balance increases we can simply mint stETH to the concerned address
     constructor(
         string memory name_,
         string memory symbol_,
         uint8 decimal_
     ) MockToken(name_, symbol_, decimal_) {}
 
-    receive() external payable {}
-
-    function submit(address) external payable returns (uint256) {
+    function deposit() public payable {
         _mint(msg.sender, msg.value);
-        return msg.value;
+        emit Deposit(msg.sender, msg.value);
+    }
+
+    function withdraw(uint256 wad) public {
+        _burn(msg.sender, wad);
+        (bool sent, ) = msg.sender.call{ value: wad }("");
+        require(sent, "Failed to send Ether");
+        emit Withdrawal(msg.sender, wad);
     }
 }
