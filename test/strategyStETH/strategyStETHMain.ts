@@ -26,7 +26,7 @@ async function initWETH(
   strategy: StrategyStETHAcc;
 }> {
   const wETH = (await deploy('MockWETH', ['WETH', 'WETH', collatBase])) as MockWETH;
-  const managerETH = (await deploy('MockPoolManager', [wETH.address, 0])) as PoolManager;
+  const managerETH = (await deploy('PoolManager', [wETH.address, governor.address, guardian.address])) as PoolManager;
   const stETH = (await deploy('MockStETH', ['stETH', 'stETH', collatBase])) as MockStETH;
   const curve = (await deploy('MockCurveStETHETH', [stETH.address])) as MockCurveStETHETH;
 
@@ -46,7 +46,7 @@ async function initWETH(
   return { wETH, managerETH, stETH, curve, strategy };
 }
 
-let governor: SignerWithAddress, guardian: SignerWithAddress, user: SignerWithAddress, tester: SignerWithAddress;
+let governor: SignerWithAddress, guardian: SignerWithAddress, user: SignerWithAddress, keeper: SignerWithAddress;
 let strategy: StrategyStETHAcc;
 let managerETH: PoolManager;
 let curve: MockCurveStETHETH;
@@ -61,7 +61,7 @@ let managerError: string;
 // Start test block
 describe('StrategyStETH', () => {
   before(async () => {
-    ({ governor, guardian, user, tester } = await ethers.getNamedSigners());
+    ({ governor, guardian, user, keeper } = await ethers.getNamedSigners());
     ({ wETH, managerETH, stETH, curve, strategy } = await initWETH(governor, guardian));
     minWindow = BigNumber.from('1000');
     maxWindow = BigNumber.from('10000');
@@ -242,8 +242,8 @@ describe('StrategyStETH', () => {
 
   // describe('setGuardian - when there is a strategy', () => {
   //   it('success - adding a new guardian', async () => {
-  //     await this.core.setGuardian(tester, { from: governor });
-  //     expect(await managerETH.hasRole(guardianRole, tester.address)).to.be.equal(true);
+  //     await this.core.setGuardian(keeper, { from: governor });
+  //     expect(await managerETH.hasRole(guardianRole, keeper.address)).to.be.equal(true);
   //     expect(await managerETH.hasRole(guardianRole, guardian.address)).to.be.equal(false);
   //   });
   //   it('success - resetting guardian', async () => {
@@ -278,7 +278,7 @@ describe('StrategyStETH', () => {
 
     it('success - lent assets updated', async () => {
       const balance = await hre.ethers.provider.getBalance(curve.address);
-      await strategy['harvest()'];
+      await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       // Still 10 total assets
       expect(await managerETH.getTotalAsset()).to.be.equal(ether('10'));
       // But 8 lent from manager to strategy
@@ -311,7 +311,7 @@ describe('StrategyStETH', () => {
       await expect(
         managerETH
           .connect(governor)
-          .updateStrategyDebtRatio(tester.address, BASE_PARAMS.mul(BigNumber.from('5')).div(BigNumber.from('10'))),
+          .updateStrategyDebtRatio(keeper.address, BASE_PARAMS.mul(BigNumber.from('5')).div(BigNumber.from('10'))),
       ).to.be.revertedWith('78');
       await expect(
         managerETH
@@ -320,7 +320,7 @@ describe('StrategyStETH', () => {
       ).to.be.revertedWith('76');
     });
     it('success - harvesting with debt', async () => {
-      await strategy['harvest()'];
+      await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       // 3 have been withdrawn from strat
       expect(await wETH.balanceOf(managerETH.address)).to.be.equal(ether('5'));
 
@@ -339,7 +339,7 @@ describe('StrategyStETH', () => {
       );
       expect(await managerETH.getTotalAsset()).to.be.equal(ether('10'));
       expect(await managerETH.debtRatio()).to.be.equal(BASE_PARAMS.mul(BigNumber.from('0')).div(BigNumber.from('10')));
-      await strategy['harvest()'];
+      await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       // 3 have been withdrawn from strat
       expect(await wETH.balanceOf(managerETH.address)).to.be.equal(ether('10'));
 
@@ -358,7 +358,7 @@ describe('StrategyStETH', () => {
     });
     it('success - harvest using the Lido circuit', async () => {
       const balance = await hre.ethers.provider.getBalance(curve.address);
-      await strategy['harvest()'];
+      await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       // Still 10 total assets
       expect(await managerETH.getTotalAsset()).to.be.equal(ether('10'));
       // But 8 lent from manager to strategy
@@ -381,7 +381,7 @@ describe('StrategyStETH', () => {
     });
     it('success - harvesting after a gain', async () => {
       // There is 12 in total assets now, 0.8 * 12 should go to the strategy, the rest to the poolManager
-      await strategy['harvest()'];
+      await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       expect(await managerETH.getTotalAsset()).to.be.equal(ether('12'));
       // But 8 lent from manager to strategy
       expect(await wETH.balanceOf(managerETH.address)).to.be.equal(ether('2.4'));
@@ -394,7 +394,7 @@ describe('StrategyStETH', () => {
     });
     it('success - recording a loss', async () => {
       await stETH.burn(strategy.address, ether('2'));
-      await strategy['harvest()'];
+      await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       expect(await managerETH.getTotalAsset()).to.be.equal(ether('10'));
       expect(await managerETH.debtRatio()).to.be.equal(BASE_PARAMS.mul(BigNumber.from('8')).div(BigNumber.from('10')));
       // Still 10 total assets
@@ -455,7 +455,7 @@ describe('StrategyStETH', () => {
       expect(await strategy.emergencyExit()).to.be.equal(true);
     });
     it('success - harvest', async () => {
-      await strategy['harvest()'];
+      await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       // This harvest makes us find about the wETH that had been left aside
       expect(await managerETH.getTotalAsset()).to.be.equal(ether('10').add(ether('10').div(BigNumber.from('11'))));
       expect(await wETH.balanceOf(strategy.address)).to.be.equal(ether('0'));
@@ -520,7 +520,7 @@ describe('StrategyStETH', () => {
   });
   describe('harvest - other cases', () => {
     it('init', async () => {
-      ({ governor, guardian, user, tester } = await ethers.getNamedSigners());
+      ({ governor, guardian, user, keeper } = await ethers.getNamedSigners());
       ({ wETH, managerETH, stETH, curve, strategy } = await initWETH(governor, guardian));
       await governor.sendTransaction({
         to: curve.address,
@@ -532,14 +532,14 @@ describe('StrategyStETH', () => {
       });
       await stETH.mint(curve.address, BASE_TOKENS.mul(BigNumber.from('10')));
       await wETH.mint(managerETH.address, ether('10'));
-      await strategy['harvest()'];
+      await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
     });
     it('success - withdraw < withdrawn', async () => {
       // In this situation we should have a profit inferior to the loss
       // This will result in a loss if we increase the dy
       await curve.setDy(BASE_TOKENS.mul(BigNumber.from('20')).div(BigNumber.from('10')));
       await wETH.burn(managerETH.address, ether('2'));
-      await strategy['harvest()'];
+      await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       // Has lost 2, then to bring it back to 0.64 => has lost 0.8 when withdrawing
       expect(await managerETH.getTotalAsset()).to.be.equal(ether('7.2'));
       // But 8 lent from manager to strategy
@@ -557,7 +557,7 @@ describe('StrategyStETH', () => {
     it('success - wantBal < toWithdraw', async () => {
       await stETH.mint(strategy.address, ether('2'));
       await strategy.connect(guardian).updateMaxSingleTrade(BigNumber.from('0'));
-      await strategy['harvest()'];
+      await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       expect(await managerETH.getTotalAsset()).to.be.equal(ether('7.2'));
       // But 8 lent from manager to strategy
       expect(await wETH.balanceOf(managerETH.address)).to.be.equal(ether('0.8'));
@@ -572,7 +572,7 @@ describe('StrategyStETH', () => {
     });
     it('success - harvestTrigger with a big debt threshold', async () => {
       await strategy.connect(guardian).setDebtThreshold(ether('1'));
-      await strategy['harvest()'];
+      await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       await stETH.burn(strategy.address, ether('8.4'));
     });
     it('success - strategyExit with too much freed', async () => {
@@ -580,7 +580,7 @@ describe('StrategyStETH', () => {
       expect(await strategy.emergencyExit()).to.be.equal(true);
       const assets = await managerETH.getTotalAsset();
       await wETH.mint(strategy.address, BASE_TOKENS.mul(BigNumber.from('100')));
-      await strategy['harvest()'];
+      await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       expect(await managerETH.getTotalAsset()).to.be.equal(assets.add(BASE_TOKENS.mul(BigNumber.from('100'))));
     });
   });

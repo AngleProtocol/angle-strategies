@@ -200,8 +200,17 @@ contract PoolManager is IPoolManagerFunctions, AccessControlUpgradeable, Functio
     /// @notice Role for `Strategy` only
     bytes32 public constant STRATEGY_ROLE = keccak256("STRATEGY_ROLE");
 
-    constructor(address _token) {
+    constructor(
+        address _token,
+        address governor,
+        address guardian
+    ) {
         token = IERC20(_token);
+        _setupRole(GUARDIAN_ROLE, guardian);
+        _setupRole(GUARDIAN_ROLE, governor);
+        _setupRole(GOVERNOR_ROLE, governor);
+        _setRoleAdmin(GOVERNOR_ROLE, GOVERNOR_ROLE);
+        _setRoleAdmin(GUARDIAN_ROLE, GOVERNOR_ROLE);
     }
 
     // ============================= Yield Farming =================================
@@ -322,6 +331,7 @@ contract PoolManager is IPoolManagerFunctions, AccessControlUpgradeable, Functio
         // The only issue is if the strategy is compromised; in this case governance
         // should revoke the strategy
         uint256 target = ((_getTotalAsset()) * params.debtRatio) / BASE_PARAMS;
+
         if (target > params.totalStrategyDebt) {
             // If the strategy has some credit left, tokens can be transferred to this strategy
             uint256 available = Math.min(target - params.totalStrategyDebt, _getBalance());
@@ -350,7 +360,7 @@ contract PoolManager is IPoolManagerFunctions, AccessControlUpgradeable, Functio
                 interestsAccumulated += gainForSurplus - adminDebtPre;
                 adminDebt = 0;
             } else adminDebt -= gainForSurplus;
-            stableMaster.accumulateInterest(gain - gainForSurplus);
+            // stableMaster.accumulateInterest(gain - gainForSurplus);
             emit FeesDistributed(gain);
         }
 
@@ -365,7 +375,7 @@ contract PoolManager is IPoolManagerFunctions, AccessControlUpgradeable, Functio
                 adminDebt += lossForSurplus - interestsAccumulatedPreLoss;
             } else interestsAccumulated -= lossForSurplus;
             // The rest is incurred to SLPs
-            stableMaster.signalLoss(loss - lossForSurplus);
+            // stableMaster.signalLoss(loss - lossForSurplus);
         }
     }
 
@@ -531,7 +541,7 @@ contract PoolManager is IPoolManagerFunctions, AccessControlUpgradeable, Functio
         // With the strategy we are using in current tests, it is going to be impossible to have
         // a positive loss by calling strategy.withdraw, this function indeed calls _liquidatePosition
         // which output value is always zero
-        if (loss > 0) stableMaster.signalLoss(loss);
+        // if (loss > 0) stableMaster.signalLoss(loss);
     }
 
     // =================== Surplus Distributor Function ============================
