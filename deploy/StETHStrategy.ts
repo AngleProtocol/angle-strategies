@@ -48,10 +48,9 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     let poolManager: PoolManager;
     // if fork we suppose that we are in mainnet
     if (!network.live) {
-      poolManager = new Contract(
-        CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR.collaterals![collat].PoolManager as string,
-        Interfaces.PoolManager_Interface,
-      ) as PoolManager;
+      // in this specific case the poolManager is not already deploy we need to hardcode the address
+      // CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR.collaterals![collat].PoolManager as string;
+      poolManager = new Contract('', Interfaces.PoolManager_Interface) as PoolManager;
     } else {
       poolManager = new Contract(
         CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR.collaterals![collat].PoolManager as string,

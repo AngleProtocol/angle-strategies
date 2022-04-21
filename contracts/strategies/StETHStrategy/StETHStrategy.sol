@@ -71,8 +71,8 @@ contract StETHStrategy is BaseStrategyUpgradeable {
         stETH = ISteth(_stETH);
         apr = _apr;
         _stETH.approve(_stableSwapSTETH, type(uint256).max);
-        maxSingleTrade = 1_000 * 1e18;
-        slippageProtectionOut = 50;
+        maxSingleTrade = 10_000 * 1e18;
+        slippageProtectionOut = 30;
     }
 
     /// @notice This contract gets ETH and so it needs this function
@@ -138,9 +138,8 @@ contract StETHStrategy is BaseStrategyUpgradeable {
             uint256 toWithdraw = _profit + _debtOutstanding;
             // If more should be withdrawn than what's in the strategy: we divest from Curve
             if (toWithdraw > wantBal) {
-                // TODO why don't we correct what we want to withdraw by the wantBal?
                 // We step our withdrawals. Adjust max single trade to withdraw more
-                uint256 willWithdraw = Math.min(maxSingleTrade, toWithdraw);
+                uint256 willWithdraw = Math.min(maxSingleTrade, toWithdraw - wantBal);
                 uint256 withdrawn = _divest(willWithdraw);
                 if (withdrawn < willWithdraw) {
                     _loss = willWithdraw - withdrawn;

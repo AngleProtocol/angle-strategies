@@ -5,8 +5,8 @@ import {
   MockStETH,
   MockWETH,
   PoolManager,
-  StrategyStETHAcc,
-  StrategyStETHAcc__factory,
+  StETHStrategy,
+  StETHStrategy__factory,
 } from '../../typechain';
 import { gwei, ether } from '../../utils/bignumber';
 import { deploy, deployUpgradeable } from '../test-utils';
@@ -24,14 +24,14 @@ async function initWETH(
   managerETH: PoolManager;
   stETH: MockStETH;
   curve: MockCurveStETHETH;
-  strategy: StrategyStETHAcc;
+  strategy: StETHStrategy;
 }> {
   const wETH = (await deploy('MockWETH', ['WETH', 'WETH', collatBase])) as MockWETH;
   const managerETH = (await deploy('PoolManager', [wETH.address, governor.address, guardian.address])) as PoolManager;
   const stETH = (await deploy('MockStETH', ['stETH', 'stETH', collatBase])) as MockStETH;
   const curve = (await deploy('MockCurveStETHETH', [stETH.address])) as MockCurveStETHETH;
 
-  const strategy = (await deployUpgradeable(new StrategyStETHAcc__factory(guardian))) as StrategyStETHAcc;
+  const strategy = (await deployUpgradeable(new StETHStrategy__factory(guardian))) as StETHStrategy;
   await strategy.initialize(
     managerETH.address,
     governor.address,
@@ -49,7 +49,7 @@ async function initWETH(
 }
 
 let governor: SignerWithAddress, guardian: SignerWithAddress, user: SignerWithAddress, keeper: SignerWithAddress;
-let strategy: StrategyStETHAcc;
+let strategy: StETHStrategy;
 let managerETH: PoolManager;
 let curve: MockCurveStETHETH;
 let stETH: MockStETH;
@@ -102,10 +102,10 @@ describe('StrategyStETH', () => {
         expect(await strategy.debtThreshold()).to.be.equal(BASE_TOKENS.mul(BigNumber.from('100')));
       });
       it('maxSingleTrade', async () => {
-        expect(await strategy.maxSingleTrade()).to.be.equal(BASE_TOKENS.mul(BigNumber.from('1000')));
+        expect(await strategy.maxSingleTrade()).to.be.equal(parseUnits('10000', 18));
       });
       it('slippageProtectionOut', async () => {
-        expect(await strategy.slippageProtectionOut()).to.be.equal(BigNumber.from('50'));
+        expect(await strategy.slippageProtectionOut()).to.be.equal(parseUnits('30', 0));
       });
       it('emergencyExit', async () => {
         expect(await strategy.emergencyExit()).to.be.equal(false);
@@ -124,7 +124,7 @@ describe('StrategyStETH', () => {
 
     describe('constructor', () => {
       it('reverts - zero guardian address', async () => {
-        const strategy = (await deployUpgradeable(new StrategyStETHAcc__factory(guardian))) as StrategyStETHAcc;
+        const strategy = (await deployUpgradeable(new StETHStrategy__factory(guardian))) as StETHStrategy;
         await expect(
           strategy.initialize(
             managerETH.address,
@@ -139,7 +139,7 @@ describe('StrategyStETH', () => {
         ).to.be.revertedWith('0');
       });
       it('reverts - zero governor address', async () => {
-        const strategy = (await deployUpgradeable(new StrategyStETHAcc__factory(guardian))) as StrategyStETHAcc;
+        const strategy = (await deployUpgradeable(new StETHStrategy__factory(guardian))) as StETHStrategy;
         await expect(
           strategy.initialize(
             managerETH.address,
@@ -154,7 +154,7 @@ describe('StrategyStETH', () => {
         ).to.be.revertedWith('0');
       });
       it('reverts - zero keeper address', async () => {
-        const strategy = (await deployUpgradeable(new StrategyStETHAcc__factory(guardian))) as StrategyStETHAcc;
+        const strategy = (await deployUpgradeable(new StETHStrategy__factory(guardian))) as StETHStrategy;
         await expect(
           strategy.initialize(
             managerETH.address,
@@ -169,7 +169,7 @@ describe('StrategyStETH', () => {
         ).to.be.revertedWith('0');
       });
       it('reverts - want != weth', async () => {
-        const strategy = (await deployUpgradeable(new StrategyStETHAcc__factory(guardian))) as StrategyStETHAcc;
+        const strategy = (await deployUpgradeable(new StETHStrategy__factory(guardian))) as StETHStrategy;
         await expect(
           strategy.initialize(
             managerETH.address,

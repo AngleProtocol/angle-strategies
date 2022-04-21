@@ -6,7 +6,7 @@
   "scripts": {
     "compile": "hardhat compile",
     "coverage": "FORK=true hardhat coverage",
-    "coverage:steth": "FORK=true hardhat coverage --testfiles 'test/strategysteth/strategystethmain.ts'",
+    "coverage:steth": "FORK=true hardhat coverage --testfiles 'test/strategysteth/strategystethlocal.ts'",
     "etherscan:mainnet": "hardhat --network mainnet etherscan-verify",
     "etherscan:rinkeby": "hardhat --network rinkeby etherscan-verify",
     "deploy:mainnet": "hardhat deploy --network mainnet --tags aave_flashloan_strategy",
