@@ -13,6 +13,7 @@ import { deploy, deployUpgradeable } from '../test-utils';
 import hre, { ethers, network } from 'hardhat';
 import { expect } from '../test-utils/chai-setup';
 import { BASE_PARAMS, BASE_TOKENS } from '../utils';
+import { parseUnits } from 'ethers/lib/utils';
 
 async function initWETH(
   governor: SignerWithAddress,
@@ -35,10 +36,11 @@ async function initWETH(
     managerETH.address,
     governor.address,
     guardian.address,
-    [],
+    [keeper.address],
     curve.address,
     wETH.address,
     stETH.address,
+    parseUnits('3', 9),
   );
 
   await managerETH.connect(governor).addStrategy(strategy.address, gwei('0.8'));
@@ -88,7 +90,7 @@ describe('StrategyStETH', () => {
         expect(await strategy.stableSwapSTETH()).to.be.equal(curve.address);
       });
       it('apr', async () => {
-        expect(await strategy.apr()).to.be.equal(BigNumber.from('0'));
+        expect(await strategy.apr()).to.be.equal(parseUnits('3', 9));
       });
       it('SECONDSPERYEAR', async () => {
         expect(await strategy.SECONDSPERYEAR()).to.be.equal(BigNumber.from('31556952'));
@@ -132,6 +134,7 @@ describe('StrategyStETH', () => {
             curve.address,
             wETH.address,
             stETH.address,
+            parseUnits('3', 9),
           ),
         ).to.be.revertedWith('0');
       });
@@ -146,6 +149,7 @@ describe('StrategyStETH', () => {
             curve.address,
             wETH.address,
             stETH.address,
+            parseUnits('3', 9),
           ),
         ).to.be.revertedWith('0');
       });
@@ -160,6 +164,7 @@ describe('StrategyStETH', () => {
             curve.address,
             wETH.address,
             stETH.address,
+            parseUnits('3', 9),
           ),
         ).to.be.revertedWith('0');
       });
@@ -174,6 +179,7 @@ describe('StrategyStETH', () => {
             curve.address,
             stETH.address,
             stETH.address,
+            parseUnits('3', 9),
           ),
         ).to.be.revertedWith('20');
       });
@@ -240,20 +246,24 @@ describe('StrategyStETH', () => {
     });
   });
 
-  // describe('setGuardian - when there is a strategy', () => {
-  //   it('success - adding a new guardian', async () => {
-  //     await this.core.setGuardian(keeper, { from: governor });
-  //     expect(await managerETH.hasRole(guardianRole, keeper.address)).to.be.equal(true);
-  //     expect(await managerETH.hasRole(guardianRole, guardian.address)).to.be.equal(false);
-  //   });
-  //   it('success - resetting guardian', async () => {
-  //     await this.core.setGuardian(guardian, { from: governor });
-  //   });
-  // });
+  describe('setGuardian - when there is a strategy', () => {
+    it('success - adding a new guardian', async () => {
+      await managerETH.connect(guardian).setGuardian(keeper.address, guardian.address);
+      expect(await managerETH.hasRole(guardianRole, keeper.address)).to.be.equal(true);
+      expect(await managerETH.hasRole(guardianRole, guardian.address)).to.be.equal(false);
+      expect(await strategy.hasRole(guardianRole, keeper.address)).to.be.equal(true);
+      expect(await strategy.hasRole(guardianRole, guardian.address)).to.be.equal(false);
+    });
+    it('success - resetting guardian', async () => {
+      await managerETH.connect(governor).setGuardian(guardian.address, keeper.address);
+      expect(await managerETH.hasRole(guardianRole, keeper.address)).to.be.equal(false);
+      expect(await managerETH.hasRole(guardianRole, guardian.address)).to.be.equal(true);
+    });
+  });
 
   describe('estimatedAPR', () => {
     it('success - returns 0 when no asset', async () => {
-      expect(await strategy.estimatedAPR()).to.be.equal(BigNumber.from('0'));
+      expect(await strategy.estimatedAPR()).to.be.equal(parseUnits('3', 9));
     });
   });
 
@@ -339,7 +349,7 @@ describe('StrategyStETH', () => {
       );
       expect(await managerETH.getTotalAsset()).to.be.equal(ether('10'));
       expect(await managerETH.debtRatio()).to.be.equal(BASE_PARAMS.mul(BigNumber.from('0')).div(BigNumber.from('10')));
-      await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
+      await (await strategy.connect(keeper)['harvest(uint256)'](ethers.constants.Zero, { gasLimit: 3e6 })).wait();
       // 3 have been withdrawn from strat
       expect(await wETH.balanceOf(managerETH.address)).to.be.equal(ether('10'));
 

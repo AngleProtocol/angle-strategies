@@ -468,6 +468,24 @@ contract PoolManager is IPoolManagerFunctions, AccessControlUpgradeable, Functio
 
     // =========================== Guardian Functions ==============================
 
+    /// @notice Changes the guardian address and echoes it to other contracts that interact with this `PoolManager`
+    /// @param _guardian New guardian address
+    /// @param guardian Old guardian address to revoke
+    function setGuardian(address _guardian, address guardian) external onlyRole(GUARDIAN_ROLE) {
+        // Granting the new role
+        // Access control for this contract
+        _grantRole(GUARDIAN_ROLE, _guardian);
+        // Propagating the new role in other contract
+        uint256 strategyListLength = strategyList.length;
+        for (uint256 i = 0; i < strategyListLength; i++) {
+            IStrategy(strategyList[i]).addGuardian(_guardian);
+        }
+        for (uint256 i = 0; i < strategyListLength; i++) {
+            IStrategy(strategyList[i]).revokeGuardian(guardian);
+        }
+        _revokeRole(GUARDIAN_ROLE, guardian);
+    }
+
     /// @notice Modifies the funds a strategy has access to
     /// @param strategy The address of the Strategy
     /// @param _debtRatio The share of the total assets that the strategy has access to

@@ -22,6 +22,7 @@ contract StrategyStETHAcc is BaseStrategyUpgradeable {
     /// @notice Current `apr` of the strategy: this apr needs to be manually filled by the strategist
     /// and updated when Lido's APR changes. It is put like that as there is no easy way to compute Lido's APR
     /// on-chain
+    /// @notice Base used is `BASE_PARAMS`
     uint256 public apr;
 
     /// @notice Reference to the Curve ETH/stETH
@@ -31,7 +32,7 @@ contract StrategyStETHAcc is BaseStrategyUpgradeable {
     /// @notice Reference to the stETH token
     ISteth public stETH;
 
-    address private _referral = 0x16388463d60FFE0661Cf7F1f31a7D658aC790ff7; //stratms. for recycling and redepositing
+    address private _referral = 0xdC4e6DFe07EFCa50a197DF15D9200883eF4Eb1c8; //stratms. for recycling and redepositing
     /// @notice Maximum trade size within the strategy
     uint256 public maxSingleTrade;
     /// @notice Parameter used for slippage protection
@@ -52,6 +53,7 @@ contract StrategyStETHAcc is BaseStrategyUpgradeable {
     /// @param _stableSwapSTETH Address of the stETH/ETH Curve pool
     /// @param _weth Address of wETH
     /// @param _stETH Address of the stETH token
+    /// @param _apr Estimated apr on each staked ETH
     function initialize(
         address _poolManager,
         address governor,
@@ -59,13 +61,15 @@ contract StrategyStETHAcc is BaseStrategyUpgradeable {
         address[] memory keepers,
         address _stableSwapSTETH,
         address _weth,
-        ISteth _stETH
+        ISteth _stETH,
+        uint256 _apr
     ) external {
         _initialize(_poolManager, governor, guardian, keepers);
         require(address(want) == _weth, "20");
         stableSwapSTETH = IStableSwapPool(_stableSwapSTETH);
         weth = IWETH9(_weth);
         stETH = ISteth(_stETH);
+        apr = _apr;
         _stETH.approve(_stableSwapSTETH, type(uint256).max);
         maxSingleTrade = 1_000 * 1e18;
         slippageProtectionOut = 50;
@@ -175,7 +179,7 @@ contract StrategyStETHAcc is BaseStrategyUpgradeable {
     }
 
     /// @notice Function called when harvesting to invest in stETH
-    /// Functio used in other contracts, in this strategy it is useless
+    /// Function used in other contracts, in this strategy it is useless
     function _adjustPosition(uint256) internal override {
         _adjustPosition();
     }
