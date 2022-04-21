@@ -15,7 +15,7 @@ import "@openzeppelin/contracts/utils/Address.sol";
 /// @author Forked from https://github.com/Grandthrax/yearn-steth-acc/blob/master/contracts/Strategy.sol
 /// @notice A strategy designed to getting yield on wETH by putting ETH in Lido or Curve for stETH and exiting
 /// for wETH
-contract StrategyStETHAcc is BaseStrategyUpgradeable {
+contract StETHStrategy is BaseStrategyUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
