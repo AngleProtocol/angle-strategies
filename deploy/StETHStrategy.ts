@@ -1,4 +1,4 @@
-import { network } from 'hardhat';
+import hre, { network } from 'hardhat';
 import yargs from 'yargs';
 import { DeployFunction } from 'hardhat-deploy/types';
 import { CONTRACTS_ADDRESSES, ChainId, Interfaces } from '@angleprotocol/sdk';
@@ -15,20 +15,20 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
   let ANGLE: string;
   let governor: string;
   let proxyAdmin: string;
-  let json = await import('./networks/' + network.name + '.json');
 
   // if fork we suppose that we are in mainnet
+  let json = (await import('./networks/mainnet.json')) as any;
   if (!network.live) {
     guardian = CONTRACTS_ADDRESSES[ChainId.MAINNET].Guardian!;
     ANGLE = CONTRACTS_ADDRESSES[ChainId.MAINNET].ANGLE!;
     governor = CONTRACTS_ADDRESSES[ChainId.MAINNET].GovernanceMultiSig! as string;
     proxyAdmin = CONTRACTS_ADDRESSES[ChainId.MAINNET].ProxyAdmin! as string;
-    json = await import('./networks/mainnet.json');
   } else {
     guardian = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].Guardian!;
     ANGLE = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].ANGLE!;
     governor = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].GovernanceMultiSig! as string;
     proxyAdmin = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].ProxyAdmin! as string;
+    json = await import('./networks/' + network.name + '.json');
   }
 
   let strategyImplementation = await deployments.getOrNull('StETHStrategy_Implementation');
@@ -49,19 +49,21 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     // if fork we suppose that we are in mainnet
     if (!network.live) {
       // in this specific case the poolManager is not already deploy we need to hardcode the address
-      // CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR.collaterals![collat].PoolManager as string;
-      poolManager = new Contract('', Interfaces.PoolManager_Interface) as PoolManager;
+      // const poolManagerAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR.collaterals![collat].PoolManager as string;
+      const poolManagerAddress = '0x7c2C494D8791654e9F6d5d6f2FCFFc27e79A2Cea';
+      poolManager = new Contract(poolManagerAddress, Interfaces.PoolManager_Interface) as PoolManager;
     } else {
       poolManager = new Contract(
-        CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR.collaterals![collat].PoolManager as string,
+        CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR.collaterals![collats[collat]]
+          .PoolManager as string,
         Interfaces.PoolManager_Interface,
       ) as PoolManager;
     }
-    console.log(`collat: ${collat}, poolManager: ${poolManager.address}`);
+    console.log(`collat: ${collats[collat]}, poolManager: ${poolManager.address}`);
 
     const curvePool = json.Curve.StableSwapStETHnETH;
-    const wETH = json.wETH;
-    const stETH = json.stETH;
+    const wETH = json.WETH;
+    const stETH = json.STETH;
     console.log(`Needed addresses \n: Curve pool:${curvePool} \n wETH:${wETH} \n stETH:${stETH} \n`);
 
     const initializeData = StETHStrategy__factory.createInterface().encodeFunctionData('initialize', [
@@ -75,17 +77,17 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
       parseUnits('4', 9),
     ]);
 
-    const proxy = await deploy(`StETHStrategy`, {
+    const proxyStrategy = await deploy(`StETHStrategy`, {
       contract: 'TransparentUpgradeableProxy',
       from: deployer.address,
       args: [strategyImplementation.address, proxyAdmin, initializeData],
     });
 
     console.log('Implementation deployed at address: ', strategyImplementation.address);
-    console.log(`Strategy StETH (proxy) successfully deployed at address: `, proxy.address);
+    console.log(`Strategy StETH (proxy) successfully deployed at address: `, proxyStrategy.address);
     console.log(
       `Deploy cost: ${(strategyImplementation.receipt?.gasUsed as BigNumber)?.toString()} (implem) + ${(
-        proxy.receipt?.gasUsed as BigNumber
+        proxyStrategy.receipt?.gasUsed as BigNumber
       )?.toString()} (proxy)`,
     );
   }
