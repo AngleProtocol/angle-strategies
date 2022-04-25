@@ -465,10 +465,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @notice Swap earned stkAave or Aave for `want` through 1Inch
     /// @param minAmountOut Minimum amount of `want` to receive for the swap to happen
     /// @param payload Bytes needed for 1Inch API. Tokens swapped should be: stkAave -> `want` or Aave -> `want`
-    function sellRewards(
-        uint256 minAmountOut,
-        bytes memory payload
-    ) external onlyRole(KEEPER_ROLE) {
+    function sellRewards(uint256 minAmountOut, bytes memory payload) external onlyRole(KEEPER_ROLE) {
         //solhint-disable-next-line
         (bool success, bytes memory result) = _oneInch.call(payload);
         if (!success) _revertBytes(result);
@@ -880,7 +877,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
                 variableBorrowRate *
                 borrows) /
             _totalAssets /
-            10**18; // BASE 9
+            10**9; // BASE 18
     }
 
     /// @notice Returns the `want` balance
