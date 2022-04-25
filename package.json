@@ -21,7 +21,7 @@
     "prettier:js": "prettier --write 'scripts/**/*.ts' 'scripts/*.ts' 'test/**/*.{js,ts}' 'deploy/*.{js,ts}' '*.{js,ts}'",
     "size": "hardhat size-contracts",
     "test": "hardhat test",
-    "test:end:fork": "FORK=true hardhat test test/end-to-end/**.ts",
+    "test:end:fork": "FORK=true hardhat test test/strategies/**.ts",
     "test:gas": "ENABLE_GAS_REPORT=true CI=true hardhat test",
     "test:fork:gas": "ENABLE_GAS_REPORT=true CI=true hardhat test --network localhost"
   },
