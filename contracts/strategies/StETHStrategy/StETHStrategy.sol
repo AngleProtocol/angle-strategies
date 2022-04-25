@@ -53,7 +53,7 @@ contract StETHStrategy is BaseStrategyUpgradeable {
     /// @param _stableSwapSTETH Address of the stETH/ETH Curve pool
     /// @param _weth Address of wETH
     /// @param _stETH Address of the stETH token
-    /// @param _apr Estimated apr on each staked ETH
+    /// @param _apr Estimated apr on staked ETH
     function initialize(
         address _poolManager,
         address governor,
