@@ -19,8 +19,8 @@ import {
   IProtocolDataProvider__factory,
   ILendingPool__factory,
 } from '../../typechain';
-import { getOptimalBorrow, getConstrainedBorrow, SCalculateBorrow } from '../../utils/optimization';
-import { formatUnits, parseUnits } from 'ethers/lib/utils';
+import { getOptimalBorrow, getConstrainedBorrow } from '../../utils/optimization';
+import { parseUnits } from 'ethers/lib/utils';
 import { expectApproxDelta } from '../../utils/bignumber';
 import { getParamsOptim } from '../utils';
 
@@ -80,11 +80,13 @@ describe('AaveFlashloan Strat', () => {
     dai = (await ethers.getContractAt(ERC20__factory.abi, '0x6B175474E89094C44Da98b954EedeAC495271d0F')) as ERC20;
     wantDecimals = await wantToken.decimals();
     daiDecimals = await dai.decimals();
+    /*
     aave = (await ethers.getContractAt(ERC20__factory.abi, '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9')) as ERC20;
     stkAave = (await ethers.getContractAt(
       IStakedAave__factory.abi,
       '0x4da27a545c0c5B758a6BA100e3a049001de870f5',
     )) as IStakedAave;
+    */
 
     [deployer, proxyAdmin, governor, guardian, user, keeper] = await ethers.getSigners();
 
@@ -372,7 +374,7 @@ describe('AaveFlashloan Strat', () => {
 
       await strategy.connect(keeper)['harvest(uint256)'](guessedBorrowed, { gasLimit: 3e6 });
 
-      const { borrows } = await strategy.getCurrentPosition();
+      // const { borrows } = await strategy.getCurrentPosition();
 
       // no equality because the minRation is not achieved so staying with the same borrow
       // if we remove the harvest after the deposit, then the maxLiquidity in the flashLoan is reached

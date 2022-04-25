@@ -117,7 +117,7 @@ abstract contract MockAave is
         stakersCooldownsValue = _stakersCooldownsValue;
     }
 
-    function getPriceOracle() external override view returns (address) {
+    function getPriceOracle() external view override returns (address) {
         return address(this);
     }
 
@@ -202,7 +202,7 @@ abstract contract MockLendingPool is ILendingPool {
         reserveNormalizedIncomes[underlying] = BASE;
     }
 
-    function getReserveNormalizedIncome(address asset) external override view returns (uint256) {
+    function getReserveNormalizedIncome(address asset) external view override returns (uint256) {
         return reserveNormalizedIncomes[asset] / BASE;
     }
 

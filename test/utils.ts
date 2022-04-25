@@ -8,7 +8,7 @@ import {
   IAaveIncentivesController,
   ILendingPool,
 } from '../typechain';
-import { getOptimalBorrow, getConstrainedBorrow, SCalculateBorrow } from '../utils/optimization';
+import { SCalculateBorrow } from '../utils/optimization';
 import { parseUnits } from 'ethers/lib/utils';
 
 const BASE_PARAMS = parseUnits('1', 9);

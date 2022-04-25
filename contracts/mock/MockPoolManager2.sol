@@ -86,20 +86,27 @@ interface IOracle {
 
 interface ISanToken is IERC20 {
     function mint(address account, uint256 amount) external;
+
     function burnFrom(
         uint256 amount,
         address burner,
         address sender
     ) external;
+
     function burnSelf(uint256 amount, address burner) external;
+
     function stableMaster() external view returns (address);
+
     function poolManager() external view returns (address);
 }
 
 interface IStableMaster {
     function agToken() external view returns (address);
+
     function signalLoss(uint256 loss) external;
+
     function accumulateInterest(uint256 gain) external;
+
     function collateralMap(IPoolManager poolManager)
         external
         view

@@ -62,8 +62,9 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     console.log('Implementation deployed at address: ', strategyImplementation.address);
     console.log(`Strategy AaveFlashloanStrategy_${collat} (proxy) successfully deployed at address: `, proxy.address);
     console.log(
-      `Deploy cost: ${(strategyImplementation.receipt?.gasUsed as BigNumber)?.toString()} (implem) + ${(proxy.receipt
-        ?.gasUsed as BigNumber)?.toString()} (proxy)`,
+      `Deploy cost: ${(strategyImplementation.receipt?.gasUsed as BigNumber)?.toString()} (implem) + ${(
+        proxy.receipt?.gasUsed as BigNumber
+      )?.toString()} (proxy)`,
     );
   }
 };

@@ -1,9 +1,9 @@
-import { ethers, network } from 'hardhat';
+import { network } from 'hardhat';
 import { utils, BigNumber } from 'ethers';
 import { impersonate } from '../test-utils';
 import { expect } from '../test-utils/chai-setup';
 
-import { setup, assert, assertAlmostEq } from './setup_tests';
+import { setup } from './setup_tests';
 
 describe('AaveFlashloan strategy', () => {
   it('scenario static', async () => {

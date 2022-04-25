@@ -8,7 +8,7 @@
     "no-empty-blocks": "off",
     "not-rely-on-time": "off",
     "compiler-version": "off",
-    "private-vars-leading-underscore": "error",
+    "private-vars-leading-underscore": "off",
     "reason-string": "off",
     "const-name-snakecase": "off",
     "func-visibility": ["error", { "ignoreConstructors": true }]

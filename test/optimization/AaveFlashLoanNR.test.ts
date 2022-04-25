@@ -1,5 +1,5 @@
 import { BigNumber } from 'ethers';
-import { formatUnits, parseUnits } from 'ethers/lib/utils';
+import { parseUnits } from 'ethers/lib/utils';
 import {
   computeInterestPrimes,
   getOptimalBorrow,
