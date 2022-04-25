@@ -12,7 +12,7 @@ on:
         required: true
         options:
           - all
-          - unit_tests
+          - run-compile
 
 defaults:
   run:
@@ -42,7 +42,7 @@ jobs:
       - name: Run eslint
         run: yarn lint:js:fix
 
-  unit-tests:
+  run-compile:
     if: ${{ github.ref == 'refs/heads/main' || github.event.inputs.workflow_to_run == 'all' || github.event.inputs.workflow_to_run == 'unit_tests' }}
     runs-on: ubuntu-latest
     steps:
