@@ -12,9 +12,6 @@ on:
         required: true
         options:
           - all
-          - all_brownie
-          - brownie-curve
-          - brownie-protocol
           - unit_tests
 
 defaults:
@@ -44,13 +41,6 @@ jobs:
         run: yarn lint:sol
       - name: Run eslint
         run: yarn lint:js:fix
-      - name: Discord notification
-        if: failure()
-        uses: Ilshidur/action-discord@master
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        with:
-          args: '⛔️ Error in project {{EVENT_PAYLOAD.repository.full_name}}. See here: https://github.com/AngleProtocol/angle-solidity/actions'
 
   unit-tests:
     if: ${{ github.ref == 'refs/heads/main' || github.event.inputs.workflow_to_run == 'all' || github.event.inputs.workflow_to_run == 'unit_tests' }}
@@ -77,58 +67,3 @@ jobs:
         run: yarn compile
       - name: Run unit tests
         run: yarn test
-        env:
-          ENABLE_GAS_REPORT: true
-          CI: true
-      - name: Print gas report
-        run: cat gas-report.txt
-      - name: Discord notification
-        if: failure()
-        uses: Ilshidur/action-discord@master
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        with:
-          args: '⛔️ Error in project {{EVENT_PAYLOAD.repository.full_name}}. See here: https://github.com/AngleProtocol/angle-solidity/actions'
-  
-  brownie-tests-curve:
-    if: ${{ github.ref == 'refs/heads/main' || github.event.inputs.workflow_to_run == 'all' || github.event.inputs.workflow_to_run == 'all_brownie' || github.event.inputs.workflow_to_run == 'brownie-curve' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
-        with:
-          node-version: 14
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.8' # Version range or exact version of a Python version to use, using SemVer's version range syntax
-      - run: npm install -g ganache-cli
-      - run: pip install -r requirements.txt
-      - run: brownie test testBrownie/CurveSystem
-      - name: Discord notification
-        if: failure()
-        uses: Ilshidur/action-discord@master
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        with:
-          args: '⛔️ Error in project {{EVENT_PAYLOAD.repository.full_name}}. See here: https://github.com/AngleProtocol/angle-solidity/actions'
-  brownie-tests-protocol:
-    if: ${{ github.ref == 'refs/heads/main' || github.event.inputs.workflow_to_run == 'all' || github.event.inputs.workflow_to_run == 'all_brownie' || github.event.inputs.workflow_to_run == 'brownie-protocol' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
-        with:
-          node-version: 14
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.8' # Version range or exact version of a Python version to use, using SemVer's version range syntax
-      - run: npm install -g ganache-cli
-      - run: pip install -r requirements.txt
-      - run: brownie test testBrownie/ProtocolTests
-      - name: Discord notification
-        if: failure()
-        uses: Ilshidur/action-discord@master
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        with:
-          args: '⛔️ Error in project {{EVENT_PAYLOAD.repository.full_name}}. See here: https://github.com/AngleProtocol/angle-solidity/actions'
