@@ -8,6 +8,8 @@
     "coverage": "FORK=true hardhat coverage",
     "etherscan:mainnet": "hardhat --network mainnet etherscan-verify",
     "etherscan:rinkeby": "hardhat --network rinkeby etherscan-verify",
+    "deploy:mainnet": "hardhat deploy --network mainnet --tags aave_flashloan_strategy",
+    "node:fork:implem": "FORK=true hardhat node --tags aave_flashloan_strategy",
     "doc": "hardhat docgen",
     "docify": "node docify.js",
     "license": "hardhat prepend-spdx-license",

@@ -23,10 +23,10 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
 
   const keeper = '0xcC617C6f9725eACC993ac626C7efC6B96476916E';
 
-  let strategyImplementation = await deployments.getOrNull('AaveFlashloanStrategy_Implementation');
+  let strategyImplementation = await deployments.getOrNull('AaveFlashloanStrategy_NewImplementation');
 
   if (!strategyImplementation) {
-    strategyImplementation = await deploy('AaveFlashloanStrategy_Implementation', {
+    strategyImplementation = await deploy('AaveFlashloanStrategy_NewImplementation', {
       contract: 'AaveFlashloanStrategy',
       from: deployer.address,
       args: [],
@@ -62,9 +62,8 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     console.log('Implementation deployed at address: ', strategyImplementation.address);
     console.log(`Strategy AaveFlashloanStrategy_${collat} (proxy) successfully deployed at address: `, proxy.address);
     console.log(
-      `Deploy cost: ${(strategyImplementation.receipt?.gasUsed as BigNumber)?.toString()} (implem) + ${(
-        proxy.receipt?.gasUsed as BigNumber
-      )?.toString()} (proxy)`,
+      `Deploy cost: ${(strategyImplementation.receipt?.gasUsed as BigNumber)?.toString()} (implem) + ${(proxy.receipt
+        ?.gasUsed as BigNumber)?.toString()} (proxy)`,
     );
   }
 };
