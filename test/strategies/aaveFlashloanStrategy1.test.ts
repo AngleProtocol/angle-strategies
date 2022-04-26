@@ -10,13 +10,13 @@ import {
   FlashMintLib,
   ERC20,
   ERC20__factory,
-  IAaveIncentivesController__factory,
+  // IAaveIncentivesController__factory,
   IStakedAave,
   IStakedAave__factory,
   AaveFlashloanStrategy__factory,
   PoolManager,
   IProtocolDataProvider,
-  IAaveIncentivesController,
+  // IAaveIncentivesController,
   ILendingPool,
   IProtocolDataProvider__factory,
   ILendingPool__factory,
@@ -40,7 +40,7 @@ describe('AaveFlashloan Strat', () => {
 
   let poolManager: PoolManager;
   let protocolDataProvider: IProtocolDataProvider;
-  let incentivesController: IAaveIncentivesController;
+  // let incentivesController: IAaveIncentivesController;
   let lendingPool: ILendingPool;
   let flashMintLib: FlashMintLib;
 
@@ -49,7 +49,7 @@ describe('AaveFlashloan Strat', () => {
   // ReserveInterestRateStrategy for USDC
   const reserveInterestRateStrategyUSDC = '0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27';
   // ReserveInterestRateStrategy for DAI
-  const reserveInterestRateStrategyDAI = '0xfffE32106A68aA3eD39CcCE673B646423EEaB62a';
+  // const reserveInterestRateStrategyDAI = '0xfffE32106A68aA3eD39CcCE673B646423EEaB62a';
 
   beforeEach(async () => {
     await network.provider.request({
@@ -81,10 +81,12 @@ describe('AaveFlashloan Strat', () => {
       '0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d',
     )) as IProtocolDataProvider;
 
+    /*
     incentivesController = (await ethers.getContractAt(
       IAaveIncentivesController__factory.abi,
       '0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5',
     )) as IAaveIncentivesController;
+    */
 
     lendingPool = (await ethers.getContractAt(
       ILendingPool__factory.abi,

@@ -1,7 +1,7 @@
 /* eslint-disable camelcase */
-import { ethers, network } from 'hardhat';
+import { network } from 'hardhat';
 import { utils } from 'ethers';
-import { logBN, setup } from './setup_tests';
+import { setup } from './setup_tests';
 
 describe('AaveFlashloan strategy random (USDC)', () => {
   it('scenario random', async () => {

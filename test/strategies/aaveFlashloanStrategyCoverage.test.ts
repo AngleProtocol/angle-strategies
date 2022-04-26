@@ -1,6 +1,6 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ethers, network } from 'hardhat';
-import { utils, constants, BigNumber, Contract } from 'ethers';
+import { utils, Contract } from 'ethers';
 import { expect } from '../test-utils/chai-setup';
 import { deploy, impersonate } from '../test-utils';
 import axios from 'axios';
@@ -21,7 +21,7 @@ import {
   IProtocolDataProvider__factory,
   ILendingPool__factory,
 } from '../../typechain';
-import { formatUnits, parseUnits } from 'ethers/lib/utils';
+import { parseUnits } from 'ethers/lib/utils';
 
 describe('AaveFlashloan Strat - coverage', () => {
   // ATokens
@@ -49,7 +49,7 @@ describe('AaveFlashloan Strat - coverage', () => {
   // ReserveInterestRateStrategy for USDC
   const reserveInterestRateStrategyUSDC = '0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27';
   // ReserveInterestRateStrategy for DAI
-  const reserveInterestRateStrategyDAI = '0xfffE32106A68aA3eD39CcCE673B646423EEaB62a';
+  // const reserveInterestRateStrategyDAI = '0xfffE32106A68aA3eD39CcCE673B646423EEaB62a';
 
   beforeEach(async () => {
     await network.provider.request({

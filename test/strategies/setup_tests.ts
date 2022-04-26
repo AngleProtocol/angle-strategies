@@ -64,7 +64,7 @@ export async function setup(startBlocknumber?: number, collat = 'USDC') {
     });
   }
 
-  const [deployer, proxyAdmin, governor, guardian, user, keeper] = await ethers.getSigners();
+  const [deployer, proxyAdmin, governor, guardian, keeper] = await ethers.getSigners();
 
   // === TOKENS ===
   const _wantToken = Object.values(ALL_TOKENS[1][1]).find(_tok => _tok.symbol === collat)?.address as string;
@@ -188,19 +188,21 @@ export async function setup(startBlocknumber?: number, collat = 'USDC') {
   // const aavePrice = utils.parseUnits('157', 6); // Can be used to update the price manually
 
   const harvest = async () => {
+    /*
     const aTokenBefore = await aToken.balanceOf(strategy.address);
     const debtTokenBefore = await debtToken.balanceOf(strategy.address);
     const crBefore = await strategy.targetCollatRatio();
     const ratesBefore = await protocolDataProvider.getReserveData(wantToken.address);
+    */
 
     // console.log('harvesting...');
 
-    const receipt = await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
+    // const receipt = await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
     // console.log('gasUsed', receipt.gasUsed.toString());
 
     const aTokenAfter = await aToken.balanceOf(strategy.address);
     const debtTokenAfter = await debtToken.balanceOf(strategy.address);
-    const crAfter = await strategy.targetCollatRatio();
+    // const crAfter = await strategy.targetCollatRatio();
     const ratesAfter = await protocolDataProvider.getReserveData(wantToken.address);
 
     const aTokenEmissions = (await incentivesController.assets(aToken.address)).emissionPerSecond.mul(

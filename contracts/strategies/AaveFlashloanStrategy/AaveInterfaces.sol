@@ -50,6 +50,7 @@ interface IAaveIncentivesController {
     /**
      * @dev for backward compatibility with previous implementation of the Incentives controller
      */
+    //solhint-disable-next-line
     function REWARD_TOKEN() external view returns (address);
 
     function getDistributionEnd() external view returns (uint256);
@@ -473,6 +474,7 @@ interface IProtocolDataProvider {
         address tokenAddress;
     }
 
+    //solhint-disable-next-line
     function ADDRESSES_PROVIDER() external view returns (ILendingPoolAddressesProvider);
 
     function getAllReservesTokens() external view returns (TokenData[] memory);
@@ -699,10 +701,12 @@ interface IStakedAave is IERC20 {
 
     function getTotalRewardsBalance(address) external view returns (uint256);
 
+    //solhint-disable-next-line
     function COOLDOWN_SECONDS() external view returns (uint256);
 
     function stakersCooldowns(address) external view returns (uint256);
 
+    //solhint-disable-next-line
     function UNSTAKE_WINDOW() external view returns (uint256);
 }
 
@@ -853,6 +857,7 @@ interface IAToken is IERC20, IScaledBalanceToken, IInitializableAToken {
     /**
      * @dev Returns the address of the underlying asset of this aToken (E.g. WETH for aWETH)
      **/
+    //solhint-disable-next-line
     function UNDERLYING_ASSET_ADDRESS() external view returns (address);
 }
 
@@ -874,6 +879,7 @@ interface IReserveInterestRateStrategy {
 
     function variableRateSlope2() external view returns (uint256);
 
+    //solhint-disable-next-line
     function OPTIMAL_UTILIZATION_RATE() external view returns (uint256);
 
     function calculateInterestRates(
