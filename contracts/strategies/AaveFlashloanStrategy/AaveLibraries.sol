@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.8.7;
+pragma solidity 0.8.12;
 
 import { IAToken, IProtocolDataProvider, IProtocolDataProvider, ILendingPool, IPriceOracle, IOptionalERC20 } from "./AaveInterfaces.sol";
 import "@openzeppelin/contracts/interfaces/IERC3156FlashLender.sol";

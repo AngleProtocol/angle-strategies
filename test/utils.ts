@@ -11,7 +11,8 @@ import {
 import { SCalculateBorrow } from '../utils/optimization';
 import { parseUnits } from 'ethers/lib/utils';
 
-const BASE_PARAMS = parseUnits('1', 9);
+export const BASE_PARAMS = parseUnits('1', 9);
+export const BASE_TOKENS = parseUnits('1', 18);
 const normalizeToBase27 = (n: BigNumber, base = 6) => n.mul(utils.parseUnits('1', 27)).div(utils.parseUnits('1', base));
 
 async function getAavePoolVariables(

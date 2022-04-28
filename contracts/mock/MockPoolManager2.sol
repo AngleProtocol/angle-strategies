@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.7;
+pragma solidity ^0.8.12;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -200,6 +200,19 @@ contract PoolManager is IPoolManagerFunctions, AccessControlUpgradeable, Functio
     /// @notice Role for `Strategy` only
     bytes32 public constant STRATEGY_ROLE = keccak256("STRATEGY_ROLE");
 
+    constructor(
+        address _token,
+        address governor,
+        address guardian
+    ) {
+        token = IERC20(_token);
+        _setupRole(GUARDIAN_ROLE, guardian);
+        _setupRole(GUARDIAN_ROLE, governor);
+        _setupRole(GOVERNOR_ROLE, governor);
+        _setRoleAdmin(GOVERNOR_ROLE, GOVERNOR_ROLE);
+        _setRoleAdmin(GUARDIAN_ROLE, GOVERNOR_ROLE);
+    }
+
     // ============================= Yield Farming =================================
 
     /// @notice Internal version of `updateStrategyDebtRatio`
@@ -318,6 +331,7 @@ contract PoolManager is IPoolManagerFunctions, AccessControlUpgradeable, Functio
         // The only issue is if the strategy is compromised; in this case governance
         // should revoke the strategy
         uint256 target = ((_getTotalAsset()) * params.debtRatio) / BASE_PARAMS;
+
         if (target > params.totalStrategyDebt) {
             // If the strategy has some credit left, tokens can be transferred to this strategy
             uint256 available = Math.min(target - params.totalStrategyDebt, _getBalance());
@@ -346,7 +360,7 @@ contract PoolManager is IPoolManagerFunctions, AccessControlUpgradeable, Functio
                 interestsAccumulated += gainForSurplus - adminDebtPre;
                 adminDebt = 0;
             } else adminDebt -= gainForSurplus;
-            stableMaster.accumulateInterest(gain - gainForSurplus);
+            // stableMaster.accumulateInterest(gain - gainForSurplus);
             emit FeesDistributed(gain);
         }
 
@@ -361,7 +375,7 @@ contract PoolManager is IPoolManagerFunctions, AccessControlUpgradeable, Functio
                 adminDebt += lossForSurplus - interestsAccumulatedPreLoss;
             } else interestsAccumulated -= lossForSurplus;
             // The rest is incurred to SLPs
-            stableMaster.signalLoss(loss - lossForSurplus);
+            // stableMaster.signalLoss(loss - lossForSurplus);
         }
     }
 
@@ -454,6 +468,24 @@ contract PoolManager is IPoolManagerFunctions, AccessControlUpgradeable, Functio
 
     // =========================== Guardian Functions ==============================
 
+    /// @notice Changes the guardian address and echoes it to other contracts that interact with this `PoolManager`
+    /// @param _guardian New guardian address
+    /// @param guardian Old guardian address to revoke
+    function setGuardian(address _guardian, address guardian) external onlyRole(GUARDIAN_ROLE) {
+        // Granting the new role
+        // Access control for this contract
+        _grantRole(GUARDIAN_ROLE, _guardian);
+        // Propagating the new role in other contract
+        uint256 strategyListLength = strategyList.length;
+        for (uint256 i = 0; i < strategyListLength; i++) {
+            IStrategy(strategyList[i]).addGuardian(_guardian);
+        }
+        for (uint256 i = 0; i < strategyListLength; i++) {
+            IStrategy(strategyList[i]).revokeGuardian(guardian);
+        }
+        _revokeRole(GUARDIAN_ROLE, guardian);
+    }
+
     /// @notice Modifies the funds a strategy has access to
     /// @param strategy The address of the Strategy
     /// @param _debtRatio The share of the total assets that the strategy has access to
@@ -527,7 +559,7 @@ contract PoolManager is IPoolManagerFunctions, AccessControlUpgradeable, Functio
         // With the strategy we are using in current tests, it is going to be impossible to have
         // a positive loss by calling strategy.withdraw, this function indeed calls _liquidatePosition
         // which output value is always zero
-        if (loss > 0) stableMaster.signalLoss(loss);
+        // if (loss > 0) stableMaster.signalLoss(loss);
     }
 
     // =================== Surplus Distributor Function ============================

@@ -64,7 +64,7 @@ export async function setup(startBlocknumber?: number, collat = 'USDC') {
     });
   }
 
-  const [deployer, proxyAdmin, governor, guardian, keeper] = await ethers.getSigners();
+  const { deployer, proxyAdmin, governor, guardian, user, keeper } = await ethers.getNamedSigners();
 
   // === TOKENS ===
   const _wantToken = Object.values(ALL_TOKENS[1][1]).find(_tok => _tok.symbol === collat)?.address as string;

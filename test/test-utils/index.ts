@@ -1,6 +1,7 @@
 import { ethers, network } from 'hardhat';
-import { Contract, Wallet } from 'ethers';
+import { Contract, ContractFactory, Wallet } from 'ethers';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { TransparentUpgradeableProxy__factory } from '../../typechain';
 
 export async function deploy(
   contractName: string,
@@ -36,4 +37,18 @@ export async function impersonate(
     });
   }
   return account;
+}
+
+// eslint-disable-next-line
+export async function deployUpgradeable(factory: ContractFactory, ...args: any[]): Promise<Contract> {
+  const { deployer, proxyAdmin, user } = await ethers.getNamedSigners();
+
+  const Implementation = args.length === 0 ? await factory.deploy() : await factory.deploy(args[0], args[1]);
+  const Proxy = await new TransparentUpgradeableProxy__factory(deployer).deploy(
+    Implementation.address,
+    proxyAdmin.address,
+    '0x',
+  );
+
+  return new Contract(Proxy.address, factory.interface, user);
 }
