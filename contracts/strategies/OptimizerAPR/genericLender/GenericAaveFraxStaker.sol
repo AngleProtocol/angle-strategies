@@ -2,13 +2,7 @@
 
 pragma solidity 0.8.12;
 
-import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-
-import { IStakedAave, IReserveInterestRateStrategy } from "../../../interfaces/external/aave/IAave.sol";
-import "../../../interfaces/external/aave/IAaveToken.sol";
-import "../../../interfaces/external/aave/IProtocolDataProvider.sol";
-import "../../../interfaces/external/aave/ILendingPool.sol";
+import "../../../interfaces/external/frax/IFraxUnifiedFarmTemplate.sol";
 import "./GenericAaveUpgradeable.sol";
 
 /// @title GenericAaveFraxStaker
@@ -18,23 +12,25 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
-    // // ==================== References to contracts =============================
-    // AggregatorV3Interface public constant oracle = AggregatorV3Interface(0x547a514d5e3769680Ce22B2361c10Ea13619e8a9);
-    // address public constant oneInch = 0x1111111254fb6c44bAC0beD2854e76F90643097d;
+    // // ========================== Aave Protocol Addresses ==========================
 
-    // // // ========================== Aave Protocol Addresses ==========================
-
-    // address private constant _aave = 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9;
-    // IStakedAave private constant _stkAave = IStakedAave(0x4da27a545c0c5B758a6BA100e3a049001de870f5);
-    // IAaveIncentivesController private constant _incentivesController =
-    //     IAaveIncentivesController(0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5);
-    // ILendingPool private constant _lendingPool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
-    // IProtocolDataProvider private constant _protocolDataProvider =
-    //     IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
+    IFraxUnifiedFarmTemplate private constant aFraxStakingContract =
+        IFraxUnifiedFarmTemplate(0x02577b426F223A6B4f2351315A19ecD6F357d65c);
 
     // ==================== Parameters =============================
 
-    error Test();
+    // hash representing the position on Frax staker
+    bytes32 kekId;
+    // used to track the current liquidity (staked + interests)
+    uint256 lastAaveLiquidityIndex;
+    // Last liquidity recorded on Frax staking contract
+    uint256 lastLiquidity;
+    // Minimum staking period
+    uint256 minStakingPeriod = 86400; // a day
+    uint256 stakingPeriod;
+
+    error NoLockedLiquidity();
+    error TooSmallStakingPeriod();
 
     // ============================= Constructor =============================
 
@@ -49,16 +45,72 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         bool _isIncentivised,
         address[] memory governorList,
         address guardian,
-        address[] memory keeperList
+        address[] memory keeperList,
+        uint256 _stakingPeriod
     ) external {
         initializeBase(_strategy, name, _isIncentivised, governorList, guardian, keeperList);
+        if (_stakingPeriod < minStakingPeriod) revert TooSmallStakingPeriod();
     }
 
     // ========================= Virtual Functions ===========================
 
-    function _stake(uint256 amount) internal virtual;
+    /// @notice Allow the lender to stake its aTokens in an external staking contract
+    /// @param amount Amount of aToken wanted to be stake
+    /// @dev If there is an existent locker already on Frax staking contract (keckId != null) --> then add to it
+    /// otherwise (first time w deposit or last action was a withdraw) we need to create a new locker
+    /// @dev Currently there is no additional reward to stake more than the minimum period as there is no multiplier
+    /// @dev We can have a multiplier if we ask for someone boosting power by let it (address_delegator) call `proxyToggleStaker(address(this))`
+    /// and then call with this contract `stakerSetVeFXSProxy(address_delegator)`
+    function _stake(uint256 amount) internal override returns (uint256 stakedAmount) {
+        uint256 liquidityIndex = _lendingPool.getReserveData(address(want)).liquidityIndex;
 
-    function _unstake(uint256 amount) internal virtual;
+        if (kekId == bytes32(0)) {
+            kekId = aFraxStakingContract.stakeLocked(amount, stakingPeriod);
+            lastLiquidity = amount;
+        } else {
+            aFraxStakingContract.lockAdditional(kekId, amount);
+            lastLiquidity = (lastLiquidity * liquidityIndex) / lastAaveLiquidityIndex + amount;
+        }
+        lastAaveLiquidityIndex = liquidityIndex;
+        stakedAmount = amount;
+    }
 
-    function _stakedBalance() internal virtual;
+    function _unstake(uint256 amount) internal override returns (uint256 withdrawnAmount) {
+        if (kekId == bytes32(0)) revert NoLockedLiquidity();
+
+        uint256 liquidityIndex = _lendingPool.getReserveData(address(want)).liquidityIndex;
+        withdrawnAmount = aFraxStakingContract.withdrawLocked(kekId, address(this));
+        if (amount <= withdrawnAmount) {
+            // too much has been withdrawn we must create back a locker
+            lastLiquidity = withdrawnAmount - amount;
+            kekId = aFraxStakingContract.stakeLocked(lastLiquidity, stakingPeriod);
+            withdrawnAmount = amount;
+        } else {
+            // this means we lost some funds in the process
+            lastLiquidity = 0;
+            delete kekId;
+        }
+        lastAaveLiquidityIndex = liquidityIndex;
+    }
+
+    function _stakedBalance() internal view override returns (uint256 amount) {
+        uint256 liquidityIndex = _lendingPool.getReserveData(address(want)).liquidityIndex;
+        return (lastLiquidity * liquidityIndex) / lastAaveLiquidityIndex;
+    }
+
+    /// @notice Permisionless function to claim rewards, reward tokens are directly sent to the contract and keeper/governance
+    /// can handle them via a `sweep` or a `sellRewards` call
+    function claimRewardsExternal() external returns (uint256[] memory) {
+        return aFraxStakingContract.getReward(address(this));
+    }
+
+    /// @notice Permisionless function to update the minimum staking period as dictated by Frax contracts
+    function setMinLockTime() external {
+        minStakingPeriod = aFraxStakingContract.lock_time_min();
+    }
+
+    /// @notice Permisionless function to update the minimum staking period as dictated by Frax contracts
+    function setLockTime(uint256 _stakingPeriod) external onlyRole(GUARDIAN_ROLE) {
+        stakingPeriod = _stakingPeriod;
+    }
 }

@@ -35,7 +35,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     IStakedAave private constant _stkAave = IStakedAave(0x4da27a545c0c5B758a6BA100e3a049001de870f5);
     IAaveIncentivesController private constant _incentivesController =
         IAaveIncentivesController(0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5);
-    ILendingPool private constant _lendingPool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
+    ILendingPool internal constant _lendingPool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
     IProtocolDataProvider private constant _protocolDataProvider =
         IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
 
@@ -71,7 +71,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         address[] memory governorList,
         address guardian,
         address[] memory keeperList
-    ) external {
+    ) public {
         _initialize(_strategy, name, governorList, guardian);
 
         _setupRole(KEEPER_ROLE, guardian);
@@ -413,9 +413,9 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
     // ========================= Virtual Functions ===========================
 
-    function _stake(uint256 amount) internal virtual;
+    function _stake(uint256 amount) internal virtual returns (uint256 stakedAmount);
 
-    function _unstake(uint256 amount) internal virtual;
+    function _unstake(uint256 amount) internal virtual returns (uint256 withdrawnAmount);
 
     function _stakedBalance() internal view virtual returns (uint256);
 }
