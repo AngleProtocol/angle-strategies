@@ -28,9 +28,11 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     // Minimum staking period
     uint256 minStakingPeriod = 86400; // a day
     uint256 stakingPeriod;
+    uint256 lastCreatedStake;
 
     error NoLockedLiquidity();
     error TooSmallStakingPeriod();
+    error UnstakedTooSoon();
 
     // ============================= Constructor =============================
 
@@ -67,6 +69,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         if (kekId == bytes32(0)) {
             kekId = aFraxStakingContract.stakeLocked(amount, stakingPeriod);
             lastLiquidity = amount;
+            lastCreatedStake = block.timestamp;
         } else {
             aFraxStakingContract.lockAdditional(kekId, amount);
             lastLiquidity = (lastLiquidity * liquidityIndex) / lastAaveLiquidityIndex + amount;
@@ -77,6 +80,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
 
     function _unstake(uint256 amount) internal override returns (uint256 withdrawnAmount) {
         if (kekId == bytes32(0)) revert NoLockedLiquidity();
+        if (block.timestamp - lastCreatedStake > stakingPeriod) revert UnstakedTooSoon();
 
         uint256 liquidityIndex = _lendingPool.getReserveData(address(want)).liquidityIndex;
         withdrawnAmount = aFraxStakingContract.withdrawLocked(kekId, address(this));
@@ -85,6 +89,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
             lastLiquidity = withdrawnAmount - amount;
             kekId = aFraxStakingContract.stakeLocked(lastLiquidity, stakingPeriod);
             withdrawnAmount = amount;
+            lastCreatedStake = block.timestamp;
         } else {
             // this means we lost some funds in the process
             lastLiquidity = 0;
