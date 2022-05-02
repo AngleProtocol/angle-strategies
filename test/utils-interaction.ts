@@ -13,7 +13,7 @@ import {
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { BigNumber } from 'ethers';
 import { formatUnits, parseUnits } from 'ethers/lib/utils';
-import { ethers } from 'hardhat';
+import { ethers, network } from 'hardhat';
 import { ERC20, ERC20__factory, StETHStrategy } from '../typechain';
 
 export const wait = (n = 1000) => {
@@ -290,3 +290,27 @@ export const closePerp = async (
     })} ${await collateral.name()}`,
   );
 };
+
+export async function findBalancesSlot(tokenAddress: string): Promise<number> {
+  const encode = (types: string[], values: any[]) => ethers.utils.defaultAbiCoder.encode(types, values);
+  const account = ethers.constants.AddressZero;
+  const probeA = encode(['uint'], [1]);
+  const probeB = encode(['uint'], [2]);
+  const token = await ethers.getContractAt('ERC20', tokenAddress);
+  for (let i = 0; i < 100; i++) {
+    let probedSlot = ethers.utils.keccak256(encode(['address', 'uint'], [account, i]));
+    // remove padding for JSON RPC
+    while (probedSlot.startsWith('0x0')) probedSlot = '0x' + probedSlot.slice(3);
+    const prev = await network.provider.send('eth_getStorageAt', [tokenAddress, probedSlot, 'latest']);
+    // make sure the probe will change the slot value
+    const probe = prev === probeA ? probeB : probeA;
+
+    await network.provider.send('hardhat_setStorageAt', [tokenAddress, probedSlot, probe]);
+
+    const balance = await token.balanceOf(account);
+    // reset to previous value
+    await network.provider.send('hardhat_setStorageAt', [tokenAddress, probedSlot, prev]);
+    if (balance.eq(ethers.BigNumber.from(probe))) return i;
+  }
+  throw 'Balances slot not found!';
+}
