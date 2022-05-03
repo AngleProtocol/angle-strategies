@@ -49,9 +49,20 @@ interface IFraxUnifiedFarmTemplate {
 
     function stakerSetVeFXSProxy(address proxy_address) external;
 
+    function proxyToggleStaker(address staker_address) external;
+
     function rewardRates(uint256 token_idx) external view returns (uint256 rwd_rate);
+
+    function lockMultiplier(uint256 secs) external view returns (uint256);
 
     function veFXSMultiplier(address account) external view returns (uint256 vefxs_multiplier);
 
     function totalCombinedWeight() external view returns (uint256);
+
+    // to be deleted
+    function toggleValidVeFXSProxy(address _proxy_addr) external;
+
+    function setMiscVariables(uint256[6] memory _misc_vars) external;
+
+    function valid_vefxs_proxies(address _proxy_addr) external returns (bool);
 }

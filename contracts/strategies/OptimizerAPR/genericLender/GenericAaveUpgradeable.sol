@@ -338,7 +338,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
             return amount;
         }
 
-        //not state changing but OK because of previous call
+        // not state changing but OK because of previous call
         uint256 liquidity = want.balanceOf(address(_aToken));
 
         if (liquidity > 1) {

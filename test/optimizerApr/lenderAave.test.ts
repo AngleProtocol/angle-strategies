@@ -3,8 +3,8 @@ import { BigNumber, utils } from 'ethers';
 import {
   ERC20,
   ERC20__factory,
-  GenericAaveUpgradeable,
-  GenericAaveUpgradeable__factory,
+  GenericAaveNoStaker,
+  GenericAaveNoStaker__factory,
   IAaveIncentivesController,
   IAaveIncentivesController__factory,
   ILendingPool,
@@ -23,21 +23,7 @@ import hre, { ethers, network } from 'hardhat';
 import { expect } from '../test-utils/chai-setup';
 import { BASE_TOKENS } from '../utils';
 import { parseUnits } from 'ethers/lib/utils';
-import { logBN } from '../utils-interaction';
-
-async function setTokenBalanceFor(token: ERC20, account: string, amount: number) {
-  // for FRAX we know it's 0
-  // const balanceSlot = await findBalancesSlot(token.address);
-  // console.log('the balance slot is ', balanceSlot);
-  const balanceSlot = 0;
-  const balanceStorage = utils.solidityKeccak256(['uint256', 'uint256'], [account, balanceSlot]);
-
-  await network.provider.send('hardhat_setStorageAt', [
-    token.address,
-    balanceStorage.replace('0x0', '0x'),
-    utils.hexZeroPad(utils.parseUnits(amount.toString(), await token.decimals()).toHexString(), 32),
-  ]);
-}
+import { logBN, setTokenBalanceFor } from '../utils-interaction';
 
 async function initStrategy(
   governor: SignerWithAddress,
@@ -61,9 +47,9 @@ async function initLenderAave(
   name: string,
   isIncentivized: boolean,
 ): Promise<{
-  lender: GenericAaveUpgradeable;
+  lender: GenericAaveNoStaker;
 }> {
-  const lender = (await deployUpgradeable(new GenericAaveUpgradeable__factory(guardian))) as GenericAaveUpgradeable;
+  const lender = (await deployUpgradeable(new GenericAaveNoStaker__factory(guardian))) as GenericAaveNoStaker;
   await lender.initialize(strategy.address, name, isIncentivized, [governor.address], guardian.address, [
     keeper.address,
   ]);
@@ -82,8 +68,8 @@ let manager: PoolManager;
 // let managerDAI: PoolManager;
 // let strategyUSDC: OptimizerAPRStrategy;
 // let strategyDAI: OptimizerAPRStrategy;
-// let lenderAaveDAI: GenericAaveUpgradeable;
-let lenderAave: GenericAaveUpgradeable;
+// let lenderAaveDAI: GenericAaveNoStaker;
+let lenderAave: GenericAaveNoStaker;
 let aave: ERC20;
 let stkAave: IStakedAave;
 let incentivesController: IAaveIncentivesController;
@@ -199,9 +185,7 @@ describe('OptimizerAPR - lenderAave', () => {
         ])) as PoolManager;
         const { strategy: strategyFEI } = await initStrategy(governor, guardian, keeper, managerFEI);
 
-        const lender = (await deployUpgradeable(
-          new GenericAaveUpgradeable__factory(guardian),
-        )) as GenericAaveUpgradeable;
+        const lender = (await deployUpgradeable(new GenericAaveNoStaker__factory(guardian))) as GenericAaveNoStaker;
         await expect(
           lender.initialize(strategyFEI.address, 'lender FEI', true, [governor.address], guardian.address, [
             keeper.address,

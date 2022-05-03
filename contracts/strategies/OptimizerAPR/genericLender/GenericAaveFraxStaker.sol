@@ -22,15 +22,16 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     // ==================== Parameters =============================
 
     // hash representing the position on Frax staker
-    bytes32 kekId;
+    bytes32 private kekId;
     // used to track the current liquidity (staked + interests)
-    uint256 lastAaveLiquidityIndex;
+    uint256 private lastAaveLiquidityIndex;
     // Last liquidity recorded on Frax staking contract
-    uint256 lastLiquidity;
+    uint256 private lastLiquidity;
+    // Last time a staker has been created
+    uint256 private lastCreatedStake;
     // Minimum staking period
-    uint256 minStakingPeriod = 86400; // a day
-    uint256 stakingPeriod;
-    uint256 lastCreatedStake;
+    uint256 public minStakingPeriod = 86400; // a day
+    uint256 public stakingPeriod;
 
     error NoLockedLiquidity();
     error TooSmallStakingPeriod();
@@ -54,6 +55,9 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     ) external {
         initializeBase(_strategy, name, _isIncentivised, governorList, guardian, keeperList);
         if (_stakingPeriod < minStakingPeriod) revert TooSmallStakingPeriod();
+        stakingPeriod = _stakingPeriod;
+        minStakingPeriod = 86400;
+        lastAaveLiquidityIndex = _lendingPool.getReserveData(address(want)).liquidityIndex;
         IERC20(address(_aToken)).safeApprove(address(aFraxStakingContract), type(uint256).max);
     }
 
@@ -83,6 +87,17 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     /// and proxy called `aFraxStakingContract.proxyToggleStaker(address(this))`
     function setProxyBoost(address proxy) external onlyRole(GUARDIAN_ROLE) {
         aFraxStakingContract.stakerSetVeFXSProxy(proxy);
+    }
+
+    /// @notice Change allowance on aFRAX for the staking contract.
+    /// @param amount Amount to allow
+    function changeAllowance(uint256 amount) external onlyRole(GUARDIAN_ROLE) {
+        uint256 currentAllowance = _aToken.allowance(address(this), address(aFraxStakingContract));
+        if (currentAllowance < amount) {
+            IERC20(address(_aToken)).safeIncreaseAllowance(address(aFraxStakingContract), amount - currentAllowance);
+        } else if (currentAllowance > amount) {
+            IERC20(address(_aToken)).safeDecreaseAllowance(address(aFraxStakingContract), currentAllowance - amount);
+        }
     }
 
     // ========================= Virtual Functions ===========================
@@ -144,22 +159,37 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     /// @param amount Virtual amount to be staked
     function _stakingApr(uint256 amount) internal view override returns (uint256 apr) {
         // These computations are made possible only because there will be only one staker
-        (uint256 oldCombinedWeight, , uint256 newCombinedWeight) = aFraxStakingContract.calcCurCombinedWeight(
-            address(this)
-        );
-        // reverse engineer the function
-        newCombinedWeight = ((_stakedBalance() + amount) * (newCombinedWeight * 1 ether)) / lastLiquidity / 1 ether;
+        (uint256 oldCombinedWeight, uint256 newVefxsMultiplier, uint256 newCombinedWeight) = aFraxStakingContract
+            .calcCurCombinedWeight(address(this));
+
+        uint256 newBalance;
+        // if we didn't stake we need and we don't have anything to give, then stakingApr can only be 0
+        if (lastLiquidity == 0 && amount == 0) return 0;
+        // if we didn't stake we need an extra info on the multiplier per staking period
+        // otherwise we reverse engineer the function
+        else if (lastLiquidity == 0) {
+            newBalance = amount;
+            newCombinedWeight =
+                (newBalance * (aFraxStakingContract.lockMultiplier(stakingPeriod) + newVefxsMultiplier)) /
+                1 ether;
+        } else {
+            newBalance = (_stakedBalance() + amount);
+            newCombinedWeight = (newBalance * (newCombinedWeight * 1 ether)) / lastLiquidity / 1 ether;
+        }
+
+        // if we arrive up until here the totalCombinedWeight can only be non null
         uint256 totalCombinedWeight = aFraxStakingContract.totalCombinedWeight() +
             newCombinedWeight -
             oldCombinedWeight;
+
         uint256 rewardRate = (newCombinedWeight * aFraxStakingContract.rewardRates(FRAX_IDX) * 1 ether) /
             (totalCombinedWeight * 1 ether);
 
         // APRs are in 1e18 and 95% of estimated APR to avoid overestimations
-        apr = (_estimatedFXSToWant(rewardRate) * _SECONDS_IN_YEAR * 9500) / 10000;
+        apr = (_estimatedFXSToWant(rewardRate) * _SECONDS_IN_YEAR * 9500 * 1 ether) / 10000 / newBalance;
     }
 
-    // ========================= Virtual Functions ===========================
+    // ========================= Internal Functions ===========================
 
     /// @notice Estimate the amount of `want` we will get out by swapping it for FXS
     /// @param amount Amount of FXS we want to exchange (in base 18)

@@ -11,7 +11,7 @@ import {
   StableMasterFront,
 } from '@angleprotocol/sdk/dist/constants/types';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { BigNumber } from 'ethers';
+import { BigNumber, utils } from 'ethers';
 import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { ethers, network } from 'hardhat';
 import { ERC20, ERC20__factory, StETHStrategy } from '../typechain';
@@ -313,4 +313,18 @@ export async function findBalancesSlot(tokenAddress: string): Promise<number> {
     if (balance.eq(ethers.BigNumber.from(probe))) return i;
   }
   throw 'Balances slot not found!';
+}
+
+export async function setTokenBalanceFor(token: ERC20, account: string, amount: number) {
+  // for FRAX we know it's 0
+  // const balanceSlot = await findBalancesSlot(token.address);
+  // console.log('the balance slot is ', balanceSlot);
+  const balanceSlot = 0;
+  const balanceStorage = utils.solidityKeccak256(['uint256', 'uint256'], [account, balanceSlot]);
+
+  await network.provider.send('hardhat_setStorageAt', [
+    token.address,
+    balanceStorage.replace('0x0', '0x'),
+    utils.hexZeroPad(utils.parseUnits(amount.toString(), await token.decimals()).toHexString(), 32),
+  ]);
 }
