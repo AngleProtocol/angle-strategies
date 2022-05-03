@@ -220,8 +220,9 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
                 reserveFactor
             );
         uint256 incentivesRate = _incentivesRate(newLiquidity + totalStableDebt + totalVariableDebt); // total supplied liquidity in Aave v2
+        uint256 stakingApr = _stakingApr(extraAmount);
 
-        return newLiquidityRate / 1e9 + incentivesRate; // divided by 1e9 to go from Ray to Wad
+        return newLiquidityRate / 1e9 + incentivesRate + stakingApr; // divided by 1e9 to go from Ray to Wad
     }
 
     // ========================= Internal Functions ===========================
@@ -267,7 +268,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
     /// @notice Estimate the amount of `want` we will get out by swapping it for AAVE
     /// @param amount Amount of AAVE we want to exchange (in base 18)
-    /// @return amount Amount of `want` we are getting. We include a discount to account for slippage equal to 9000
+    /// @return amount Amount of `want` we are getting
     /// @dev Uses Chainlink spot price. Return value will be in base of `want` (6 for USDC)
     function _estimatedStkAaveToWant(uint256 amount) internal view returns (uint256) {
         (, int256 aavePriceUSD, , , ) = oracle.latestRoundData(); // stkAavePriceUSD is in base 8
@@ -290,8 +291,9 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
         ) = _protocolDataProvider.getReserveData(address(want));
         uint256 incentivesRate = _incentivesRate(availableLiquidity + totalStableDebt + totalVariableDebt); // total supplied liquidity in Aave v2
+        uint256 stakingApr = _stakingApr(0);
 
-        return liquidityRate / 10**9 + incentivesRate;
+        return liquidityRate / 10**9 + incentivesRate + stakingApr;
     }
 
     /// @notice Calculates APR from Liquidity Mining Program
@@ -417,9 +419,11 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
     // ========================= Virtual Functions ===========================
 
-    function _stake(uint256 amount) internal virtual returns (uint256 stakedAmount);
+    function _stake(uint256 amount) internal virtual returns (uint256);
 
-    function _unstake(uint256 amount) internal virtual returns (uint256 withdrawnAmount);
+    function _unstake(uint256 amount) internal virtual returns (uint256);
 
     function _stakedBalance() internal view virtual returns (uint256);
+
+    function _stakingApr(uint256 amount) internal view virtual returns (uint256);
 }

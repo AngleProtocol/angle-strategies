@@ -45,7 +45,13 @@ interface IFraxUnifiedFarmTemplate {
     /// @return Liquidity withdrawn from the locker
     function withdrawLocked(bytes32 kek_id, address destination_address) external returns (uint256);
 
-    // ------ Boosting ------
+    // ------ REWARDS ------
 
     function stakerSetVeFXSProxy(address proxy_address) external;
+
+    function rewardRates(uint256 token_idx) external view returns (uint256 rwd_rate);
+
+    function veFXSMultiplier(address account) external view returns (uint256 vefxs_multiplier);
+
+    function totalCombinedWeight() external view returns (uint256);
 }
