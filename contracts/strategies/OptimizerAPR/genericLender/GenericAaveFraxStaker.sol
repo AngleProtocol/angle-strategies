@@ -52,6 +52,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     ) external {
         initializeBase(_strategy, name, _isIncentivised, governorList, guardian, keeperList);
         if (_stakingPeriod < minStakingPeriod) revert TooSmallStakingPeriod();
+        IERC20(address(_aToken)).safeApprove(address(aFraxStakingContract), type(uint256).max);
     }
 
     // ========================= Virtual Functions ===========================
@@ -61,8 +62,6 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     /// @dev If there is an existent locker already on Frax staking contract (keckId != null) --> then add to it
     /// otherwise (first time w deposit or last action was a withdraw) we need to create a new locker
     /// @dev Currently there is no additional reward to stake more than the minimum period as there is no multiplier
-    /// @dev We can have a multiplier if we ask for someone boosting power by let it (address_delegator) call `proxyToggleStaker(address(this))`
-    /// and then call with this contract `stakerSetVeFXSProxy(address_delegator)`
     function _stake(uint256 amount) internal override returns (uint256 stakedAmount) {
         uint256 liquidityIndex = _lendingPool.getReserveData(address(want)).liquidityIndex;
 
@@ -78,26 +77,28 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         stakedAmount = amount;
     }
 
-    function _unstake(uint256 amount) internal override returns (uint256 withdrawnAmount) {
+    function _unstake(uint256 amount) internal override returns (uint256 availableAmount) {
         if (kekId == bytes32(0)) revert NoLockedLiquidity();
         if (block.timestamp - lastCreatedStake > stakingPeriod) revert UnstakedTooSoon();
 
         uint256 liquidityIndex = _lendingPool.getReserveData(address(want)).liquidityIndex;
-        withdrawnAmount = aFraxStakingContract.withdrawLocked(kekId, address(this));
-        if (amount <= withdrawnAmount) {
+        availableAmount = aFraxStakingContract.withdrawLocked(kekId, address(this));
+        if (amount <= availableAmount) {
             // too much has been withdrawn we must create back a locker
-            lastLiquidity = withdrawnAmount - amount;
+            lastLiquidity = availableAmount - amount;
             kekId = aFraxStakingContract.stakeLocked(lastLiquidity, stakingPeriod);
-            withdrawnAmount = amount;
+            availableAmount = amount;
             lastCreatedStake = block.timestamp;
         } else {
             // this means we lost some funds in the process
             lastLiquidity = 0;
+            lastCreatedStake = 0;
             delete kekId;
         }
         lastAaveLiquidityIndex = liquidityIndex;
     }
 
+    /// @notice Get current staked Frax balance (counting interest receive since last update)
     function _stakedBalance() internal view override returns (uint256 amount) {
         uint256 liquidityIndex = _lendingPool.getReserveData(address(want)).liquidityIndex;
         return (lastLiquidity * liquidityIndex) / lastAaveLiquidityIndex;
@@ -114,8 +115,16 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         minStakingPeriod = aFraxStakingContract.lock_time_min();
     }
 
-    /// @notice Permisionless function to update the minimum staking period as dictated by Frax contracts
+    /// @notice Function to update the staking period
     function setLockTime(uint256 _stakingPeriod) external onlyRole(GUARDIAN_ROLE) {
         stakingPeriod = _stakingPeriod;
+    }
+
+    /// @notice Function to set a proxy on the staking contract to have a delegation on their boosting
+    /// @dev We can have a multiplier if we ask for someone with boosting power
+    /// @dev Can only be called after Frax governance called `aFraxStakingContract.toggleValidVeFXSProxy(proxy)`
+    /// and proxy called `aFraxStakingContract.proxyToggleStaker(address(this))`
+    function setProxyBoost(address proxy) external onlyRole(GUARDIAN_ROLE) {
+        aFraxStakingContract.stakerSetVeFXSProxy(proxy);
     }
 }

@@ -40,13 +40,12 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
 
     // ==================== Parameters =============================
-
     uint256 public cooldownSeconds;
     uint256 public unstakeWindow;
     uint256 public wantBase;
     bool public cooldownStkAave;
     bool public isIncentivised;
-    IAToken private _aToken;
+    IAToken internal _aToken;
 
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
     uint256 internal constant _SECONDS_IN_YEAR = 365 days;
@@ -95,6 +94,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     function deposit() external override onlyRole(STRATEGY_ROLE) {
         uint256 balance = want.balanceOf(address(this));
         _deposit(balance);
+        _stake(balance);
     }
 
     /// @notice Withdraws a given amount from lender
@@ -108,7 +108,8 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     /// @param amount Amount to withdraw
     /// @dev Does not check if any error occurs or if the amount withdrawn is correct
     function emergencyWithdraw(uint256 amount) external override onlyRole(GUARDIAN_ROLE) {
-        _lendingPool.withdraw(address(want), amount, address(this));
+        uint256 availableAmount = _unstake(amount);
+        _lendingPool.withdraw(address(want), availableAmount, address(this));
         want.safeTransfer(address(poolManager), want.balanceOf(address(this)));
     }
 
@@ -249,7 +250,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         stkAaveBalance = _balanceOfStkAave();
 
         // request start of cooldown period, if there's no cooldown in progress
-        if (cooldownStkAave && stkAaveBalance > 0 && cooldownStatus == 0) {
+        if (cooldownStkAave && stkAaveBalance > 0 && _checkCooldown() == 0) {
             _stkAave.cooldown();
         }
     }
@@ -320,9 +321,10 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
     /// @notice See `withdraw`
     function _withdraw(uint256 amount) internal returns (uint256) {
-        uint256 balanceUnderlying = _aToken.balanceOf(address(this));
+        uint256 stakedBalance = _stakedBalance();
+        uint256 balanceUnderlying = _balanceAtoken();
         uint256 looseBalance = want.balanceOf(address(this));
-        uint256 total = balanceUnderlying + looseBalance;
+        uint256 total = stakedBalance + balanceUnderlying + looseBalance;
 
         if (amount > total) {
             //cant withdraw more than we own
@@ -342,10 +344,12 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
             if (toWithdraw <= liquidity) {
                 //we can take all
-                _lendingPool.withdraw(address(want), toWithdraw, address(this));
+                uint256 availableAmount = _unstake(toWithdraw);
+                _lendingPool.withdraw(address(want), availableAmount, address(this));
             } else {
                 //take all we can
-                _lendingPool.withdraw(address(want), liquidity, address(this));
+                uint256 availableAmount = _unstake(liquidity);
+                _lendingPool.withdraw(address(want), availableAmount, address(this));
             }
         }
         looseBalance = want.balanceOf(address(this));

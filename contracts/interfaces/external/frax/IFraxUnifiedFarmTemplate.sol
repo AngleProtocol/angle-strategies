@@ -22,13 +22,6 @@ interface IFraxUnifiedFarmTemplate {
             uint256 new_combined_weight
         );
 
-    // ------ REBASE RELATED ------
-
-    // Aave V2
-    // ============================================
-    // Get currentLiquidityIndex from AAVE
-    function currLiqIdx() external view returns (uint256);
-
     // get the current minimum lockTime on the staking contract
     function lock_time_min() external view returns (uint256);
 
@@ -37,12 +30,6 @@ interface IFraxUnifiedFarmTemplate {
     function getReward(address destination_address) external returns (uint256[] memory);
 
     // ------ LOCK RELATED ------
-
-    // All the locked stakes for a given account
-    function lockedStakesOf(address account) external view returns (LockedStake[] memory);
-
-    // Returns the length of the locked stakes for a given account
-    function lockedStakesOfLength(address account) external view returns (uint256);
 
     // Add additional LPs to an existing locked stake
     // REBASE: If you simply want to accrue interest, call this with addl_liq = 0
@@ -57,4 +44,8 @@ interface IFraxUnifiedFarmTemplate {
     /// @notice Each withdraw will delete the locked associated to the `keck_id`
     /// @return Liquidity withdrawn from the locker
     function withdrawLocked(bytes32 kek_id, address destination_address) external returns (uint256);
+
+    // ------ Boosting ------
+
+    function stakerSetVeFXSProxy(address proxy_address) external;
 }
