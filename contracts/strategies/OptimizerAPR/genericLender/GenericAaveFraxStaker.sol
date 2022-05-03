@@ -57,7 +57,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
 
     // ========================= Virtual Functions ===========================
 
-    /// @notice Allow the lender to stake its aTokens in an external staking contract
+    /// @notice Allow the lender to stake its aTokens in the external staking contract
     /// @param amount Amount of aToken wanted to be stake
     /// @dev If there is an existent locker already on Frax staking contract (keckId != null) --> then add to it
     /// otherwise (first time w deposit or last action was a withdraw) we need to create a new locker
@@ -77,20 +77,26 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         stakedAmount = amount;
     }
 
+    /// @notice Allow the lender to unstake its aTokens from the external staking contract
+    /// @param amount Amount of aToken wanted to be unstake
+    /// @dev If minimum staking period is not finished the function will revert / we can also
+    /// want to continue the process by just returning availableAmount=0 instead
+    /// In case of loss we don't report it to the lender / but this should never
     function _unstake(uint256 amount) internal override returns (uint256 availableAmount) {
         if (kekId == bytes32(0)) revert NoLockedLiquidity();
         if (block.timestamp - lastCreatedStake > stakingPeriod) revert UnstakedTooSoon();
 
         uint256 liquidityIndex = _lendingPool.getReserveData(address(want)).liquidityIndex;
         availableAmount = aFraxStakingContract.withdrawLocked(kekId, address(this));
-        if (amount <= availableAmount) {
+        // can set a min amount to stake back
+        if (amount < availableAmount) {
             // too much has been withdrawn we must create back a locker
             lastLiquidity = availableAmount - amount;
             kekId = aFraxStakingContract.stakeLocked(lastLiquidity, stakingPeriod);
             availableAmount = amount;
             lastCreatedStake = block.timestamp;
         } else {
-            // this means we lost some funds in the process
+            // this means we lost some funds in the process this shouldn't be possible and most surely to be deleted
             lastLiquidity = 0;
             lastCreatedStake = 0;
             delete kekId;
