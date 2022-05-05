@@ -9,8 +9,6 @@ import {
   ERC20,
   ERC20__factory,
   IAaveIncentivesController__factory,
-  IStakedAave,
-  IStakedAave__factory,
   AaveFlashloanStrategy__factory,
   PoolManager,
   IProtocolDataProvider,
@@ -33,7 +31,7 @@ describe('AaveFlashloan Strat', () => {
   let aDAIToken: ERC20, debtDAIToken: ERC20;
 
   // Tokens
-  let wantToken: ERC20, dai: ERC20, aave: ERC20, stkAave: IStakedAave;
+  let wantToken: ERC20, dai: ERC20;
   let wantDecimals: number;
   let daiDecimals: number;
 
@@ -366,11 +364,6 @@ describe('AaveFlashloan Strat', () => {
       );
 
       const guessedBorrowed = toOriginalBase(getOptimalBorrow(paramOptimBorrow), wantDecimals);
-      const constrainedBorrow = getConstrainedBorrow(
-        guessedBorrowed,
-        toOriginalBase(paramOptimBorrow.strategyAssets, wantDecimals),
-        maxCollatRatio,
-      );
 
       await strategy.connect(keeper)['harvest(uint256)'](guessedBorrowed, { gasLimit: 3e6 });
 

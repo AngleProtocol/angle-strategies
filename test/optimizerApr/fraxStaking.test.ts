@@ -1,5 +1,5 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { BigNumber, Contract, utils } from 'ethers';
+import { BigNumber, utils } from 'ethers';
 import {
   AggregatorV3Interface,
   AggregatorV3Interface__factory,
@@ -7,14 +7,8 @@ import {
   ERC20__factory,
   GenericAaveFraxStaker,
   GenericAaveFraxStaker__factory,
-  IAaveIncentivesController,
-  IAaveIncentivesController__factory,
-  IFraxUnifiedFarmTemplate,
-  IFraxUnifiedFarmTemplate__factory,
-  ILendingPool,
-  ILendingPool__factory,
-  IProtocolDataProvider,
-  IProtocolDataProvider__factory,
+  IMockFraxUnifiedFarm,
+  IMockFraxUnifiedFarm__factory,
   IStakedAave,
   IStakedAave__factory,
   MockToken,
@@ -25,7 +19,7 @@ import {
 } from '../../typechain';
 import { gwei } from '../../utils/bignumber';
 import { deploy, deployUpgradeable, impersonate } from '../test-utils';
-import hre, { ethers, network } from 'hardhat';
+import { ethers, network } from 'hardhat';
 import { expect } from '../test-utils/chai-setup';
 import { parseUnits } from 'ethers/lib/utils';
 import { logBN, setTokenBalanceFor } from '../utils-interaction';
@@ -77,26 +71,16 @@ let token: ERC20;
 let aToken: ERC20;
 let nativeRewardToken: MockToken;
 let tokenDecimal: number;
-let FEI: ERC20;
 let manager: PoolManager;
 let lenderAave: GenericAaveFraxStaker;
-let aave: ERC20;
 let stkAave: IStakedAave;
-let stkAaveAsERC20: ERC20;
-let incentivesController: IAaveIncentivesController;
-let lendingPool: ILendingPool;
-let protocolDataProvider: IProtocolDataProvider;
-let aFraxStakingContract: IFraxUnifiedFarmTemplate;
-let veFXS: ERC20;
+let aFraxStakingContract: IMockFraxUnifiedFarm;
 let oracleNativeReward: AggregatorV3Interface;
 let oracleStkAave: AggregatorV3Interface;
 const lockerStakeDAO = '0xCd3a267DE09196C48bbB1d9e842D7D7645cE448f';
 const fraxTimelock = '0x8412ebf45bAC1B340BbE8F318b928C466c4E39CA';
 
 const guardianRole = ethers.utils.solidityKeccak256(['string'], ['GUARDIAN_ROLE']);
-const strategyRole = ethers.utils.solidityKeccak256(['string'], ['STRATEGY_ROLE']);
-const governorRole = ethers.utils.solidityKeccak256(['string'], ['GOVERNOR_ROLE']);
-const keeperRole = ethers.utils.solidityKeccak256(['string'], ['KEEPER_ROLE']);
 let guardianError: string;
 
 // Start test block
@@ -122,36 +106,17 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
       '0x3432B6A60D23Ca0dFCa7761B7ab56459D9C964D0',
     )) as MockToken;
 
-    FEI = (await ethers.getContractAt(ERC20__factory.abi, '0x956F47F50A910163D8BF957Cf5846D573E7f87CA')) as ERC20;
-
     tokenDecimal = await token.decimals();
 
-    aave = (await ethers.getContractAt(ERC20__factory.abi, '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9')) as ERC20;
     stkAave = (await ethers.getContractAt(
       IStakedAave__factory.abi,
       '0x4da27a545c0c5B758a6BA100e3a049001de870f5',
     )) as IStakedAave;
-    stkAaveAsERC20 = (await ethers.getContractAt(
-      ERC20__factory.abi,
-      '0x4da27a545c0c5B758a6BA100e3a049001de870f5',
-    )) as ERC20;
-    incentivesController = (await ethers.getContractAt(
-      IAaveIncentivesController__factory.abi,
-      '0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5',
-    )) as IAaveIncentivesController;
-    lendingPool = (await ethers.getContractAt(
-      ILendingPool__factory.abi,
-      '0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9',
-    )) as ILendingPool;
-    protocolDataProvider = (await ethers.getContractAt(
-      IProtocolDataProvider__factory.abi,
-      '0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d',
-    )) as IProtocolDataProvider;
 
     aFraxStakingContract = (await ethers.getContractAt(
-      IFraxUnifiedFarmTemplate__factory.abi,
+      IMockFraxUnifiedFarm__factory.abi,
       '0x02577b426F223A6B4f2351315A19ecD6F357d65c',
-    )) as IFraxUnifiedFarmTemplate;
+    )) as IMockFraxUnifiedFarm;
 
     oracleNativeReward = (await ethers.getContractAt(
       AggregatorV3Interface__factory.abi,
@@ -163,13 +128,11 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
       '0x547a514d5e3769680Ce22B2361c10Ea13619e8a9',
     )) as AggregatorV3Interface;
 
-    veFXS = (await ethers.getContractAt(ERC20__factory.abi, '0xc8418aF6358FFddA74e09Ca9CC3Fe03Ca6aDC5b0')) as ERC20;
-
     guardianError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${guardianRole}`;
 
     manager = (await deploy('PoolManager', [token.address, governor.address, guardian.address])) as PoolManager;
 
-    ({ strategy: strategy } = await initStrategy(governor, guardian, keeper, manager));
+    ({ strategy } = await initStrategy(governor, guardian, keeper, manager));
 
     ({ lender: lenderAave } = await initLenderAaveFraxStaker(
       governor,
@@ -182,221 +145,221 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
     ));
   });
 
-  // describe('Contructor', () => {
-  //   it('reverts - too small saking period', async () => {
-  //     const lender = (await deployUpgradeable(new GenericAaveFraxStaker__factory(guardian))) as GenericAaveFraxStaker;
-  //     await expect(
-  //       lender.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address], 0),
-  //     ).to.be.revertedWith('TooSmallStakingPeriod()');
-  //   });
-  // });
+  describe('Contructor', () => {
+    it('reverts - too small saking period', async () => {
+      const lender = (await deployUpgradeable(new GenericAaveFraxStaker__factory(guardian))) as GenericAaveFraxStaker;
+      await expect(
+        lender.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address], 0),
+      ).to.be.revertedWith('TooSmallStakingPeriod()');
+    });
+  });
 
-  // describe('Parameters', () => {
-  //   it('stakingPeriod', async () => {
-  //     expect(await lenderAave.stakingPeriod()).to.be.equal(BigNumber.from(DAY.toString()));
-  //   });
-  //   it('allowance - frax staking contract', async () => {
-  //     expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
-  //       ethers.constants.MaxUint256,
-  //     );
-  //   });
-  // });
+  describe('Parameters', () => {
+    it('stakingPeriod', async () => {
+      expect(await lenderAave.stakingPeriod()).to.be.equal(BigNumber.from(DAY.toString()));
+    });
+    it('allowance - frax staking contract', async () => {
+      expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
+        ethers.constants.MaxUint256,
+      );
+    });
+  });
 
-  // describe('AccessControl', () => {
-  //   it('setLockTime - reverts Guardian', async () => {
-  //     await expect(lenderAave.connect(user).setLockTime(ethers.constants.Zero)).to.be.revertedWith(guardianError);
-  //   });
-  //   it('setProxyBoost - reverts Guardian', async () => {
-  //     await expect(lenderAave.connect(user).setProxyBoost(ethers.constants.AddressZero)).to.be.revertedWith(
-  //       guardianError,
-  //     );
-  //   });
-  //   it('changeAllowance - reverts Guardian', async () => {
-  //     await expect(lenderAave.connect(user).changeAllowance(ethers.constants.Zero)).to.be.revertedWith(guardianError);
-  //   });
-  // });
+  describe('AccessControl', () => {
+    it('setLockTime - reverts Guardian', async () => {
+      await expect(lenderAave.connect(user).setLockTime(ethers.constants.Zero)).to.be.revertedWith(guardianError);
+    });
+    it('setProxyBoost - reverts Guardian', async () => {
+      await expect(lenderAave.connect(user).setProxyBoost(ethers.constants.AddressZero)).to.be.revertedWith(
+        guardianError,
+      );
+    });
+    it('changeAllowance - reverts Guardian', async () => {
+      await expect(lenderAave.connect(user).changeAllowance(ethers.constants.Zero)).to.be.revertedWith(guardianError);
+    });
+  });
 
-  // describe('Permisionless functions', () => {
-  //   it('setMinLockTime', async () => {
-  //     const minLockTimeBefore = await lenderAave.minStakingPeriod();
-  //     expect(minLockTimeBefore).to.be.equal(parseUnits(DAY.toString(), 0));
-  //     await impersonate(fraxTimelock, async acc => {
-  //       await network.provider.send('hardhat_setBalance', [
-  //         fraxTimelock,
-  //         utils.parseEther('1').toHexString().replace('0x0', '0x'),
-  //       ]);
-  //       await (
-  //         await aFraxStakingContract
-  //           .connect(acc)
-  //           .setMiscVariables([
-  //             parseUnits('1', 18),
-  //             ethers.constants.Zero,
-  //             ethers.constants.Zero,
-  //             ethers.constants.Zero,
-  //             parseUnits('100000000', 0),
-  //             parseUnits('1', 0),
-  //           ])
-  //       ).wait();
-  //     });
-  //     await lenderAave.connect(user).setMinLockTime();
-  //     const minLockTimeAfter = await lenderAave.minStakingPeriod();
-  //     expect(minLockTimeAfter).to.be.equal(parseUnits('1', 0));
-  //   });
-  // });
+  describe('Permisionless functions', () => {
+    it('setMinLockTime', async () => {
+      const minLockTimeBefore = await lenderAave.minStakingPeriod();
+      expect(minLockTimeBefore).to.be.equal(parseUnits(DAY.toString(), 0));
+      await impersonate(fraxTimelock, async acc => {
+        await network.provider.send('hardhat_setBalance', [
+          fraxTimelock,
+          utils.parseEther('1').toHexString().replace('0x0', '0x'),
+        ]);
+        await (
+          await aFraxStakingContract
+            .connect(acc)
+            .setMiscVariables([
+              parseUnits('1', 18),
+              ethers.constants.Zero,
+              ethers.constants.Zero,
+              ethers.constants.Zero,
+              parseUnits('100000000', 0),
+              parseUnits('1', 0),
+            ])
+        ).wait();
+      });
+      await lenderAave.connect(user).setMinLockTime();
+      const minLockTimeAfter = await lenderAave.minStakingPeriod();
+      expect(minLockTimeAfter).to.be.equal(parseUnits('1', 0));
+    });
+  });
 
-  // describe('Governance functions', () => {
-  //   it('setLockTime - revert', async () => {
-  //     const minLockTimeBefore = await lenderAave.minStakingPeriod();
-  //     expect(minLockTimeBefore).to.be.equal(parseUnits(DAY.toString(), 0));
-  //     await expect(lenderAave.connect(guardian).setLockTime(ethers.constants.Zero)).to.be.revertedWith(
-  //       'StakingPeriodTooSmall',
-  //     );
-  //   });
-  //   it('setLockTime', async () => {
-  //     const minLockTimeBefore = await lenderAave.minStakingPeriod();
-  //     expect(minLockTimeBefore).to.be.equal(parseUnits(DAY.toString(), 0));
-  //     await lenderAave.connect(guardian).setLockTime(parseUnits((2 * DAY).toString(), 0));
-  //     expect(await lenderAave.stakingPeriod()).to.be.equal(parseUnits((2 * DAY).toString(), 0));
-  //   });
-  //   it('setProxyBoost', async () => {
-  //     const veFXSMultiplierBefore = await aFraxStakingContract.veFXSMultiplier(lenderAave.address);
-  //     await impersonate(fraxTimelock, async acc => {
-  //       await network.provider.send('hardhat_setBalance', [
-  //         fraxTimelock,
-  //         utils.parseEther('1').toHexString().replace('0x0', '0x'),
-  //       ]);
-  //       await (await aFraxStakingContract.connect(acc).toggleValidVeFXSProxy(lockerStakeDAO)).wait();
-  //     });
-  //     await impersonate(lockerStakeDAO, async acc => {
-  //       await network.provider.send('hardhat_setBalance', [
-  //         lockerStakeDAO,
-  //         utils.parseEther('1').toHexString().replace('0x0', '0x'),
-  //       ]);
-  //       await (await aFraxStakingContract.connect(acc).proxyToggleStaker(lenderAave.address)).wait();
-  //     });
-  //     await lenderAave.connect(guardian).setProxyBoost(lockerStakeDAO);
+  describe('Governance functions', () => {
+    it('setLockTime - revert', async () => {
+      const minLockTimeBefore = await lenderAave.minStakingPeriod();
+      expect(minLockTimeBefore).to.be.equal(parseUnits(DAY.toString(), 0));
+      await expect(lenderAave.connect(guardian).setLockTime(ethers.constants.Zero)).to.be.revertedWith(
+        'StakingPeriodTooSmall',
+      );
+    });
+    it('setLockTime', async () => {
+      const minLockTimeBefore = await lenderAave.minStakingPeriod();
+      expect(minLockTimeBefore).to.be.equal(parseUnits(DAY.toString(), 0));
+      await lenderAave.connect(guardian).setLockTime(parseUnits((2 * DAY).toString(), 0));
+      expect(await lenderAave.stakingPeriod()).to.be.equal(parseUnits((2 * DAY).toString(), 0));
+    });
+    it('setProxyBoost', async () => {
+      const veFXSMultiplierBefore = await aFraxStakingContract.veFXSMultiplier(lenderAave.address);
+      await impersonate(fraxTimelock, async acc => {
+        await network.provider.send('hardhat_setBalance', [
+          fraxTimelock,
+          utils.parseEther('1').toHexString().replace('0x0', '0x'),
+        ]);
+        await (await aFraxStakingContract.connect(acc).toggleValidVeFXSProxy(lockerStakeDAO)).wait();
+      });
+      await impersonate(lockerStakeDAO, async acc => {
+        await network.provider.send('hardhat_setBalance', [
+          lockerStakeDAO,
+          utils.parseEther('1').toHexString().replace('0x0', '0x'),
+        ]);
+        await (await aFraxStakingContract.connect(acc).proxyToggleStaker(lenderAave.address)).wait();
+      });
+      await lenderAave.connect(guardian).setProxyBoost(lockerStakeDAO);
 
-  //     const veFXSMultiplierAfter = await aFraxStakingContract.veFXSMultiplier(lenderAave.address);
-  //     expect(veFXSMultiplierAfter).to.be.gt(veFXSMultiplierBefore);
-  //   });
-  //   it('changeAllowance', async () => {
-  //     await lenderAave.connect(guardian).changeAllowance(ethers.constants.Zero);
-  //     expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
-  //       ethers.constants.Zero,
-  //     );
-  //     await lenderAave.connect(guardian).changeAllowance(ethers.constants.MaxUint256.div(BigNumber.from('2')));
-  //     expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
-  //       ethers.constants.MaxUint256.div(BigNumber.from('2')),
-  //     );
-  //     // doesn't change anything
-  //     await lenderAave.connect(guardian).changeAllowance(ethers.constants.MaxUint256.div(BigNumber.from('2')));
-  //     expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
-  //       ethers.constants.MaxUint256.div(BigNumber.from('2')),
-  //     );
-  //     await lenderAave.connect(guardian).changeAllowance(ethers.constants.MaxUint256);
-  //     expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
-  //       ethers.constants.MaxUint256,
-  //     );
-  //   });
-  // });
+      const veFXSMultiplierAfter = await aFraxStakingContract.veFXSMultiplier(lenderAave.address);
+      expect(veFXSMultiplierAfter).to.be.gt(veFXSMultiplierBefore);
+    });
+    it('changeAllowance', async () => {
+      await lenderAave.connect(guardian).changeAllowance(ethers.constants.Zero);
+      expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
+        ethers.constants.Zero,
+      );
+      await lenderAave.connect(guardian).changeAllowance(ethers.constants.MaxUint256.div(BigNumber.from('2')));
+      expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
+        ethers.constants.MaxUint256.div(BigNumber.from('2')),
+      );
+      // doesn't change anything
+      await lenderAave.connect(guardian).changeAllowance(ethers.constants.MaxUint256.div(BigNumber.from('2')));
+      expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
+        ethers.constants.MaxUint256.div(BigNumber.from('2')),
+      );
+      await lenderAave.connect(guardian).changeAllowance(ethers.constants.MaxUint256);
+      expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
+        ethers.constants.MaxUint256,
+      );
+    });
+  });
 
-  // describe('View functions', () => {
-  //   it('apr - no funds', async () => {
-  //     await (await strategy.connect(keeper)['harvest()']()).wait();
-  //     const apr = await lenderAave.connect(keeper).apr();
-  //     // at mainnet fork time there is 1.22% coming from liquidity rate, 0.05% coming from incentives
-  //     // and 0% as no funds deposited yet on the strat
-  //     expect(apr).to.be.closeTo(parseUnits('0.0127', 18), parseUnits('0.001', 18));
-  //   });
-  //   it('apr - no boost', async () => {
-  //     await setTokenBalanceFor(token, strategy.address, 1000000);
-  //     await (await strategy.connect(keeper)['harvest()']()).wait();
-  //     const apr = await lenderAave.connect(keeper).apr();
-  //     // at mainnet fork time there is 1.22% coming from liquidity rate, 0.05% coming from incentives
-  //     // and 11.58% (computed by hand because apr displyed on Frax front is wrong)
-  //     expect(apr).to.be.closeTo(parseUnits('0.1285', 18), parseUnits('0.005', 18));
-  //   });
-  //   it('apr - with boost', async () => {
-  //     await impersonate(fraxTimelock, async acc => {
-  //       await network.provider.send('hardhat_setBalance', [
-  //         fraxTimelock,
-  //         utils.parseEther('1').toHexString().replace('0x0', '0x'),
-  //       ]);
-  //       await (await aFraxStakingContract.connect(acc).toggleValidVeFXSProxy(lockerStakeDAO)).wait();
-  //     });
-  //     await impersonate(lockerStakeDAO, async acc => {
-  //       await network.provider.send('hardhat_setBalance', [
-  //         lockerStakeDAO,
-  //         utils.parseEther('1').toHexString().replace('0x0', '0x'),
-  //       ]);
-  //       await (await aFraxStakingContract.connect(acc).proxyToggleStaker(lenderAave.address)).wait();
-  //     });
-  //     await lenderAave.connect(guardian).setProxyBoost(lockerStakeDAO);
+  describe('View functions', () => {
+    it('apr - no funds', async () => {
+      await (await strategy.connect(keeper)['harvest()']()).wait();
+      const apr = await lenderAave.connect(keeper).apr();
+      // at mainnet fork time there is 1.22% coming from liquidity rate, 0.05% coming from incentives
+      // and 0% as no funds deposited yet on the strat
+      expect(apr).to.be.closeTo(parseUnits('0.0127', 18), parseUnits('0.001', 18));
+    });
+    it('apr - no boost', async () => {
+      await setTokenBalanceFor(token, strategy.address, 1000000);
+      await (await strategy.connect(keeper)['harvest()']()).wait();
+      const apr = await lenderAave.connect(keeper).apr();
+      // at mainnet fork time there is 1.22% coming from liquidity rate, 0.05% coming from incentives
+      // and 11.58% (computed by hand because apr displyed on Frax front is wrong)
+      expect(apr).to.be.closeTo(parseUnits('0.1285', 18), parseUnits('0.005', 18));
+    });
+    it('apr - with boost', async () => {
+      await impersonate(fraxTimelock, async acc => {
+        await network.provider.send('hardhat_setBalance', [
+          fraxTimelock,
+          utils.parseEther('1').toHexString().replace('0x0', '0x'),
+        ]);
+        await (await aFraxStakingContract.connect(acc).toggleValidVeFXSProxy(lockerStakeDAO)).wait();
+      });
+      await impersonate(lockerStakeDAO, async acc => {
+        await network.provider.send('hardhat_setBalance', [
+          lockerStakeDAO,
+          utils.parseEther('1').toHexString().replace('0x0', '0x'),
+        ]);
+        await (await aFraxStakingContract.connect(acc).proxyToggleStaker(lenderAave.address)).wait();
+      });
+      await lenderAave.connect(guardian).setProxyBoost(lockerStakeDAO);
 
-  //     const veFXSMultiplierAfter = await aFraxStakingContract.veFXSMultiplier(lenderAave.address);
-  //     await setTokenBalanceFor(token, strategy.address, 1000000);
-  //     await (await strategy.connect(keeper)['harvest()']()).wait();
-  //     const apr = await lenderAave.connect(keeper).apr();
-  //     // at mainnet fork time there is 1.22% coming from liquidity rate, 0.05% coming from incentives
-  //     // and 13.59% (computed by hand because apr displyed on Frax front is wrong)
-  //     expect(apr).to.be.closeTo(parseUnits('0.1481', 18), parseUnits('0.005', 18));
-  //   });
-  //   it('aprAfterDeposit', async () => {
-  //     const aprAfterDepositSupposed = await lenderAave
-  //       .connect(keeper)
-  //       .aprAfterDeposit(parseUnits('10000000', tokenDecimal));
+      const veFXSMultiplierAfter = await aFraxStakingContract.veFXSMultiplier(lenderAave.address);
+      await setTokenBalanceFor(token, strategy.address, 1000000);
+      await (await strategy.connect(keeper)['harvest()']()).wait();
+      const apr = await lenderAave.connect(keeper).apr();
+      // at mainnet fork time there is 1.22% coming from liquidity rate, 0.05% coming from incentives
+      // and 13.59% (computed by hand because apr displyed on Frax front is wrong)
+      expect(apr).to.be.closeTo(parseUnits('0.1481', 18), parseUnits('0.005', 18));
+    });
+    it('aprAfterDeposit', async () => {
+      const aprAfterDepositSupposed = await lenderAave
+        .connect(keeper)
+        .aprAfterDeposit(parseUnits('10000000', tokenDecimal));
 
-  //     // Do the deposit and see if the values are indeed equals
-  //     await setTokenBalanceFor(token, strategy.address, 10000000);
-  //     await (await strategy.connect(keeper)['harvest()']()).wait();
-  //     const aprReal = await lenderAave.connect(keeper).apr();
+      // Do the deposit and see if the values are indeed equals
+      await setTokenBalanceFor(token, strategy.address, 10000000);
+      await (await strategy.connect(keeper)['harvest()']()).wait();
+      const aprReal = await lenderAave.connect(keeper).apr();
 
-  //     expect(aprAfterDepositSupposed).to.be.closeTo(aprReal, parseUnits('0.001', 18));
-  //   });
-  // });
+      expect(aprAfterDepositSupposed).to.be.closeTo(aprReal, parseUnits('0.001', 18));
+    });
+  });
 
-  // describe('Strategy deposits', () => {
-  //   it('deposit - success - no previous lock', async () => {
-  //     expect(await lenderAave.kekId()).to.be.equal(ethers.constants.HashZero);
-  //     // expect(await lenderAave.lastAaveLiquidityIndex()).to.be.equal(ethers.constants.Zero);
-  //     expect(await lenderAave.lastCreatedStake()).to.be.equal(ethers.constants.Zero);
+  describe('Strategy deposits', () => {
+    it('deposit - success - no previous lock', async () => {
+      expect(await lenderAave.kekId()).to.be.equal(ethers.constants.HashZero);
+      // expect(await lenderAave.lastAaveLiquidityIndex()).to.be.equal(ethers.constants.Zero);
+      expect(await lenderAave.lastCreatedStake()).to.be.equal(ethers.constants.Zero);
 
-  //     await setTokenBalanceFor(token, strategy.address, 1000000);
+      await setTokenBalanceFor(token, strategy.address, 1000000);
 
-  //     const timestamp = await latestTime();
-  //     await (await strategy.connect(keeper)['harvest()']()).wait();
-  //     expect(await lenderAave.kekId()).to.not.eq('');
-  //     expect(await lenderAave.lastCreatedStake()).to.be.gte(timestamp);
+      const timestamp = await latestTime();
+      await (await strategy.connect(keeper)['harvest()']()).wait();
+      expect(await lenderAave.kekId()).to.not.eq('');
+      expect(await lenderAave.lastCreatedStake()).to.be.gte(timestamp);
 
-  //     const underlyingBalance = await lenderAave.underlyingBalanceStored();
-  //     const balanceToken = await lenderAave.nav();
-  //     const balanceTokenStrat = await token.balanceOf(strategy.address);
-  //     expect(balanceToken).to.be.equal(parseUnits('1000000', tokenDecimal));
-  //     expect(underlyingBalance).to.be.closeTo(parseUnits('1000000', tokenDecimal), parseUnits('10', tokenDecimal));
-  //     expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
-  //   });
-  //   it('deposit - success - with previous lock', async () => {
-  //     // going through the poolManager to not have to withdraw funds (because it would think we made a huge profit)
-  //     await setTokenBalanceFor(token, manager.address, 1000000);
-  //     await (await strategy.connect(keeper)['harvest()']()).wait();
-  //     const kekId = await lenderAave.kekId();
-  //     const stakerCreated = await lenderAave.lastCreatedStake();
-  //     await setTokenBalanceFor(token, manager.address, 1000000);
-  //     await (await strategy.connect(keeper)['harvest()']()).wait();
+      const underlyingBalance = await lenderAave.underlyingBalanceStored();
+      const balanceToken = await lenderAave.nav();
+      const balanceTokenStrat = await token.balanceOf(strategy.address);
+      expect(balanceToken).to.be.equal(parseUnits('1000000', tokenDecimal));
+      expect(underlyingBalance).to.be.closeTo(parseUnits('1000000', tokenDecimal), parseUnits('10', tokenDecimal));
+      expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
+    });
+    it('deposit - success - with previous lock', async () => {
+      // going through the poolManager to not have to withdraw funds (because it would think we made a huge profit)
+      await setTokenBalanceFor(token, manager.address, 1000000);
+      await (await strategy.connect(keeper)['harvest()']()).wait();
+      const kekId = await lenderAave.kekId();
+      const stakerCreated = await lenderAave.lastCreatedStake();
+      await setTokenBalanceFor(token, manager.address, 1000000);
+      await (await strategy.connect(keeper)['harvest()']()).wait();
 
-  //     const kekIdAfter = await lenderAave.kekId();
-  //     const stakerCreatedAfter = await lenderAave.lastCreatedStake();
-  //     expect(kekIdAfter).to.be.equal(kekId);
-  //     expect(stakerCreatedAfter).to.be.equal(stakerCreated);
+      const kekIdAfter = await lenderAave.kekId();
+      const stakerCreatedAfter = await lenderAave.lastCreatedStake();
+      expect(kekIdAfter).to.be.equal(kekId);
+      expect(stakerCreatedAfter).to.be.equal(stakerCreated);
 
-  //     const underlyingBalance = await lenderAave.underlyingBalanceStored();
-  //     const balanceToken = await lenderAave.nav();
-  //     const balanceTokenStrat = await token.balanceOf(strategy.address);
-  //     expect(balanceToken).to.be.closeTo(parseUnits('2000000', tokenDecimal), parseUnits('1000', tokenDecimal));
-  //     expect(underlyingBalance).to.be.closeTo(parseUnits('2000000', tokenDecimal), parseUnits('1000', tokenDecimal));
-  //     expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
-  //   });
-  // });
+      const underlyingBalance = await lenderAave.underlyingBalanceStored();
+      const balanceToken = await lenderAave.nav();
+      const balanceTokenStrat = await token.balanceOf(strategy.address);
+      expect(balanceToken).to.be.closeTo(parseUnits('2000000', tokenDecimal), parseUnits('1000', tokenDecimal));
+      expect(underlyingBalance).to.be.closeTo(parseUnits('2000000', tokenDecimal), parseUnits('1000', tokenDecimal));
+      expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
+    });
+  });
 
   describe('Strategy withdraws', () => {
     it('withdraw - revert - too soon', async () => {
@@ -650,128 +613,128 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
     });
   });
 
-  // describe('Handle rewards', () => {
-  //   it('claimRewardsExternal - success - FXS+stkAave reward', async () => {
-  //     await setTokenBalanceFor(token, strategy.address, 1000000);
-  //     await (await strategy.connect(keeper)['harvest()']()).wait();
+  describe('Handle rewards', () => {
+    it('claimRewardsExternal - success - FXS+stkAave reward', async () => {
+      await setTokenBalanceFor(token, strategy.address, 1000000);
+      await (await strategy.connect(keeper)['harvest()']()).wait();
 
-  //     // let days pass to have a non negligible gain
-  //     await time.increase(DAY * 7);
+      // let days pass to have a non negligible gain
+      await time.increase(DAY * 7);
 
-  //     await (await lenderAave.connect(user).claimRewardsExternal()).wait();
+      await (await lenderAave.connect(user).claimRewardsExternal()).wait();
 
-  //     expect(await nativeRewardToken.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
-  //     expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
-  //   });
-  //   it('claimRewardsExternal - success - verify apr', async () => {
-  //     await setTokenBalanceFor(token, strategy.address, 1000000);
-  //     await (await strategy.connect(keeper)['harvest()']()).wait();
+      expect(await nativeRewardToken.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
+      expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
+    });
+    it('claimRewardsExternal - success - verify apr', async () => {
+      await setTokenBalanceFor(token, strategy.address, 1000000);
+      await (await strategy.connect(keeper)['harvest()']()).wait();
 
-  //     const aprSupposed = await lenderAave.connect(keeper).apr();
+      const aprSupposed = await lenderAave.connect(keeper).apr();
 
-  //     // let days pass to have a non negligible gain
-  //     await time.increase(DAY * 7);
+      // let days pass to have a non negligible gain
+      await time.increase(DAY * 7);
 
-  //     await (await lenderAave.connect(user).claimRewardsExternal()).wait();
+      await (await lenderAave.connect(user).claimRewardsExternal()).wait();
 
-  //     let rewardNative = await nativeRewardToken.balanceOf(lenderAave.address);
-  //     let rewardStkAave = await stkAave.balanceOf(lenderAave.address);
-  //     rewardNative = rewardNative.mul((await oracleNativeReward.latestRoundData()).answer).div(parseUnits('1', 8));
-  //     rewardStkAave = rewardStkAave.mul((await oracleStkAave.latestRoundData()).answer).div(parseUnits('1', 8));
-  //     const interestToken = (await lenderAave.nav()).sub(parseUnits('1000000', tokenDecimal));
-  //     // console.log(`FXS reward in USD:\t${logBN(rewardNative)}`);
-  //     // console.log(`stkAave reward in USD:\t${logBN(rewardStkAave)}`);
-  //     // console.log(`interest in USD:\t${logBN(interestToken)}`);
+      let rewardNative = await nativeRewardToken.balanceOf(lenderAave.address);
+      let rewardStkAave = await stkAave.balanceOf(lenderAave.address);
+      rewardNative = rewardNative.mul((await oracleNativeReward.latestRoundData()).answer).div(parseUnits('1', 8));
+      rewardStkAave = rewardStkAave.mul((await oracleStkAave.latestRoundData()).answer).div(parseUnits('1', 8));
+      const interestToken = (await lenderAave.nav()).sub(parseUnits('1000000', tokenDecimal));
+      // console.log(`FXS reward in USD:\t${logBN(rewardNative)}`);
+      // console.log(`stkAave reward in USD:\t${logBN(rewardStkAave)}`);
+      // console.log(`interest in USD:\t${logBN(interestToken)}`);
 
-  //     // console.log(
-  //     //   `FXS apr:\t${logBN(
-  //     //     parseUnits('52', 18)
-  //     //       .mul(rewardNative.mul(parseUnits('0.95', 4)))
-  //     //       .div(parseUnits('1000000', 22)),
-  //     //   )}`,
-  //     // );
-  //     // console.log(
-  //     //   `stkAave apr:\t${logBN(
-  //     //     parseUnits('52', 18)
-  //     //       .mul(rewardStkAave.mul(parseUnits('0.95', 4)))
-  //     //       .div(parseUnits('1000000', 22)),
-  //     //   )}`,
-  //     // );
-  //     // console.log(`interest apr:\t${logBN(parseUnits('52', 18).mul(interestToken).div(parseUnits('1000000', 18)))}`);
+      // console.log(
+      //   `FXS apr:\t${logBN(
+      //     parseUnits('52', 18)
+      //       .mul(rewardNative.mul(parseUnits('0.95', 4)))
+      //       .div(parseUnits('1000000', 22)),
+      //   )}`,
+      // );
+      // console.log(
+      //   `stkAave apr:\t${logBN(
+      //     parseUnits('52', 18)
+      //       .mul(rewardStkAave.mul(parseUnits('0.95', 4)))
+      //       .div(parseUnits('1000000', 22)),
+      //   )}`,
+      // );
+      // console.log(`interest apr:\t${logBN(parseUnits('52', 18).mul(interestToken).div(parseUnits('1000000', 18)))}`);
 
-  //     // we roughly multiply by 52 weeks and don't take into account compounding
-  //     const impliedApr = parseUnits('52', 18)
-  //       .mul(rewardNative.add(rewardStkAave).add(interestToken))
-  //       .div(parseUnits('1000000', 18));
+      // we roughly multiply by 52 weeks and don't take into account compounding
+      const impliedApr = parseUnits('52', 18)
+        .mul(rewardNative.add(rewardStkAave).add(interestToken))
+        .div(parseUnits('1000000', 18));
 
-  //     console.log(`supposed apr --> implied apr:\t${logBN(aprSupposed)} --> ${logBN(impliedApr)}`);
+      console.log(`supposed apr --> implied apr:\t${logBN(aprSupposed)} --> ${logBN(impliedApr)}`);
 
-  //     // not equal?
-  //     // expect(impliedApr).to.be.equal(aprSupposed);
-  //   });
-  //   it('claimRewardsExternal - success - verify apr with boost', async () => {
-  //     await impersonate(fraxTimelock, async acc => {
-  //       await network.provider.send('hardhat_setBalance', [
-  //         fraxTimelock,
-  //         utils.parseEther('1').toHexString().replace('0x0', '0x'),
-  //       ]);
-  //       await (await aFraxStakingContract.connect(acc).toggleValidVeFXSProxy(lockerStakeDAO)).wait();
-  //     });
-  //     await impersonate(lockerStakeDAO, async acc => {
-  //       await network.provider.send('hardhat_setBalance', [
-  //         lockerStakeDAO,
-  //         utils.parseEther('1').toHexString().replace('0x0', '0x'),
-  //       ]);
-  //       await (await aFraxStakingContract.connect(acc).proxyToggleStaker(lenderAave.address)).wait();
-  //     });
-  //     await lenderAave.connect(guardian).setProxyBoost(lockerStakeDAO);
+      // not equal?
+      // expect(impliedApr).to.be.equal(aprSupposed);
+    });
+    it('claimRewardsExternal - success - verify apr with boost', async () => {
+      await impersonate(fraxTimelock, async acc => {
+        await network.provider.send('hardhat_setBalance', [
+          fraxTimelock,
+          utils.parseEther('1').toHexString().replace('0x0', '0x'),
+        ]);
+        await (await aFraxStakingContract.connect(acc).toggleValidVeFXSProxy(lockerStakeDAO)).wait();
+      });
+      await impersonate(lockerStakeDAO, async acc => {
+        await network.provider.send('hardhat_setBalance', [
+          lockerStakeDAO,
+          utils.parseEther('1').toHexString().replace('0x0', '0x'),
+        ]);
+        await (await aFraxStakingContract.connect(acc).proxyToggleStaker(lenderAave.address)).wait();
+      });
+      await lenderAave.connect(guardian).setProxyBoost(lockerStakeDAO);
 
-  //     // const aprSupposed = await lenderAave.connect(keeper).aprAfterDeposit(parseUnits('1000000', tokenDecimal));
+      // const aprSupposed = await lenderAave.connect(keeper).aprAfterDeposit(parseUnits('1000000', tokenDecimal));
 
-  //     await setTokenBalanceFor(token, strategy.address, 1000000);
-  //     await (await strategy.connect(keeper)['harvest()']()).wait();
+      await setTokenBalanceFor(token, strategy.address, 1000000);
+      await (await strategy.connect(keeper)['harvest()']()).wait();
 
-  //     const aprSupposed = await lenderAave.connect(keeper).apr();
+      const aprSupposed = await lenderAave.connect(keeper).apr();
 
-  //     // let days pass to have a non negligible gain
-  //     await time.increase(DAY * 7);
+      // let days pass to have a non negligible gain
+      await time.increase(DAY * 7);
 
-  //     await (await lenderAave.connect(user).claimRewardsExternal()).wait();
+      await (await lenderAave.connect(user).claimRewardsExternal()).wait();
 
-  //     let rewardNative = await nativeRewardToken.balanceOf(lenderAave.address);
-  //     let rewardStkAave = await stkAave.balanceOf(lenderAave.address);
-  //     rewardNative = rewardNative.mul((await oracleNativeReward.latestRoundData()).answer).div(parseUnits('1', 8));
-  //     rewardStkAave = rewardStkAave.mul((await oracleStkAave.latestRoundData()).answer).div(parseUnits('1', 8));
-  //     const interestToken = (await lenderAave.nav()).sub(parseUnits('1000000', tokenDecimal));
-  //     // console.log(`FXS reward in USD:\t${logBN(rewardNative)}`);
-  //     // console.log(`stkAave reward in USD:\t${logBN(rewardStkAave)}`);
-  //     // console.log(`interest in USD:\t${logBN(interestToken)}`);
+      let rewardNative = await nativeRewardToken.balanceOf(lenderAave.address);
+      let rewardStkAave = await stkAave.balanceOf(lenderAave.address);
+      rewardNative = rewardNative.mul((await oracleNativeReward.latestRoundData()).answer).div(parseUnits('1', 8));
+      rewardStkAave = rewardStkAave.mul((await oracleStkAave.latestRoundData()).answer).div(parseUnits('1', 8));
+      const interestToken = (await lenderAave.nav()).sub(parseUnits('1000000', tokenDecimal));
+      // console.log(`FXS reward in USD:\t${logBN(rewardNative)}`);
+      // console.log(`stkAave reward in USD:\t${logBN(rewardStkAave)}`);
+      // console.log(`interest in USD:\t${logBN(interestToken)}`);
 
-  //     // console.log(
-  //     //   `FXS apr:\t${logBN(
-  //     //     parseUnits('52', 18)
-  //     //       .mul(rewardNative.mul(parseUnits('0.95', 4)))
-  //     //       .div(parseUnits('1000000', 22)),
-  //     //   )}`,
-  //     // );
-  //     // console.log(
-  //     //   `stkAave apr:\t${logBN(
-  //     //     parseUnits('52', 18)
-  //     //       .mul(rewardStkAave.mul(parseUnits('0.95', 4)))
-  //     //       .div(parseUnits('1000000', 22)),
-  //     //   )}`,
-  //     // );
-  //     // console.log(`interest apr:\t${logBN(parseUnits('52', 18).mul(interestToken).div(parseUnits('1000000', 18)))}`);
+      // console.log(
+      //   `FXS apr:\t${logBN(
+      //     parseUnits('52', 18)
+      //       .mul(rewardNative.mul(parseUnits('0.95', 4)))
+      //       .div(parseUnits('1000000', 22)),
+      //   )}`,
+      // );
+      // console.log(
+      //   `stkAave apr:\t${logBN(
+      //     parseUnits('52', 18)
+      //       .mul(rewardStkAave.mul(parseUnits('0.95', 4)))
+      //       .div(parseUnits('1000000', 22)),
+      //   )}`,
+      // );
+      // console.log(`interest apr:\t${logBN(parseUnits('52', 18).mul(interestToken).div(parseUnits('1000000', 18)))}`);
 
-  //     // we roughly multiply by 52 weeks and don't take into account compounding
-  //     const impliedApr = parseUnits('52', 18)
-  //       .mul(rewardNative.add(rewardStkAave).add(interestToken))
-  //       .div(parseUnits('1000000', 18));
+      // we roughly multiply by 52 weeks and don't take into account compounding
+      const impliedApr = parseUnits('52', 18)
+        .mul(rewardNative.add(rewardStkAave).add(interestToken))
+        .div(parseUnits('1000000', 18));
 
-  //     console.log(`supposed apr --> implied apr:\t${logBN(aprSupposed)} --> ${logBN(impliedApr)}`);
+      console.log(`supposed apr --> implied apr:\t${logBN(aprSupposed)} --> ${logBN(impliedApr)}`);
 
-  //     // not equal?
-  //     // expect(impliedApr).to.be.equal(aprSupposed);
-  //   });
-  // });
+      // not equal?
+      // expect(impliedApr).to.be.equal(aprSupposed);
+    });
+  });
 });

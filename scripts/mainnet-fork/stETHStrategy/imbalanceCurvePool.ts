@@ -22,10 +22,10 @@ import { parseUnits } from 'ethers/lib/utils';
 import {
   logBN,
   logGeneralInfo,
-  randomBurn,
+  // randomBurn,
   randomDeposit,
   randomMint,
-  randomWithdraw,
+  // randomWithdraw,
   wait,
 } from '../../../test/utils-interaction';
 import {
@@ -44,7 +44,7 @@ async function main() {
   const { deployer, user: richStETH } = await ethers.getNamedSigners();
 
   // If we're in mainnet fork, we're using the json.mainnet address
-  let json = (await import('../../../deploy/networks/mainnet.json')) as any;
+  const json = (await import('../../../deploy/networks/mainnet.json')) as any;
 
   const governance = CONTRACTS_ADDRESSES[ChainId.MAINNET].GovernanceMultiSig! as string;
 
@@ -62,7 +62,7 @@ async function main() {
   const curvePoolAddress = json.Curve.StableSwapStETHnETH;
 
   const wETH = (await ethers.getContractAt(Weth__factory.abi, wETHAddress)) as Weth;
-  const wETHERC20 = (await ethers.getContractAt(ERC20__factory.abi, wETHAddress)) as ERC20;
+  // const wETHERC20 = (await ethers.getContractAt(ERC20__factory.abi, wETHAddress)) as ERC20;
 
   // wrap some
   await wETH.connect(deployer).deposit({ value: parseUnits('800000', 18) });
@@ -70,7 +70,7 @@ async function main() {
   const stableMasterAddressInt = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.StableMaster;
   const poolManagerAddress = '0x7c2C494D8791654e9F6d5d6f2FCFFc27e79A2Cea';
   const perpetualManagerAddress = '0xb9207130832b4863d01452d7411FaE1408005078';
-  const strategyAddress = (await deployments.get(`StETHStrategy`)).address;
+  const strategyAddress = (await deployments.get('StETHStrategy')).address;
 
   const stableMasterAddress: string = stableMasterAddressInt !== undefined ? stableMasterAddressInt : '0x';
 

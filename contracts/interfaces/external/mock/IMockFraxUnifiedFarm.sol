@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.12;
 
-interface IFraxUnifiedFarmTemplate {
+interface IMockFraxUnifiedFarm {
     // Struct for the stake
     struct LockedStake {
         bytes32 kek_id;
@@ -54,4 +54,22 @@ interface IFraxUnifiedFarmTemplate {
     function lockMultiplier(uint256 secs) external view returns (uint256);
 
     function totalCombinedWeight() external view returns (uint256);
+
+    // just for the mock and testing
+
+    function proxyToggleStaker(address staker_address) external;
+
+    function veFXSMultiplier(address account) external view returns (uint256 vefxs_multiplier);
+
+    function toggleValidVeFXSProxy(address _proxy_addr) external;
+
+    function setMiscVariables(uint256[6] memory _misc_vars) external;
+
+    function getProxyFor(address _proxy_addr) external view returns (address);
+
+    function storedStkLiqIdx(bytes32) external view returns (uint256);
+
+    function currLiqIdx() external view returns (uint256);
+
+    function lockedStakes(address, uint256) external view returns (LockedStake memory);
 }

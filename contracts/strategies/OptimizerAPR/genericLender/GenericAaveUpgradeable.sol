@@ -10,7 +10,6 @@ import "../../../interfaces/external/aave/IAaveToken.sol";
 import "../../../interfaces/external/aave/IProtocolDataProvider.sol";
 import "../../../interfaces/external/aave/ILendingPool.sol";
 import "./GenericLenderBaseUpgradeable.sol";
-import "hardhat/console.sol";
 
 struct AaveReferences {
     IAToken _aToken;
@@ -354,8 +353,6 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
             } else {
                 //take all we can
                 uint256 freedAmount = _unstake(liquidity);
-                console.log("liquidity ", liquidity);
-                console.log("freedAmount ", freedAmount);
                 _lendingPool.withdraw(address(want), freedAmount, address(this));
             }
         }

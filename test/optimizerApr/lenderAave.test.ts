@@ -1,16 +1,12 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { BigNumber, utils } from 'ethers';
+import { BigNumber } from 'ethers';
 import {
   ERC20,
   ERC20__factory,
   GenericAaveNoStaker,
   GenericAaveNoStaker__factory,
-  IAaveIncentivesController,
-  IAaveIncentivesController__factory,
   ILendingPool,
   ILendingPool__factory,
-  IProtocolDataProvider,
-  IProtocolDataProvider__factory,
   IStakedAave,
   IStakedAave__factory,
   OptimizerAPRStrategy,
@@ -61,29 +57,19 @@ let governor: SignerWithAddress, guardian: SignerWithAddress, user: SignerWithAd
 let strategy: OptimizerAPRStrategy;
 let token: ERC20;
 let tokenDecimal: number;
-// let USDC: ERC20;
-// let DAI: ERC20;
 let FEI: ERC20;
 let manager: PoolManager;
-// let managerDAI: PoolManager;
-// let strategyUSDC: OptimizerAPRStrategy;
-// let strategyDAI: OptimizerAPRStrategy;
-// let lenderAaveDAI: GenericAaveNoStaker;
 let lenderAave: GenericAaveNoStaker;
 let aave: ERC20;
 let stkAave: IStakedAave;
-let incentivesController: IAaveIncentivesController;
 let lendingPool: ILendingPool;
-let protocolDataProvider: IProtocolDataProvider;
 
 const guardianRole = ethers.utils.solidityKeccak256(['string'], ['GUARDIAN_ROLE']);
 const strategyRole = ethers.utils.solidityKeccak256(['string'], ['STRATEGY_ROLE']);
-const governorRole = ethers.utils.solidityKeccak256(['string'], ['GOVERNOR_ROLE']);
 const keeperRole = ethers.utils.solidityKeccak256(['string'], ['KEEPER_ROLE']);
 let guardianError: string;
 let strategyError: string;
 let keeperError: string;
-let governorError: string;
 
 // Start test block
 describe('OptimizerAPR - lenderAave', () => {
@@ -115,30 +101,21 @@ describe('OptimizerAPR - lenderAave', () => {
       IStakedAave__factory.abi,
       '0x4da27a545c0c5B758a6BA100e3a049001de870f5',
     )) as IStakedAave;
-    incentivesController = (await ethers.getContractAt(
-      IAaveIncentivesController__factory.abi,
-      '0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5',
-    )) as IAaveIncentivesController;
     lendingPool = (await ethers.getContractAt(
       ILendingPool__factory.abi,
       '0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9',
     )) as ILendingPool;
-    protocolDataProvider = (await ethers.getContractAt(
-      IProtocolDataProvider__factory.abi,
-      '0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d',
-    )) as IProtocolDataProvider;
 
     guardianError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${guardianRole}`;
     strategyError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${strategyRole}`;
     keeperError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${keeperRole}`;
-    governorError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${governorRole}`;
   });
 
   beforeEach(async () => {
     manager = (await deploy('PoolManager', [token.address, governor.address, guardian.address])) as PoolManager;
     // managerDAI = (await deploy('PoolManager', [DAI.address, governor.address, guardian.address])) as PoolManager;
 
-    ({ strategy: strategy } = await initStrategy(governor, guardian, keeper, manager));
+    ({ strategy } = await initStrategy(governor, guardian, keeper, manager));
     // ({ strategy: strategyDAI } = await initStrategy(governor, guardian, keeper, managerDAI));
 
     ({ lender: lenderAave } = await initLenderAave(governor, guardian, keeper, strategy, 'genericAave', true));

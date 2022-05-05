@@ -215,8 +215,8 @@ export const randomOpenPerp = async (
   user: SignerWithAddress,
   perpetualManager: PerpetualManagerFront,
   collateral: ERC20,
-  stableMaster: StableMasterFront,
-  poolManager: PoolManager,
+  // stableMaster: StableMasterFront,
+  // poolManager: PoolManager,
 ) => {
   const min = 2;
   const max = 50;
@@ -227,16 +227,16 @@ export const randomOpenPerp = async (
   const collatDecimal = await collateral.decimals();
 
   const margin = parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), collatDecimal);
-  let position = margin.mul(
+  const position = margin.mul(
     parseUnits(Math.floor(Math.random() * (maxMultiplier - minMultiplier + 1) + min).toString(), 0).div(
       parseUnits('10000', 0),
     ),
   );
 
-  const collatData = await stableMaster.collateralMap(poolManager.address);
-  const oracle = (await ethers.getContractAt(OracleMulti__factory.abi, collatData.oracle)) as OracleMulti;
-  const oracleValues = await oracle.readAll();
-  const totalHedge = await perpetualManager.totalHedgeAmount();
+  // const collatData = await stableMaster.collateralMap(poolManager.address);
+  // const oracle = (await ethers.getContractAt(OracleMulti__factory.abi, collatData.oracle)) as OracleMulti;
+  // const oracleValues = await oracle.readAll();
+  // const totalHedge = await perpetualManager.totalHedgeAmount();
 
   //   const maxPosition = collatData.stocksUsers
   //     .sub(totalHedge)
@@ -312,7 +312,7 @@ export async function findBalancesSlot(tokenAddress: string): Promise<number> {
     await network.provider.send('hardhat_setStorageAt', [tokenAddress, probedSlot, prev]);
     if (balance.eq(ethers.BigNumber.from(probe))) return i;
   }
-  throw 'Balances slot not found!';
+  throw Error('Balances slot not found!');
 }
 
 export async function setTokenBalanceFor(token: ERC20, account: string, amount: number) {

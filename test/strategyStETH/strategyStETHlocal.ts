@@ -10,7 +10,7 @@ import {
 } from '../../typechain';
 import { gwei, ether } from '../../utils/bignumber';
 import { deploy, deployUpgradeable } from '../test-utils';
-import hre, { ethers, network } from 'hardhat';
+import hre, { ethers } from 'hardhat';
 import { expect } from '../test-utils/chai-setup';
 import { BASE_PARAMS, BASE_TOKENS } from '../utils';
 import { parseUnits } from 'ethers/lib/utils';
@@ -54,7 +54,6 @@ let managerETH: PoolManager;
 let curve: MockCurveStETHETH;
 let stETH: MockStETH;
 let wETH: MockWETH;
-let minWindow: BigNumber, maxWindow: BigNumber, blocksPerYear: BigNumber;
 const guardianRole = ethers.utils.solidityKeccak256(['string'], ['GUARDIAN_ROLE']);
 const managerRole = ethers.utils.solidityKeccak256(['string'], ['POOLMANAGER_ROLE']);
 let guardianError: string;
@@ -65,9 +64,6 @@ describe('StrategyStETH', () => {
   before(async () => {
     ({ governor, guardian, user, keeper } = await ethers.getNamedSigners());
     ({ wETH, managerETH, stETH, curve, strategy } = await initWETH(governor, guardian));
-    minWindow = BigNumber.from('1000');
-    maxWindow = BigNumber.from('10000');
-    blocksPerYear = BigNumber.from('2350000');
     guardianError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${guardianRole}`;
     managerError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${managerRole}`;
   });

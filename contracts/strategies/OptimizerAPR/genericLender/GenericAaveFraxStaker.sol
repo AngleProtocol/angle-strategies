@@ -24,7 +24,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     // hash representing the position on Frax staker
     bytes32 public kekId;
     // used to track the current liquidity (staked + interests)
-    uint256 public lastAaveLiquidityIndex;
+    uint256 public lastAaveReserveNormalizedIncome;
     // Last liquidity recorded on Frax staking contract
     uint256 private lastLiquidity;
     // Last time a staker has been created
@@ -61,7 +61,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         stakingPeriod = _stakingPeriod;
         minStakingPeriod = 86400;
 
-        lastAaveLiquidityIndex = _lendingPool.getReserveNormalizedIncome(address(want));
+        lastAaveReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
         IERC20(address(_aToken)).safeApprove(address(aFraxStakingContract), type(uint256).max);
     }
 
@@ -113,7 +113,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     /// otherwise (first time w deposit or last action was a withdraw) we need to create a new locker
     /// @dev Currently there is no additional reward to stake more than the minimum period as there is no multiplier
     function _stake(uint256 amount) internal override returns (uint256 stakedAmount) {
-        uint256 liquidityIndex = _lendingPool.getReserveNormalizedIncome(address(want));
+        uint256 reserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
 
         if (kekId == bytes32(0)) {
             kekId = aFraxStakingContract.stakeLocked(amount, stakingPeriod);
@@ -121,10 +121,10 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
             lastCreatedStake = block.timestamp;
         } else {
             aFraxStakingContract.lockAdditional(kekId, amount);
-            lastLiquidity = (lastLiquidity * liquidityIndex) / lastAaveLiquidityIndex + amount;
+            lastLiquidity = (lastLiquidity * reserveNormalizedIncome) / lastAaveReserveNormalizedIncome + amount;
         }
 
-        lastAaveLiquidityIndex = liquidityIndex;
+        lastAaveReserveNormalizedIncome = reserveNormalizedIncome;
         stakedAmount = amount;
     }
 
@@ -137,33 +137,32 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         if (kekId == bytes32(0)) revert NoLockedLiquidity();
         if (block.timestamp - lastCreatedStake < stakingPeriod) revert UnstakedTooSoon();
 
-        uint256 liquidityIndex = _lendingPool.getReserveNormalizedIncome(address(want));
+        uint256 reserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
         freedAmount = aFraxStakingContract.withdrawLocked(kekId, address(this));
-
-        console.log("freedAmount ", freedAmount);
 
         // can set a min amount to stake back
         if (amount + minStakingAmount < freedAmount) {
             // too much has been withdrawn we must create back a locker
             lastLiquidity = freedAmount - amount;
             kekId = aFraxStakingContract.stakeLocked(lastLiquidity, stakingPeriod);
-            freedAmount = amount;
+
+            // - 1 because there values are rounded when transfering aTokens so we may end up with
+            // with a little bit less, instead of making multiple call just play it safe and withdraw 1 in all cases
+            freedAmount = amount - 1;
             lastCreatedStake = block.timestamp;
         } else {
             lastLiquidity = 0;
             lastCreatedStake = 0;
             delete kekId;
         }
-        console.log("lastLiquidity ", lastLiquidity);
-        console.log("aTokenBalance ", _balanceAtoken());
 
-        lastAaveLiquidityIndex = liquidityIndex;
+        lastAaveReserveNormalizedIncome = reserveNormalizedIncome;
     }
 
     /// @notice Get current staked Frax balance (counting interest receive since last update)
     function _stakedBalance() internal view override returns (uint256 amount) {
-        uint256 liquidityIndex = _lendingPool.getReserveNormalizedIncome(address(want));
-        return (lastLiquidity * liquidityIndex) / lastAaveLiquidityIndex;
+        uint256 reserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
+        return (lastLiquidity * reserveNormalizedIncome) / lastAaveReserveNormalizedIncome;
     }
 
     /// @notice Get stakingAPR after staking an additional `amount`
@@ -198,16 +197,6 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
 
         // APRs are in 1e18 and 95% of estimated APR to avoid overestimations
         apr = (_estimatedFXSToWant(rewardRate) * _SECONDS_IN_YEAR * 9500 * 1 ether) / 10000 / newBalance;
-
-        // console.log("amount ", amount);
-        // console.log("lastLiquidity ", lastLiquidity);
-        // console.log("newBalance ", newBalance);
-        // console.log("totalCombinedWeight ", totalCombinedWeight);
-        // console.log("newCombinedWeight ", newCombinedWeight);
-        // console.log("oldCombinedWeight ", oldCombinedWeight);
-        // console.log("rewardRate ", rewardRate);
-        // console.log("rewardRate in USD", _estimatedFXSToWant(rewardRate));
-        // console.log("apr ", apr);
     }
 
     // ========================= Internal Functions ===========================
