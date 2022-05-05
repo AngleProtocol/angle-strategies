@@ -10,6 +10,7 @@ import "../../../interfaces/external/aave/IAaveToken.sol";
 import "../../../interfaces/external/aave/IProtocolDataProvider.sol";
 import "../../../interfaces/external/aave/ILendingPool.sol";
 import "./GenericLenderBaseUpgradeable.sol";
+import "hardhat/console.sol";
 
 struct AaveReferences {
     IAToken _aToken;
@@ -93,8 +94,12 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     /// @notice Deposits the current balance to the lending platform
     function deposit() external override onlyRole(STRATEGY_ROLE) {
         uint256 balance = want.balanceOf(address(this));
+        // Aave doesn't allow null deposits
+        if (balance == 0) return;
         _deposit(balance);
-        _stake(balance);
+        // we don't stake balance but the whole aTokenBalance
+        // if some dust has been kept idle
+        _stake(_balanceAtoken());
     }
 
     /// @notice Withdraws a given amount from lender
@@ -108,8 +113,8 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     /// @param amount Amount to withdraw
     /// @dev Does not check if any error occurs or if the amount withdrawn is correct
     function emergencyWithdraw(uint256 amount) external override onlyRole(GUARDIAN_ROLE) {
-        uint256 availableAmount = _unstake(amount);
-        _lendingPool.withdraw(address(want), availableAmount, address(this));
+        _unstake(amount);
+        _lendingPool.withdraw(address(want), amount, address(this));
         want.safeTransfer(address(poolManager), want.balanceOf(address(this)));
     }
 
@@ -186,7 +191,6 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         return a * _nav();
     }
 
-    // TODO to be adapted for staking
     /// @notice Returns an estimation of the current Annual Percentage Rate after a new deposit
     /// @param extraAmount The amount to add to the lending platform
     function aprAfterDeposit(uint256 extraAmount) external view override returns (uint256) {
@@ -343,18 +347,20 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
         if (liquidity > 1) {
             uint256 toWithdraw = amount - looseBalance;
-
             if (toWithdraw <= liquidity) {
                 //we can take all
-                uint256 availableAmount = _unstake(toWithdraw);
-                _lendingPool.withdraw(address(want), availableAmount, address(this));
+                uint256 freedAmount = _unstake(toWithdraw);
+                _lendingPool.withdraw(address(want), freedAmount, address(this));
             } else {
                 //take all we can
-                uint256 availableAmount = _unstake(liquidity);
-                _lendingPool.withdraw(address(want), availableAmount, address(this));
+                uint256 freedAmount = _unstake(liquidity);
+                console.log("liquidity ", liquidity);
+                console.log("freedAmount ", freedAmount);
+                _lendingPool.withdraw(address(want), freedAmount, address(this));
             }
         }
         looseBalance = want.balanceOf(address(this));
+
         want.safeTransfer(address(strategy), looseBalance);
         return looseBalance;
     }

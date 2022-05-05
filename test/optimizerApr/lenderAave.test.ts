@@ -306,10 +306,7 @@ describe('OptimizerAPR - lenderAave', () => {
         const balanceTokenManager = await token.balanceOf(manager.address);
         expect(balanceToken).to.be.equal(parseUnits('0', tokenDecimal));
         expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
-        expect(balanceTokenManager).to.be.closeTo(
-          parseUnits('1000000', tokenDecimal),
-          parseUnits('0.001', tokenDecimal),
-        );
+        expect(balanceTokenManager).to.be.closeTo(parseUnits('1000000', tokenDecimal), parseUnits('1', tokenDecimal));
       });
     });
 
