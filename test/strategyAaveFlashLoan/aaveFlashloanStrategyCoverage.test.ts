@@ -15,11 +15,7 @@ import {
   IStakedAave__factory,
   AaveFlashloanStrategy__factory,
   PoolManager,
-  IProtocolDataProvider,
   IAaveIncentivesController,
-  ILendingPool,
-  IProtocolDataProvider__factory,
-  ILendingPool__factory,
 } from '../../typechain';
 import { parseUnits } from 'ethers/lib/utils';
 
@@ -39,9 +35,7 @@ describe('AaveFlashloan Strat - coverage', () => {
     keeper: SignerWithAddress;
 
   let poolManager: PoolManager;
-  let protocolDataProvider: IProtocolDataProvider;
   let incentivesController: IAaveIncentivesController;
-  let lendingPool: ILendingPool;
   let flashMintLib: FlashMintLib;
 
   let strategy: AaveFlashloanStrategy;
@@ -76,20 +70,10 @@ describe('AaveFlashloan Strat - coverage', () => {
 
     poolManager = (await deploy('MockPoolManager', [wantToken.address, 0])) as PoolManager;
 
-    protocolDataProvider = (await ethers.getContractAt(
-      IProtocolDataProvider__factory.abi,
-      '0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d',
-    )) as IProtocolDataProvider;
-
     incentivesController = (await ethers.getContractAt(
       IAaveIncentivesController__factory.abi,
       '0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5',
     )) as IAaveIncentivesController;
-
-    lendingPool = (await ethers.getContractAt(
-      ILendingPool__factory.abi,
-      '0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9',
-    )) as ILendingPool;
 
     flashMintLib = (await deploy('FlashMintLib')) as FlashMintLib;
 
@@ -120,7 +104,6 @@ describe('AaveFlashloan Strat - coverage', () => {
 
   describe('Strategy', () => {
     const _startAmountUSDC = utils.parseUnits((2_000_000).toString(), 6);
-    const _guessedBorrowed = utils.parseUnits((0).toString(), 6);
 
     beforeEach(async () => {
       await (await poolManager.addStrategy(strategy.address, utils.parseUnits('0.75', 9))).wait();

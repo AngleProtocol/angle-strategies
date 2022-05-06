@@ -18,12 +18,11 @@ import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
 import { network, ethers, deployments } from 'hardhat';
 import { parseUnits } from 'ethers/lib/utils';
 import {
-  closePerp,
   logGeneralInfo,
-  randomBurn,
+  logSLP,
+  logStETHInfo,
   randomDeposit,
   randomMint,
-  randomOpenPerp,
   randomWithdraw,
   wait,
 } from '../../../test/utils-interaction';
@@ -43,7 +42,6 @@ async function main() {
 
   const wETHAddress = json.WETH;
   const wETH = (await ethers.getContractAt(Weth__factory.abi, wETHAddress)) as Weth;
-  const wETHERC20 = (await ethers.getContractAt(ERC20__factory.abi, wETHAddress)) as ERC20;
 
   // wrap some
   await wETH.connect(deployer).deposit({ value: parseUnits('800000', 18) });
@@ -51,7 +49,7 @@ async function main() {
   const stableMasterAddressInt = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.StableMaster;
   const poolManagerAddress = '0x7c2C494D8791654e9F6d5d6f2FCFFc27e79A2Cea';
   const perpetualManagerAddress = '0xb9207130832b4863d01452d7411FaE1408005078';
-  const strategyAddress = (await deployments.get(`StETHStrategy`)).address;
+  const strategyAddress = (await deployments.get('StETHStrategy')).address;
 
   const stableMasterAddress: string = stableMasterAddressInt !== undefined ? stableMasterAddressInt : '0x';
 
@@ -80,9 +78,11 @@ async function main() {
   await expect(strategy.connect(deployer)['harvest(uint256)'](0)).to.be.reverted;
 
   for (let i = 0; i < 20; i++) {
-    if (i % 5 == 0) {
+    if (i % 5 === 0) {
       await (await strategy['harvest()']()).wait();
-      await logGeneralInfo(stableMaster, poolManager, perpetualManager, strategy);
+      await logGeneralInfo(stableMaster, poolManager, perpetualManager);
+      await logSLP(stableMaster, poolManager);
+      await logStETHInfo(stableMaster, poolManager, strategy);
     }
     const randomValue = Math.random();
     if (randomValue < 0.5) await randomDeposit(deployer, stableMaster, poolManager);

@@ -1,5 +1,4 @@
-import hre, { network } from 'hardhat';
-import yargs from 'yargs';
+import { network } from 'hardhat';
 import { DeployFunction } from 'hardhat-deploy/types';
 import { CONTRACTS_ADDRESSES, ChainId, Interfaces } from '@angleprotocol/sdk';
 import { BigNumber, Contract } from 'ethers';
@@ -77,14 +76,14 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
       parseUnits('3.9', 9),
     ]);
 
-    const proxyStrategy = await deploy(`StETHStrategy`, {
+    const proxyStrategy = await deploy('StETHStrategy', {
       contract: 'TransparentUpgradeableProxy',
       from: deployer.address,
       args: [strategyImplementation.address, proxyAdmin, initializeData],
     });
 
     console.log('Implementation deployed at address: ', strategyImplementation.address);
-    console.log(`Strategy StETH (proxy) successfully deployed at address: `, proxyStrategy.address);
+    console.log('Strategy StETH (proxy) successfully deployed at address: ', proxyStrategy.address);
     console.log(
       `Deploy cost: ${(strategyImplementation.receipt?.gasUsed as BigNumber)?.toString()} (implem) + ${(
         proxyStrategy.receipt?.gasUsed as BigNumber
