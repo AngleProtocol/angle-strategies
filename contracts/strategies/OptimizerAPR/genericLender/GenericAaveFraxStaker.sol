@@ -114,7 +114,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     /// @dev If minimum staking period is not finished the function will revert
     /// @dev We suppose there is no loss on staking contract --> only if the funds get hacked
     function _unstake(uint256 amount) internal override returns (uint256 freedAmount) {
-        if (kekId == bytes32(0)) revert NoLockedLiquidity();
+        if (kekId == bytes32(0)) return 0;
         if (block.timestamp - lastCreatedStake < stakingPeriod) revert UnstakedTooSoon();
 
         lastAaveReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
