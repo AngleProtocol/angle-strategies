@@ -718,6 +718,57 @@ describe('AaveFlashloan Strategy1', () => {
       expect(await wantToken.balanceOf(strategy.address)).to.equal(0);
       expect(parseFloat(utils.formatUnits(await strategy.estimatedAPR(), 18))).to.be.closeTo(0.067, 0.001);
     });
+
+    // it.only('claimRewards', async () => {
+    //   // Lets make sure everything is at 0 to start with
+    //   expect(await stkAave.balanceOf(strategy.address)).to.equal(0);
+    //   expect(await aave.balanceOf(strategy.address)).to.equal(0);
+    //   expect(await stkAave.stakersCooldowns(strategy.address)).to.equal(0);
+    //   expect(await wantToken.balanceOf(strategy.address)).to.equal(0);
+
+    //   const log = async (msg?: string) => {
+    //     if (msg) console.log(msg);
+    //     console.log(`
+    //       stkAave: ${utils.formatEther(await stkAave.balanceOf(strategy.address))}
+    //       aave: ${utils.formatEther(await aave.balanceOf(strategy.address))}
+    //       rewards: ${utils.formatEther(
+    //         await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
+    //       )}
+    //       cooldown: ${new Date((await stkAave.stakersCooldowns(strategy.address)).toNumber() * 1000)}
+    //       current: ${new Date((await ethers.provider.getBlock('latest')).timestamp * 1000)}
+    //     `);
+
+    //     // aUSDC: ${utils.formatUnits(await aToken.balanceOf(strategy.address), 6)}
+    //     // debtUSDC: ${utils.formatUnits(await debtToken.balanceOf(strategy.address), 6)}
+    //   };
+
+    //   await strategy['harvest()']({ gasLimit: 3e6 });
+
+    //   await network.provider.send('evm_increaseTime', [3600 * 24 * 3]);
+    //   await network.provider.send('evm_mine');
+    //   await strategy.connect(keeper).claimRewards();
+    //   await log('after 3 days');
+
+    //   await network.provider.send('evm_increaseTime', [3600 * 24 * 8]);
+    //   await network.provider.send('evm_mine');
+    //   await strategy.connect(keeper).claimRewards();
+    //   await log();
+
+    //   await network.provider.send('evm_increaseTime', [3600 * 24 * 11]);
+    //   await network.provider.send('evm_mine');
+    //   await strategy.connect(keeper).claimRewards();
+    //   await log();
+
+    //   await network.provider.send('evm_increaseTime', [3600 * 24 * 11]);
+    //   await network.provider.send('evm_mine');
+    //   await strategy.connect(keeper).claimRewards();
+    //   await log();
+
+    //   await network.provider.send('evm_increaseTime', [3600 * 24 * 11]);
+    //   await network.provider.send('evm_mine');
+    //   await strategy.connect(keeper).claimRewards();
+    //   await log();
+    // });
   });
 
   // describe("", () => {

@@ -514,13 +514,17 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         stkAaveBalance = _balanceOfStkAave();
 
         // request start of cooldown period, if there's no cooldown in progress
-        if (boolParams.cooldownStkAave && stkAaveBalance > 0 && cooldownStatus == 0) {
+        if (boolParams.cooldownStkAave && stkAaveBalance > 0 && _checkCooldown() == 0) {
             _stkAave.cooldown();
         }
     }
 
     function claimRewards() external onlyRole(KEEPER_ROLE) {
         _claimRewards();
+    }
+
+    function cooldown() external onlyRole(KEEPER_ROLE) {
+        _stkAave.cooldown();
     }
 
     /// @notice Reduce exposure by withdrawing funds and repaying debt
