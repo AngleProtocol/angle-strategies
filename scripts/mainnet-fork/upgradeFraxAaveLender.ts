@@ -29,6 +29,8 @@ import {
   OptimizerAPRStrategy,
   OptimizerAPRStrategy__factory,
 } from '../../typechain';
+import { time } from '../../test/test-utils/helpers';
+import { DAY } from '../../test/contants';
 
 async function main() {
   // =============== Simulation parameters ====================
@@ -124,9 +126,8 @@ async function main() {
 
   for (let i = 0; i < 20; i++) {
     if (i % 5 === 0) {
-      //   await (await strategy['harvest()']()).wait();
+      await time.increase(DAY);
       await (await strategy['harvest()']()).wait();
-
       console.log('harvest');
 
       await logGeneralInfo(stableMaster, poolManager, perpetualManager);
