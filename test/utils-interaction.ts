@@ -11,10 +11,10 @@ import {
   StableMasterFront,
 } from '@angleprotocol/sdk/dist/constants/types';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { BigNumber, utils } from 'ethers';
+import { BigNumber, BigNumberish, utils } from 'ethers';
 import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { ethers, network } from 'hardhat';
-import { ERC20, ERC20__factory, StETHStrategy } from '../typechain';
+import { ERC20, ERC20__factory, OptimizerAPRStrategy, StETHStrategy } from '../typechain';
 
 export const wait = (n = 1000) => {
   return new Promise(resolve => {
@@ -39,21 +39,14 @@ export const logGeneralInfo = async (
   stableMaster: StableMasterFront,
   poolManager: PoolManager,
   perpetualManager: PerpetualManagerFront,
-  strategy: StETHStrategy,
 ) => {
   const agTokenAddress = await stableMaster.agToken();
   const agToken = (await ethers.getContractAt(AgToken__factory.abi, agTokenAddress)) as AgToken;
   const agTokenName = await agToken.name();
 
-  const collatAddress = (await stableMaster.collateralMap(poolManager.address)).token;
-  const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;
-  const collatDecimal = await collat.decimals();
-
   const collatData = await stableMaster.collateralMap(poolManager.address);
   const oracle = (await ethers.getContractAt(OracleMulti__factory.abi, collatData.oracle)) as OracleMulti;
   const oracleValues = await oracle.readAll();
-
-  const stratParams = await poolManager.strategies(strategy.address);
 
   console.log(`
   General Info:
@@ -64,15 +57,16 @@ export const logGeneralInfo = async (
   Oracle Info:
    Lower rate:\t${logBN(oracleValues[0], { base: 18 })}
    Upper rate:\t${logBN(oracleValues[1], { base: 18 })}
-  Strategy:
-   total assets PoolManager:\t${logBN(await poolManager.getTotalAsset(), { base: collatDecimal })}
-   wETH PoolManager:\t${logBN(await collat.balanceOf(poolManager.address), { base: collatDecimal })}
-   debt ratio:\t${logBN(stratParams.debtRatio, { base: 9 })}
-   total debt:\t${logBN(stratParams.totalStrategyDebt, { base: collatDecimal })}
-   wETH balance:\t${logBN(await strategy.wantBalance(), { base: collatDecimal })}
-   stETH balance:\t${logBN(await strategy.stethBalance(), { base: collatDecimal })}
-   apr:\t${logBN(await strategy.estimatedAPR(), { base: 9 })}
+  `);
+};
 
+export const logSLP = async (stableMaster: StableMasterFront, poolManager: PoolManager) => {
+  const collatAddress = (await stableMaster.collateralMap(poolManager.address)).token;
+  const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;
+  const collatDecimal = await collat.decimals();
+  const collatData = await stableMaster.collateralMap(poolManager.address);
+
+  console.log(`
   SLP:
    SanRate:\t${logBN(collatData.sanRate, { base: 18 })}
    Locked Interest:\t${logBN(collatData.slpData.lockedInterests, { base: 18 })}
@@ -84,6 +78,57 @@ export const logGeneralInfo = async (
    interests for SLPs:\t${logBN(collatData.slpData.interestsForSLPs, { base: 9 })}
    fees for SLPs:\t${logBN(collatData.slpData.feesForSLPs, { base: 18 })}
   `);
+};
+
+export const logStETHInfo = async (
+  stableMaster: StableMasterFront,
+  poolManager: PoolManager,
+  strategy: StETHStrategy,
+) => {
+  const collatAddress = (await stableMaster.collateralMap(poolManager.address)).token;
+  const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;
+  const collatDecimal = await collat.decimals();
+  const stratParams = await poolManager.strategies(strategy.address);
+
+  console.log(`
+  Strategy:
+   total assets PoolManager:\t${logBN(await poolManager.getTotalAsset(), { base: collatDecimal })}
+   wETH PoolManager:\t${logBN(await collat.balanceOf(poolManager.address), { base: collatDecimal })}
+   debt ratio:\t${logBN(stratParams.debtRatio, { base: 9 })}
+   total debt:\t${logBN(stratParams.totalStrategyDebt, { base: collatDecimal })}
+   wETH balance:\t${logBN(await strategy.wantBalance(), { base: collatDecimal })}
+   stETH balance:\t${logBN(await strategy.stethBalance(), { base: collatDecimal })}
+   apr:\t${logBN(await strategy.estimatedAPR(), { base: 9 })}
+  `);
+};
+
+export const logOptimizerInfo = async (
+  stableMaster: StableMasterFront,
+  poolManager: PoolManager,
+  strategy: OptimizerAPRStrategy,
+) => {
+  const collatAddress = (await stableMaster.collateralMap(poolManager.address)).token;
+  const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;
+  const collatDecimal = await collat.decimals();
+  const stratParams = await poolManager.strategies(strategy.address);
+  const lendStatus = await strategy.lendStatuses();
+  console.log(`
+  Strategy:
+   total assets PoolManager:\t${logBN(await poolManager.getTotalAsset(), { base: collatDecimal })}
+   PoolManager:\t${logBN(await collat.balanceOf(poolManager.address), { base: collatDecimal })}
+   debt ratio:\t${logBN(stratParams.debtRatio, { base: 9 })}
+   total debt:\t${logBN(stratParams.totalStrategyDebt, { base: collatDecimal })}
+   apr:\t${logBN(await strategy.estimatedAPR(), { base: 9 })}
+  `);
+  for (let i = 0; i < lendStatus.length; i++) {
+    console.log(`
+  Lender ${i}:
+   name:\t${lendStatus[i].name}
+   address:\t${lendStatus[i].add}
+   nav:\t${logBN(lendStatus[i].assets, { base: collatDecimal })}
+   apr:\t${logBN(lendStatus[i].rate, { base: 18 })}
+  `);
+  }
 };
 
 export const randomMint = async (
@@ -114,6 +159,7 @@ export const randomMint = async (
   }
 
   const agTokenBalanceBefore = await agToken.balanceOf(user.address);
+  await setTokenBalanceFor(collat, user.address, amount);
   await collat.connect(user).approve(stableMaster.address, amount);
   await stableMaster.connect(user).mint(amount, user.address, poolManager.address, parseUnits('0', 1));
   const agTokenBalanceAfter = await agToken.balanceOf(user.address);
@@ -173,6 +219,7 @@ export const randomDeposit = async (
   const amount = parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), collatDecimal);
 
   const sanTokenBalanceBefore = await sanToken.balanceOf(user.address);
+  await setTokenBalanceFor(collat, user.address, amount);
   await collat.connect(user).approve(stableMaster.address, amount);
   await stableMaster.connect(user).deposit(amount, user.address, poolManager.address);
   const sanTokenBalanceAfter = await sanToken.balanceOf(user.address);
@@ -197,7 +244,11 @@ export const randomWithdraw = async (
   const sanToken = (await ethers.getContractAt(SanToken__factory.abi, sanTokenAddress)) as SanToken;
   const collatDecimal = await collat.decimals();
 
-  const amount = parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), collatDecimal);
+  let amount = parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), collatDecimal);
+  const maxAmount = await sanToken.balanceOf(user.address);
+  if (amount.gt(maxAmount)) {
+    amount = maxAmount;
+  }
 
   const collatBalanceBefore = await collat.balanceOf(user.address);
   await sanToken.connect(user).approve(stableMaster.address, amount);
@@ -315,7 +366,7 @@ export async function findBalancesSlot(tokenAddress: string): Promise<number> {
   throw Error('Balances slot not found!');
 }
 
-export async function setTokenBalanceFor(token: ERC20, account: string, amount: number) {
+export async function setTokenBalanceFor(token: ERC20, account: string, amount: BigNumberish) {
   // for FRAX we know it's 0
   // const balanceSlot = await findBalancesSlot(token.address);
   // console.log('the balance slot is ', balanceSlot);

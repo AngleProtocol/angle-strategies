@@ -59,7 +59,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     /// @param governorList List of addresses with governor privilege
     /// @param keeperList List of addresses with keeper privilege
     /// @param guardian Address of the guardian
-    function initializeBase(
+    function initializeAave(
         address _strategy,
         string memory name,
         bool _isIncentivised,

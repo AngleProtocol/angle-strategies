@@ -22,6 +22,8 @@ import { parseUnits } from 'ethers/lib/utils';
 import {
   logBN,
   logGeneralInfo,
+  logSLP,
+  logStETHInfo,
   // randomBurn,
   randomDeposit,
   randomMint,
@@ -29,8 +31,6 @@ import {
   wait,
 } from '../../../test/utils-interaction';
 import {
-  ERC20,
-  ERC20__factory,
   IStableSwapPool,
   IStableSwapPool__factory,
   ISteth,
@@ -118,7 +118,10 @@ async function main() {
   await randomMint(deployer, stableMaster, poolManager);
   await randomDeposit(deployer, stableMaster, poolManager);
   await strategy.connect(deployer)['harvest()']();
-  await logGeneralInfo(stableMaster, poolManager, perpetualManager, strategy);
+  await logGeneralInfo(stableMaster, poolManager, perpetualManager);
+  await logSLP(stableMaster, poolManager);
+  await logStETHInfo(stableMaster, poolManager, strategy);
+
   await wait();
 
   // empty the reserve of the poolManager to make him withdraw on Curve
@@ -134,7 +137,9 @@ async function main() {
       poolManager.address,
     );
 
-  await logGeneralInfo(stableMaster, poolManager, perpetualManager, strategy);
+  await logGeneralInfo(stableMaster, poolManager, perpetualManager);
+  await logSLP(stableMaster, poolManager);
+  await logStETHInfo(stableMaster, poolManager, strategy);
   // update to a really small slippage so tht the tx should revert
   await strategy.connect(govSigner).updateSlippageProtectionOut(parseUnits('1', 1));
 
@@ -144,7 +149,9 @@ async function main() {
   await strategy.connect(govSigner).updateSlippageProtectionOut(parseUnits('3000', 1));
   await strategy.connect(deployer)['harvest()']();
 
-  await logGeneralInfo(stableMaster, poolManager, perpetualManager, strategy);
+  await logGeneralInfo(stableMaster, poolManager, perpetualManager);
+  await logSLP(stableMaster, poolManager);
+  await logStETHInfo(stableMaster, poolManager, strategy);
 }
 
 main().catch(error => {

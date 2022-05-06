@@ -54,7 +54,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         address[] memory keeperList,
         uint256 _stakingPeriod
     ) external {
-        initializeBase(_strategy, name, _isIncentivised, governorList, guardian, keeperList);
+        initializeAave(_strategy, name, _isIncentivised, governorList, guardian, keeperList);
         if (_stakingPeriod < aFraxStakingContract.lock_time_min()) revert TooSmallStakingPeriod();
         stakingPeriod = _stakingPeriod;
 

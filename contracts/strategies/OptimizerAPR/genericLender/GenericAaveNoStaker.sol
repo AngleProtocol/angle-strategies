@@ -23,7 +23,7 @@ contract GenericAaveNoStaker is GenericAaveUpgradeable {
         address guardian,
         address[] memory keeperList
     ) external {
-        initializeBase(_strategy, name, _isIncentivised, governorList, guardian, keeperList);
+        initializeAave(_strategy, name, _isIncentivised, governorList, guardian, keeperList);
     }
 
     // ========================= Virtual Functions ===========================

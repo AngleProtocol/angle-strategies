@@ -17,7 +17,15 @@ import { expect } from '../../../test/test-utils/chai-setup';
 import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
 import { network, ethers, deployments } from 'hardhat';
 import { parseUnits } from 'ethers/lib/utils';
-import { logGeneralInfo, randomDeposit, randomMint, randomWithdraw, wait } from '../../../test/utils-interaction';
+import {
+  logGeneralInfo,
+  logSLP,
+  logStETHInfo,
+  randomDeposit,
+  randomMint,
+  randomWithdraw,
+  wait,
+} from '../../../test/utils-interaction';
 import { ERC20, ERC20__factory, StETHStrategy, StETHStrategy__factory } from '../../../typechain';
 
 async function main() {
@@ -72,7 +80,9 @@ async function main() {
   for (let i = 0; i < 20; i++) {
     if (i % 5 === 0) {
       await (await strategy['harvest()']()).wait();
-      await logGeneralInfo(stableMaster, poolManager, perpetualManager, strategy);
+      await logGeneralInfo(stableMaster, poolManager, perpetualManager);
+      await logSLP(stableMaster, poolManager);
+      await logStETHInfo(stableMaster, poolManager, strategy);
     }
     const randomValue = Math.random();
     if (randomValue < 0.5) await randomDeposit(deployer, stableMaster, poolManager);
