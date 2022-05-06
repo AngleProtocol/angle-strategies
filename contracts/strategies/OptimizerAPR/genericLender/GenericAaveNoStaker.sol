@@ -4,9 +4,9 @@ pragma solidity 0.8.12;
 
 import "./GenericAaveUpgradeable.sol";
 
-/// @title GenericAaveFraxStaker
+/// @title GenericAaveNoStaker
 /// @author  Angle Core Team
-/// @notice Allow to stake aFRAX on FRAX contracts to earn their incentives
+/// @notice Only deposit onto Aave lendingPool with no staking
 contract GenericAaveNoStaker is GenericAaveUpgradeable {
     // ============================= Constructor =============================
 

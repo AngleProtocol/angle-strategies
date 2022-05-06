@@ -26,8 +26,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     using Address for address;
 
     // ==================== References to contracts =============================
-    AggregatorV3Interface public constant oracle = AggregatorV3Interface(0x547a514d5e3769680Ce22B2361c10Ea13619e8a9);
-    address public constant oneInch = 0x1111111254fb6c44bAC0beD2854e76F90643097d;
+    AggregatorV3Interface private constant oracle = AggregatorV3Interface(0x547a514d5e3769680Ce22B2361c10Ea13619e8a9);
 
     // // ========================== Aave Protocol Addresses ==========================
 
@@ -47,14 +46,11 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     bool public isIncentivised;
     IAToken internal _aToken;
 
-    bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
     uint256 internal constant _SECONDS_IN_YEAR = 365 days;
 
     event IncentivisedUpdated(bool _isIncentivised);
 
     error PoolNotIncentivized();
-    error TooSmallAmount();
-    error ErrorSwap();
 
     // ============================= Constructor =============================
 
@@ -71,14 +67,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         address guardian,
         address[] memory keeperList
     ) public {
-        _initialize(_strategy, name, governorList, guardian);
-
-        _setupRole(KEEPER_ROLE, guardian);
-        for (uint256 i = 0; i < keeperList.length; i++) {
-            _setupRole(KEEPER_ROLE, keeperList[i]);
-        }
-
-        _setRoleAdmin(KEEPER_ROLE, GUARDIAN_ROLE);
+        _initialize(_strategy, name, governorList, guardian, keeperList);
 
         _setAavePoolVariables();
         if (_isIncentivised && address(_aToken.getIncentivesController()) == address(0)) revert PoolNotIncentivized();
@@ -126,18 +115,6 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
     function claimRewards() external onlyRole(KEEPER_ROLE) {
         _claimRewards();
-    }
-
-    /// @notice Swap earned _stkAave or Aave for `want` through 1Inch
-    /// @param minAmountOut Minimum amount of `want` to receive for the swap to happen
-    /// @param payload Bytes needed for 1Inch API. Tokens swapped should be: _stkAave -> `want` or Aave -> `want`
-    function sellRewards(uint256 minAmountOut, bytes memory payload) external onlyRole(KEEPER_ROLE) {
-        //solhint-disable-next-line
-        (bool success, bytes memory result) = oneInch.call(payload);
-        if (!success) _revertBytes(result);
-
-        uint256 amountOut = abi.decode(result, (uint256));
-        if (amountOut < minAmountOut) revert TooSmallAmount();
     }
 
     /// @notice Retrieves lending pool variables for `want`. Those variables are mostly used in the function
@@ -407,17 +384,6 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         protected[0] = address(want);
         protected[1] = address(_aToken);
         return protected;
-    }
-
-    /// @notice Internal function used for error handling
-    function _revertBytes(bytes memory errMsg) internal pure {
-        if (errMsg.length > 0) {
-            //solhint-disable-next-line
-            assembly {
-                revert(add(32, errMsg), mload(errMsg))
-            }
-        }
-        revert ErrorSwap();
     }
 
     // ========================= Virtual Functions ===========================

@@ -20,11 +20,13 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
 
     bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
     bytes32 public constant STRATEGY_ROLE = keccak256("STRATEGY_ROLE");
+    bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
+    // ==================== References to contracts =============================
+    address private constant oneInch = 0x1111111254fb6c44bAC0beD2854e76F90643097d;
+
+    // ==================== References to parameters ============================
     string public override lenderName;
-
-    // ============================= References to contracts =============================
-
     /// @notice Reference to the protocol's collateral poolManager
     IPoolManager public poolManager;
 
@@ -33,6 +35,10 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
 
     /// @notice Reference to the token lent
     IERC20 public want;
+
+    error ErrorSwap();
+    error IncompatibleLengths();
+    error TooSmallAmount();
 
     // ============================= Constructor =============================
 
@@ -44,7 +50,8 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
         address _strategy,
         string memory _name,
         address[] memory governorList,
-        address guardian
+        address guardian,
+        address[] memory keeperList
     ) internal initializer {
         strategy = _strategy;
         // The corresponding `PoolManager` is inferred from the `Strategy`
@@ -56,6 +63,14 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
         for (uint256 i = 0; i < governorList.length; i++) {
             _setupRole(GUARDIAN_ROLE, governorList[i]);
         }
+
+        _setupRole(KEEPER_ROLE, guardian);
+        for (uint256 i = 0; i < keeperList.length; i++) {
+            _setupRole(KEEPER_ROLE, keeperList[i]);
+        }
+
+        _setRoleAdmin(KEEPER_ROLE, GUARDIAN_ROLE);
+
         _setupRole(GUARDIAN_ROLE, guardian);
         _setupRole(STRATEGY_ROLE, _strategy);
         _setRoleAdmin(GUARDIAN_ROLE, STRATEGY_ROLE);
@@ -106,5 +121,48 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
         for (uint256 i = 0; i < __protectedTokens.length; i++) require(_token != __protectedTokens[i], "93");
 
         IERC20(_token).safeTransfer(to, IERC20(_token).balanceOf(address(this)));
+    }
+
+    /// @notice Changes allowance for a contract
+    /// @param tokens Addresses of the tokens for which approvals should be madee
+    /// @param spenders Addresses to approve
+    /// @param amounts Approval amounts for each address
+    function changeAllowance(
+        IERC20[] calldata tokens,
+        address[] calldata spenders,
+        uint256[] calldata amounts
+    ) external onlyRole(GUARDIAN_ROLE) {
+        if (tokens.length != spenders.length || tokens.length != amounts.length) revert IncompatibleLengths();
+        for (uint256 i = 0; i < tokens.length; i++) {
+            uint256 currentAllowance = tokens[i].allowance(address(this), address(spenders[i]));
+            if (currentAllowance < amounts[i]) {
+                IERC20(address(tokens[i])).safeIncreaseAllowance(address(spenders[i]), amounts[i] - currentAllowance);
+            } else if (currentAllowance > amounts[i]) {
+                IERC20(address(tokens[i])).safeDecreaseAllowance(address(spenders[i]), currentAllowance - amounts[i]);
+            }
+        }
+    }
+
+    /// @notice Swap earned _stkAave or Aave for `want` through 1Inch
+    /// @param minAmountOut Minimum amount of `want` to receive for the swap to happen
+    /// @param payload Bytes needed for 1Inch API. Tokens swapped should be: _stkAave -> `want` or Aave -> `want`
+    function sellRewards(uint256 minAmountOut, bytes memory payload) external onlyRole(KEEPER_ROLE) {
+        //solhint-disable-next-line
+        (bool success, bytes memory result) = oneInch.call(payload);
+        if (!success) _revertBytes(result);
+
+        uint256 amountOut = abi.decode(result, (uint256));
+        if (amountOut < minAmountOut) revert TooSmallAmount();
+    }
+
+    /// @notice Internal function used for error handling
+    function _revertBytes(bytes memory errMsg) internal pure {
+        if (errMsg.length > 0) {
+            //solhint-disable-next-line
+            assembly {
+                revert(add(32, errMsg), mload(errMsg))
+            }
+        }
+        revert ErrorSwap();
     }
 }

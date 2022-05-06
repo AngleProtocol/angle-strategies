@@ -17,8 +17,6 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
-    bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
-
     uint256 public constant BLOCKS_PER_YEAR = 2_350_000;
 
     AggregatorV3Interface public constant oracle = AggregatorV3Interface(0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5);
@@ -47,7 +45,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         address[] memory keeperList,
         address guardian
     ) external {
-        _initialize(_strategy, _name, governorList, guardian);
+        _initialize(_strategy, _name, governorList, guardian, keeperList);
 
         _setupRole(KEEPER_ROLE, guardian);
         for (uint256 i = 0; i < keeperList.length; i++) {
@@ -207,18 +205,6 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         return looseBalance;
     }
 
-    /// @notice Claims and swaps from Uniswap the `comp` earned
-    /// @param minAmountOut Minimum amount accepted for the swap to happen
-    /// @param payload Bytes needed for 1Inch API
-    function swapComp(uint256 minAmountOut, bytes memory payload) external onlyRole(KEEPER_ROLE) {
-        //solhint-disable-next-line
-        (bool success, bytes memory result) = oneInch.call(payload);
-        if (!success) _revertBytes(result);
-
-        uint256 amountOut = abi.decode(result, (uint256));
-        require(amountOut >= minAmountOut, "15");
-    }
-
     /// @notice Calculates APR from Compound's Liquidity Mining Program
     /// @param amountToAdd Amount to add to the `totalSupplyInWant` (for the `aprAfterDeposit` function)
     function _incentivesRate(uint256 amountToAdd) internal view returns (uint256) {
@@ -258,17 +244,6 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         protected[0] = address(want);
         protected[1] = address(cToken);
         return protected;
-    }
-
-    /// @notice Internal function used for error handling
-    function _revertBytes(bytes memory errMsg) internal pure {
-        if (errMsg.length > 0) {
-            //solhint-disable-next-line
-            assembly {
-                revert(add(32, errMsg), mload(errMsg))
-            }
-        }
-        revert("117");
     }
 
     /// @notice Recovers ETH from the contract
