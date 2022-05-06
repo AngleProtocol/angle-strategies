@@ -57,9 +57,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         initializeAave(_strategy, name, _isIncentivised, governorList, guardian, keeperList);
         if (_stakingPeriod < aFraxStakingContract.lock_time_min()) revert TooSmallStakingPeriod();
         stakingPeriod = _stakingPeriod;
-
         lastAaveReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
-        IERC20(address(_aToken)).safeApprove(address(aFraxStakingContract), type(uint256).max);
     }
 
     // ========================= External Functions ===========================
@@ -97,6 +95,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         uint256 pastReserveNormalizedIncome = lastAaveReserveNormalizedIncome;
         lastAaveReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
 
+        IERC20(address(_aToken)).safeApprove(address(aFraxStakingContract), amount);
         if (kekId == bytes32(0)) {
             lastLiquidity = amount;
             lastCreatedStake = block.timestamp;
@@ -125,6 +124,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         if (amount + minStakingAmount < freedAmount) {
             // too much has been withdrawn we must create back a locker
             lastLiquidity = freedAmount - amount;
+            IERC20(address(_aToken)).safeApprove(address(aFraxStakingContract), lastLiquidity);
             kekId = aFraxStakingContract.stakeLocked(lastLiquidity, stakingPeriod);
 
             // - 1 because there values are rounded when transfering aTokens so we may end up with

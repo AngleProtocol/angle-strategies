@@ -158,11 +158,6 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
     it('stakingPeriod', async () => {
       expect(await lenderAave.stakingPeriod()).to.be.equal(BigNumber.from(DAY.toString()));
     });
-    it('allowance - frax staking contract', async () => {
-      expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
-        ethers.constants.MaxUint256,
-      );
-    });
   });
 
   describe('AccessControl', () => {
