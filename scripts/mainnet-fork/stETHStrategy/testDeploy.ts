@@ -26,13 +26,14 @@ import {
   randomWithdraw,
   wait,
 } from '../../../test/utils-interaction';
-import { ERC20, ERC20__factory, StETHStrategy, StETHStrategy__factory } from '../../../typechain';
+import { StETHStrategy, StETHStrategy__factory } from '../../../typechain';
 
 async function main() {
   // =============== Simulation parameters ====================
   const { deployer } = await ethers.getNamedSigners();
 
   // If we're in mainnet fork, we're using the json.mainnet address
+  // eslint-disable-next-line
   let json = (await import('../../../deploy/networks/mainnet.json')) as any;
   if (network.live) {
     json = await import('../../../deploy/networks/' + network.name + '.json');

@@ -7,12 +7,13 @@ import "./GenericAaveUpgradeable.sol";
 
 /// @title GenericAaveFraxStaker
 /// @author  Angle Core Team
-/// @notice Allow to stake aFRAX on FRAX contracts to earn their incentives
+/// @notice `GenericAaveUpgradeable` implementation for FRAX where aFRAX obtained from Aave are staked on a FRAX contract
+/// to earn FXS incentives
 contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
-    // // ========================== Protocol Addresses ==========================
+    // ============================= Protocol Addresses ============================
 
     AggregatorV3Interface private constant oracleFXS =
         AggregatorV3Interface(0x6Ebc52C8C1089be9eB3945C4350B68B8E4C2233f);
@@ -20,31 +21,37 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         IFraxUnifiedFarmTemplate(0x02577b426F223A6B4f2351315A19ecD6F357d65c);
     uint256 private constant FRAX_IDX = 0;
 
-    // ==================== Parameters =============================
+    // ================================ Variables ==================================
 
-    // hash representing the position on Frax staker
+    /// @notice Hash representing the position on Frax staker
     bytes32 public kekId;
-    // used to track the current liquidity (staked + interests)
+    /// @notice Used to track the current liquidity (staked + interests) from Aave
     uint256 public lastAaveReserveNormalizedIncome;
-    // Last liquidity recorded on Frax staking contract
+    /// @notice Tracks the amount of FRAX controlled by the protocol and lent as aFRAX on Frax staking contract
+    /// This quantity increases due to the Aave native yield
     uint256 private lastLiquidity;
-    // Last time a staker has been created
+    /// @notice Last time a staker has been created
     uint256 public lastCreatedStake;
+
+    // ================================ Parameters =================================
+
+    /// @notice Minimum amount of aFRAX to stake
     uint256 private constant minStakingAmount = 1000 * 1e18; // 100 aFrax
+    /// @notice Staking duration
     uint256 public stakingPeriod;
+
+    // ==================================== Errors =================================
 
     error NoLockedLiquidity();
     error TooSmallStakingPeriod();
     error StakingPeriodTooSmall();
     error UnstakedTooSoon();
 
-    // ============================= Constructor =============================
+    // ============================= Constructor ===================================
 
-    /// @notice Initializer of the `GenericAave`
-    /// @param _strategy Reference to the strategy using this lender
-    /// @param governorList List of addresses with governor privilege
-    /// @param keeperList List of addresses with keeper privilege
-    /// @param guardian Address of the guardian
+    /// @notice Wrapper built on top of the `initializeAave` method to initialize the contract
+    /// @param _stakingPeriod Amount of time aFRAX must remain staked
+    /// @dev This function also initialized some FRAX related parameters like the staking period
     function initialize(
         address _strategy,
         string memory name,
@@ -60,7 +67,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         lastAaveReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
     }
 
-    // ========================= External Functions ===========================
+    // =========================== External Function ===============================
 
     /// @notice Permisionless function to claim rewards, reward tokens are directly sent to the contract and keeper/governance
     /// can handle them via a `sweep` or a `sellRewards` call
@@ -68,32 +75,31 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         return aFraxStakingContract.getReward(address(this));
     }
 
-    // ========================= Governance Functions ===========================
+    // =========================== Governance Functions ============================
 
-    /// @notice Function to update the staking period
+    /// @notice Updates the staking period on the aFRAX staking contract
     function setLockTime(uint256 _stakingPeriod) external onlyRole(GUARDIAN_ROLE) {
         if (_stakingPeriod < aFraxStakingContract.lock_time_min()) revert StakingPeriodTooSmall();
         stakingPeriod = _stakingPeriod;
     }
 
-    /// @notice Function to set a proxy on the staking contract to have a delegation on their boosting
-    /// @dev We can have a multiplier if we ask for someone with boosting power
+    /// @notice Sets a proxy on the staking contract to obtain a delegation from an address with a boost
+    /// @dev Contract can have a multiplier on its FXS rewards if granted by someone with boosting power
     /// @dev Can only be called after Frax governance called `aFraxStakingContract.toggleValidVeFXSProxy(proxy)`
     /// and proxy called `aFraxStakingContract.proxyToggleStaker(address(this))`
     function setProxyBoost(address proxy) external onlyRole(GUARDIAN_ROLE) {
         aFraxStakingContract.stakerSetVeFXSProxy(proxy);
     }
 
-    // ========================= Virtual Functions ===========================
+    // ============================ Virtual Functions ==============================
 
-    /// @notice Allow the lender to stake its aTokens in the external staking contract
-    /// @param amount Amount of aToken wanted to be stake
-    /// @dev If there is an existent locker already on Frax staking contract (keckId != null) --> then add to it
-    /// otherwise (first time w deposit or last action was a withdraw) we need to create a new locker
+    /// @notice Implementation of the `_stake` function to stake aFRAX in the FRAX staking contract
+    /// @dev If there is an existent locker already on Frax staking contract (keckId != null), then this function adds to it
+    /// otherwise (if it's the first time we deposit or if last action was a withdraw) we need to create a new locker
     /// @dev Currently there is no additional reward to stake more than the minimum period as there is no multiplier
     function _stake(uint256 amount) internal override returns (uint256 stakedAmount) {
         uint256 pastReserveNormalizedIncome = lastAaveReserveNormalizedIncome;
-        lastAaveReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
+        uint256 newReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
 
         IERC20(address(_aToken)).safeApprove(address(aFraxStakingContract), amount);
         if (kekId == bytes32(0)) {
@@ -102,33 +108,34 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
             kekId = aFraxStakingContract.stakeLocked(amount, stakingPeriod);
         } else {
             aFraxStakingContract.lockAdditional(kekId, amount);
-            lastLiquidity = (lastLiquidity * lastAaveReserveNormalizedIncome) / pastReserveNormalizedIncome + amount;
+            // Updating the `lastLiquidity` value
+            lastLiquidity = (lastLiquidity * newReserveNormalizedIncome) / pastReserveNormalizedIncome + amount;
         }
-
+        lastAaveReserveNormalizedIncome = newReserveNormalizedIncome;
         stakedAmount = amount;
     }
 
-    /// @notice Allow the lender to unstake its aTokens from the external staking contract
-    /// @param amount Amount of aToken wanted to be unstake
-    /// @dev If minimum staking period is not finished the function will revert
-    /// @dev We suppose there is no loss on staking contract --> only if the funds get hacked
+    /// @notice Implementation of the `_unstake` function
+    /// @dev If the minimum staking period is not finished, the function will revert
+    /// @dev This implementation assumes that there cannot any loss when staking on FRAX
     function _unstake(uint256 amount) internal override returns (uint256 freedAmount) {
         if (kekId == bytes32(0)) return 0;
         if (block.timestamp - lastCreatedStake < stakingPeriod) revert UnstakedTooSoon();
 
         lastAaveReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
-        lastCreatedStake = block.timestamp;
-
         freedAmount = aFraxStakingContract.withdrawLocked(kekId, address(this));
 
         if (amount + minStakingAmount < freedAmount) {
-            // too much has been withdrawn we must create back a locker
-            lastLiquidity = freedAmount - amount;
-            IERC20(address(_aToken)).safeApprove(address(aFraxStakingContract), lastLiquidity);
-            kekId = aFraxStakingContract.stakeLocked(lastLiquidity, stakingPeriod);
-
-            // - 1 because there values are rounded when transfering aTokens so we may end up with
-            // with a little bit less, instead of making multiple call just play it safe and withdraw 1 in all cases
+            // If too much has been withdrawn, we must create back a locker
+            lastCreatedStake = block.timestamp;
+            uint256 amountFRAXControlled = freedAmount - amount;
+            lastLiquidity = amountFRAXControlled;
+            IERC20(address(_aToken)).safeApprove(address(aFraxStakingContract), amountFRAXControlled);
+            kekId = aFraxStakingContract.stakeLocked(amountFRAXControlled, stakingPeriod);
+            
+            // We need to round down the `freedAmount` value because values can be rounded down when transfering aTokens
+            // and we may stake slightly less than desired: to play it safe in all cases and avoid multiple calls, we 
+            // systematically round down
             freedAmount = amount - 1;
         } else {
             lastLiquidity = 0;
@@ -146,14 +153,14 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     /// @notice Get stakingAPR after staking an additional `amount`
     /// @param amount Virtual amount to be staked
     function _stakingApr(uint256 amount) internal view override returns (uint256 apr) {
-        // These computations are made possible only because there will be only one staker
+        // These computations are made possible only because there can only be one staker in the contract
         (uint256 oldCombinedWeight, uint256 newVefxsMultiplier, uint256 newCombinedWeight) = aFraxStakingContract
             .calcCurCombinedWeight(address(this));
 
         uint256 newBalance;
-        // if we didn't stake we need and we don't have anything to give, then stakingApr can only be 0
+        // If we didn't stake anything and we don't have anything to give, then stakingApr can only be 0
         if (lastLiquidity == 0 && amount == 0) return 0;
-        // if we didn't stake we need an extra info on the multiplier per staking period
+        // If we didn't stake we need an extra info on the multiplier per staking period
         // otherwise we reverse engineer the function
         else if (lastLiquidity == 0) {
             newBalance = amount;
@@ -165,26 +172,27 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
             newCombinedWeight = (newBalance * newCombinedWeight) / lastLiquidity;
         }
 
-        // if we arrive up until here the totalCombinedWeight can only be non null
+        // If we arrive up until here the `totalCombinedWeight` can only be non null
         uint256 totalCombinedWeight = aFraxStakingContract.totalCombinedWeight() +
             newCombinedWeight -
             oldCombinedWeight;
 
-        uint256 rewardRate = (newCombinedWeight * aFraxStakingContract.rewardRates(FRAX_IDX) * 1 ether) /
-            (totalCombinedWeight * 1 ether);
+        uint256 rewardRate = (newCombinedWeight * aFraxStakingContract.rewardRates(FRAX_IDX)) / totalCombinedWeight;
 
-        // APRs are in 1e18 and 95% of estimated APR to avoid overestimations
-        apr = (_estimatedFXSToWant(rewardRate) * _SECONDS_IN_YEAR * 9500 * 1 ether) / 10000 / newBalance;
+        // APRs are in 1e18 and a 5% penalty on the FXS price is taken to avoid overestimations
+        apr = (_estimatedFXSToWant(rewardRate * _SECONDS_IN_YEAR) * 9500 * 1 ether) / 10000 / newBalance;
     }
 
-    // ========================= Internal Functions ===========================
+    // ============================ Internal Functions =============================
 
-    /// @notice Estimate the amount of `want` we will get out by swapping it for FXS
+    /// @notice Estimates the amount of `want` we will get out by swapping it for FXS
     /// @param amount Amount of FXS we want to exchange (in base 18)
-    /// @return swappedAmount Amount of `want` we are getting but in a gloabl base 18
-    /// @dev Uses Chainlink spot price. Return value will be in base 18
+    /// @return swappedAmount Amount of `want` we are getting but in a global base 18
+    /// @dev Uses Chainlink spot price
+    /// @dev This implementation assumes that 1 FRAX = 1 USD, as it does not do any FRAX -> USD conversion
     function _estimatedFXSToWant(uint256 amount) internal view returns (uint256) {
-        (, int256 fxsPriceUSD, , , ) = oracleFXS.latestRoundData(); // fxsPriceUSD is in base 8
+        (, int256 fxsPriceUSD, , , ) = oracleFXS.latestRoundData(); 
+        // fxsPriceUSD is in base 8
         return (uint256(fxsPriceUSD) * amount) / 1e8;
     }
 }

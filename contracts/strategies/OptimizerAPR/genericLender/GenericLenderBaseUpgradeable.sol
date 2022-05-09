@@ -12,9 +12,9 @@ import "../../../interfaces/IGenericLender.sol";
 import "../../../interfaces/IPoolManager.sol";
 import "../../../interfaces/IStrategy.sol";
 
-/// @title GenericLenderBase
+/// @title GenericLenderBaseUpgradeable
 /// @author Forked from https://github.com/Grandthrax/yearnV2-generic-lender-strat/tree/master/contracts/GenericLender
-/// @notice A base contract to build contracts to lend assets
+/// @notice A base contract to build contracts that lend assets to protocols
 abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlUpgradeable {
     using SafeERC20 for IERC20;
 
@@ -22,30 +22,35 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
     bytes32 public constant STRATEGY_ROLE = keccak256("STRATEGY_ROLE");
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
-    // ==================== References to contracts =============================
+    // ======================= References to contracts =============================
+
     address private constant oneInch = 0x1111111254fb6c44bAC0beD2854e76F90643097d;
 
-    // ==================== References to parameters ============================
+    // ========================= References and Parameters =========================
+
     string public override lenderName;
     /// @notice Reference to the protocol's collateral poolManager
     IPoolManager public poolManager;
-
     /// @notice Reference to the `Strategy`
     address public override strategy;
-
     /// @notice Reference to the token lent
     IERC20 public want;
 
+    // ================================ Errors =====================================
+
     error ErrorSwap();
     error IncompatibleLengths();
+    error ProtectedToken();
     error TooSmallAmount();
 
-    // ============================= Constructor =============================
+    // ================================ Initializer ================================
 
     /// @notice Initalizer of the `GenericLenderBase`
     /// @param _strategy Reference to the strategy using this lender
+    /// @param _name Name of the lender
     /// @param governorList List of addresses with governor privilege
     /// @param guardian Address of the guardian
+    /// @param keeperList List of keeper addresses
     function _initialize(
         address _strategy,
         string memory _name,
@@ -82,7 +87,7 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}
 
-    // ============================= Governance =============================
+    // ============================ Governance Functions ===========================
 
     /// @notice Override this to add all tokens/tokenized positions this contract
     /// manages on a *persistent* basis (e.g. not just for swapping back to
@@ -118,13 +123,14 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
     /// should be protected from sweeping in addition to `want`.
     function sweep(address _token, address to) external override onlyRole(GUARDIAN_ROLE) {
         address[] memory __protectedTokens = _protectedTokens();
-        for (uint256 i = 0; i < __protectedTokens.length; i++) require(_token != __protectedTokens[i], "93");
+        for (uint256 i = 0; i < __protectedTokens.length; i++)
+            if (_token == __protectedTokens[i]) revert ProtectedToken();
 
         IERC20(_token).safeTransfer(to, IERC20(_token).balanceOf(address(this)));
     }
 
-    /// @notice Changes allowance for a contract
-    /// @param tokens Addresses of the tokens for which approvals should be madee
+    /// @notice Changes allowance of a set of tokens to addresses
+    /// @param tokens Addresses of the tokens for which approvals should be made
     /// @param spenders Addresses to approve
     /// @param amounts Approval amounts for each address
     function changeAllowance(
@@ -145,7 +151,8 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
 
     /// @notice Swap earned _stkAave or Aave for `want` through 1Inch
     /// @param minAmountOut Minimum amount of `want` to receive for the swap to happen
-    /// @param payload Bytes needed for 1Inch API. Tokens swapped should be: _stkAave -> `want` or Aave -> `want`
+    /// @param payload Bytes needed for 1Inch API
+    /// @dev In the case of a contract lending to Aave, tokens swapped should typically be: _stkAave -> `want` or Aave -> `want`
     function sellRewards(uint256 minAmountOut, bytes memory payload) external onlyRole(KEEPER_ROLE) {
         //solhint-disable-next-line
         (bool success, bytes memory result) = oneInch.call(payload);

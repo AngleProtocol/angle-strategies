@@ -20,6 +20,7 @@ import { expect } from '../test-utils/chai-setup';
 import { BASE_TOKENS } from '../utils';
 import { parseUnits } from 'ethers/lib/utils';
 import { logBN, setTokenBalanceFor } from '../utils-interaction';
+import { ZERO_ADDRESS } from '../test-utils/helpers';
 
 async function initStrategy(
   governor: SignerWithAddress,
@@ -201,22 +202,31 @@ describe('OptimizerAPR - lenderAave', () => {
       it('withdraw - reverts nonStrategy', async () => {
         await expect(lenderAave.connect(user).withdraw(BASE_TOKENS)).to.be.revertedWith(strategyError);
       });
-      it('withdraw - reverts nonStrategy', async () => {
+      it('withdrawAll - reverts nonStrategy', async () => {
         await expect(lenderAave.connect(user).withdrawAll()).to.be.revertedWith(strategyError);
       });
       it('claimRewards - reverts non keeper', async () => {
         await expect(lenderAave.connect(user).claimRewards()).to.be.revertedWith(keeperError);
       });
-      it('emergencyWithdraw - reverts guardian', async () => {
+      it('cooldown - reverts non keeper', async () => {
+        await expect(lenderAave.connect(user).cooldown()).to.be.revertedWith(keeperError);
+      });
+      it('sellRewards - reverts non keeper', async () => {
+        await expect(lenderAave.connect(user).sellRewards(0, '0x')).to.be.revertedWith(keeperError);
+      });
+      it('changeAllowance - reverts non guardian', async () => {
+        await expect(lenderAave.connect(user).changeAllowance([], [], [])).to.be.revertedWith(guardianError);
+      });
+      it('emergencyWithdraw - reverts non guardian', async () => {
         await expect(lenderAave.connect(user).emergencyWithdraw(BASE_TOKENS)).to.be.revertedWith(guardianError);
       });
-      it('emergencyWithdraw - reverts guardian', async () => {
-        await expect(lenderAave.connect(user).emergencyWithdraw(BASE_TOKENS)).to.be.revertedWith(guardianError);
+      it('sweep - reverts non guardian', async () => {
+        await expect(lenderAave.connect(user).sweep(ZERO_ADDRESS, ZERO_ADDRESS)).to.be.revertedWith(guardianError);
       });
-      it('toggleIsIncentivised - reverts guardian', async () => {
+      it('toggleIsIncentivised - reverts non guardian', async () => {
         await expect(lenderAave.connect(user).toggleIsIncentivised()).to.be.revertedWith(guardianError);
       });
-      it('toggleCooldownStkAave - reverts guardian', async () => {
+      it('toggleCooldownStkAave - reverts non guardian', async () => {
         await expect(lenderAave.connect(user).toggleCooldownStkAave()).to.be.revertedWith(guardianError);
       });
     });
@@ -228,7 +238,7 @@ describe('OptimizerAPR - lenderAave', () => {
         await (await lenderAave.connect(guardian).toggleCooldownStkAave()).wait();
         expect(await lenderAave.cooldownStkAave()).to.be.equal(true);
       });
-      it('isIncentivised ', async () => {
+      it('isIncentivised', async () => {
         await (await lenderAave.connect(guardian).toggleIsIncentivised()).wait();
         expect(await lenderAave.isIncentivised()).to.be.equal(false);
         await (await lenderAave.connect(guardian).toggleIsIncentivised()).wait();

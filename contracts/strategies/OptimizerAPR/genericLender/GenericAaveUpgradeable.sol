@@ -20,15 +20,17 @@ struct AaveReferences {
 
 /// @title GenericAave
 /// @author Forked from https://github.com/Grandthrax/yearnV2-generic-lender-strat/blob/master/contracts/GenericLender/GenericAave.sol
-/// @notice A contract to lend any ERC20 to Aave
+/// @notice A contract to lend any supported ERC20 to Aave and potentially stake them in an external staking contract
+/// @dev This contract is just a base implementation which can be overriden depending on the staking contract on which to stake
+/// or not the aTokens
 abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
-    // ==================== References to contracts =============================
+    // ======================== Reference to contract ==============================
     AggregatorV3Interface private constant oracle = AggregatorV3Interface(0x547a514d5e3769680Ce22B2361c10Ea13619e8a9);
 
-    // // ========================== Aave Protocol Addresses ==========================
+    // ========================== Aave Protocol Addresses ==========================
 
     address private constant _aave = 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9;
     IStakedAave private constant _stkAave = IStakedAave(0x4da27a545c0c5B758a6BA100e3a049001de870f5);
@@ -38,27 +40,32 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     IProtocolDataProvider private constant _protocolDataProvider =
         IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
 
-    // ==================== Parameters =============================
+    // ========================= Constants and Parameters ==========================
     uint256 public cooldownSeconds;
     uint256 public unstakeWindow;
     uint256 public wantBase;
     bool public cooldownStkAave;
     bool public isIncentivised;
     IAToken internal _aToken;
-
     uint256 internal constant _SECONDS_IN_YEAR = 365 days;
+
+    // =================================== Event ===================================
 
     event IncentivisedUpdated(bool _isIncentivised);
 
+    // =================================== Error ===================================
+
     error PoolNotIncentivized();
 
-    // ============================= Constructor =============================
+    // ================================ Constructor ================================
 
     /// @notice Initializer of the `GenericAave`
     /// @param _strategy Reference to the strategy using this lender
+    /// @param name Name of the lender
+    /// @param _isIncentivised Whether the corresponding token is incentivized on Aave or not
     /// @param governorList List of addresses with governor privilege
-    /// @param keeperList List of addresses with keeper privilege
     /// @param guardian Address of the guardian
+    /// @param keeperList List of addresses with keeper privilege
     function initializeAave(
         address _strategy,
         string memory name,
@@ -77,7 +84,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         wantBase = 10**IERC20Metadata(address(want)).decimals();
     }
 
-    // ============================= External Functions =============================
+    // ============================= External Functions ============================
 
     /// @notice Deposits the current balance to the lending platform
     function deposit() external override onlyRole(STRATEGY_ROLE) {
@@ -85,7 +92,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         // Aave doesn't allow null deposits
         if (balance == 0) return;
         _deposit(balance);
-        // we don't stake balance but the whole aTokenBalance
+        // We don't stake balance but the whole aTokenBalance
         // if some dust has been kept idle
         _stake(_balanceAtoken());
     }
@@ -113,32 +120,37 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         return returned >= invested;
     }
 
+    /// @notice Claim earned stkAAVE
+    /// @dev stkAAVE require a "cooldown" period of 10 days before being claimed
     function claimRewards() external onlyRole(KEEPER_ROLE) {
         _claimRewards();
     }
 
-    /// @notice Retrieves lending pool variables for `want`. Those variables are mostly used in the function
-    /// to compute the optimal borrow amount
-    /// @dev No access control needed because they fetch the values from Aave directly.
-    /// If it changes there, it will need to be updated here too
+    /// @notice Triggers the cooldown on Aave for this contract
+    function cooldown() external onlyRole(KEEPER_ROLE) {
+        _stkAave.cooldown();
+    }
+
+    /// @notice Retrieves lending pool variables like the `COOLDOWN_SECONDS` or the `UNSTAKE_WINDOW` on Aave
+    /// @dev No access control is needed here because values are fetched from Aave directly
     /// @dev We expect the values concerned not to be often modified
     function setAavePoolVariables() external {
         _setAavePoolVariables();
     }
 
-    // ============================= External Setter Functions =============================
+    // ========================== External Setter Functions ========================
 
     /// @notice Toggle isIncentivised state, to let know the lender if it should harvest aave rewards
     function toggleIsIncentivised() external onlyRole(GUARDIAN_ROLE) {
         isIncentivised = !isIncentivised;
     }
 
-    /// @notice Toggle cooldownStkAave state, which allow or not to call the coolDown
+    /// @notice Toggle cooldownStkAave state, which allow or not to call the coolDown stkAave each time rewards are claimed
     function toggleCooldownStkAave() external onlyRole(GUARDIAN_ROLE) {
         cooldownStkAave = !cooldownStkAave;
     }
 
-    // ============================= External View Functions =============================
+    // =========================== External View Functions =========================
 
     /// @notice Checks if assets are currently managed by this contract
     function hasAssets() external view override returns (bool) {
@@ -205,19 +217,13 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         return newLiquidityRate / 1e9 + incentivesRate + stakingApr; // divided by 1e9 to go from Ray to Wad
     }
 
-    // ========================= Internal Functions ===========================
+    // =========================== Internal Functions ==============================
 
-    /// @notice Claim earned stkAAVE (only called at `harvest`)
-    /// @dev stkAAVE require a "cooldown" period of 10 days before being claimed
+    /// @notice Internal version of the `claimRewards` function
     function _claimRewards() internal returns (uint256 stkAaveBalance) {
         stkAaveBalance = _balanceOfStkAave();
-        uint256 cooldownStatus;
-        if (stkAaveBalance > 0) {
-            cooldownStatus = _checkCooldown(); // don't check status if we have no _stkAave
-        }
-
         // If it's the claim period claim
-        if (stkAaveBalance > 0 && cooldownStatus == 1) {
+        if (stkAaveBalance > 0 && _checkCooldown() == 1) {
             // redeem AAVE from _stkAave
             _stkAave.claimRewards(address(this), type(uint256).max);
             _stkAave.redeem(address(this), stkAaveBalance);
@@ -278,11 +284,9 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
     /// @notice Calculates APR from Liquidity Mining Program
     /// @param totalLiquidity Total liquidity available in the pool
-    /// @dev At Angle, compared with Yearn implementation, we have decided to add a check
-    /// about the `totalLiquidity` before entering the `if` branch
     function _incentivesRate(uint256 totalLiquidity) internal view returns (uint256) {
         // only returns != 0 if the incentives are in place at the moment.
-        // it will fail if the isIncentivised is set to true but there is no incentives
+        // it will fail if the isIncentivised is set to true but there are no incentives
         if (isIncentivised && block.timestamp < _incentivesController.getDistributionEnd() && totalLiquidity > 0) {
             uint256 _emissionsPerSecond;
             (, _emissionsPerSecond, ) = _incentivesController.getAssetData(address(_aToken));
@@ -318,7 +322,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
             return amount;
         }
 
-        // not state changing but OK because of previous call
+        // Not state changing but OK because of previous call
         uint256 liquidity = want.balanceOf(address(_aToken));
 
         if (liquidity > 1) {
@@ -363,7 +367,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
     /// @notice Verifies the cooldown status for earned stkAAVE
     /// @return cooldownStatus Status of the coolDown: if it is 0 then there is no cooldown Status, if it is 1 then
-    /// the strategy should claim
+    /// the strategy should claim the stkAave
     function _checkCooldown() internal view returns (uint256 cooldownStatus) {
         uint256 cooldownStartTimestamp = IStakedAave(_stkAave).stakersCooldowns(address(this));
         uint256 nextClaimStartTimestamp = cooldownStartTimestamp + cooldownSeconds;
@@ -388,11 +392,21 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
     // ========================= Virtual Functions ===========================
 
+    /// @notice Allows the lender to stake its aTokens in an external staking contract
+    /// @param amount Amount of aTokens to stake
+    /// @return Amount of aTokens actually staked
     function _stake(uint256 amount) internal virtual returns (uint256);
 
+    /// @notice Allows the lender to unstake its aTokens from an external staking contract
+    /// @param amount Amount of aToken to unstake
+    /// @return Amount of aTokens actually unstaked
     function _unstake(uint256 amount) internal virtual returns (uint256);
 
+    /// @notice Gets the amount of aTokens currently staked
     function _stakedBalance() internal view virtual returns (uint256);
 
+    /// @notice Gets the APR from staking additional `amount` of aTokens in the associated staking 
+    /// contract
+    /// @param amount Virtual amount to be staked
     function _stakingApr(uint256 amount) internal view virtual returns (uint256);
 }

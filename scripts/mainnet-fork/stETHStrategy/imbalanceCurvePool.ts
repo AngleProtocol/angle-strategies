@@ -44,6 +44,7 @@ async function main() {
   const { deployer, user: richStETH } = await ethers.getNamedSigners();
 
   // If we're in mainnet fork, we're using the json.mainnet address
+  // eslint-disable-next-line
   const json = (await import('../../../deploy/networks/mainnet.json')) as any;
 
   const governance = CONTRACTS_ADDRESSES[ChainId.MAINNET].GovernanceMultiSig! as string;
