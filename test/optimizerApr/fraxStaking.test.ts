@@ -87,8 +87,6 @@ let guardianError: string;
 let keeperError: string;
 let stkAaveHolder: string;
 
-const impersonatedSigners: { [key: string]: Signer } = {};
-
 // Start test block
 describe('OptimizerAPR - lenderAaveFraxStaker', () => {
   beforeEach(async () => {
