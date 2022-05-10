@@ -59,7 +59,7 @@ const config: HardhatUserConfig = {
       forking: {
         enabled: argv.fork || false,
         url: nodeUrl('fork'),
-        blockNumber: 14679410,
+        blockNumber: 14563630,
       },
       mining: argv.disableAutoMining
         ? {

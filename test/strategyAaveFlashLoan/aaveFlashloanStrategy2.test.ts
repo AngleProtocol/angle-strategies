@@ -4,6 +4,7 @@ import { impersonate } from '../test-utils';
 import { expect } from '../test-utils/chai-setup';
 
 import { setup } from './setup_tests';
+import { parseUnits } from 'ethers/lib/utils';
 
 describe('AaveFlashloan Strategy2', () => {
   it('scenario static', async () => {
@@ -45,9 +46,9 @@ describe('AaveFlashloan Strategy2', () => {
     expect((await poolManager.getTotalAsset()).mul(3).div(4)).to.be.closeTo(BigNumber.from('0x5365efafcf9b'), 1000);
 
     let _data = await protocolDataProvider.getReserveData(_wantToken);
-    expect(_data.availableLiquidity).to.equal(BigNumber.from('0x020ce27db56962'));
-    expect(_data.totalStableDebt).to.equal(BigNumber.from('0x0dfd587ea04e'));
-    expect(_data.totalVariableDebt).to.equal(BigNumber.from('0x0665030e3803a1'));
+    expect(_data.availableLiquidity).to.closeTo(BigNumber.from('0x020ce27db56962'), parseUnits('100', 6));
+    expect(_data.totalStableDebt).to.closeTo(BigNumber.from('0x0dfd587ea04e'), parseUnits('100', 6));
+    expect(_data.totalVariableDebt).to.closeTo(BigNumber.from('0x0665030e3803a1'), parseUnits('100', 6));
 
     // log params for python script
     const logState = async () => {

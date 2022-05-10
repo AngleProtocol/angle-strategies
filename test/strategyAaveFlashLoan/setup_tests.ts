@@ -195,9 +195,9 @@ export async function setup(startBlocknumber?: number, collat = 'USDC') {
     const ratesBefore = await protocolDataProvider.getReserveData(wantToken.address);
     */
 
-    // console.log('harvesting...');
+    console.log('harvesting...');
 
-    // const receipt = await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
+    await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
     // console.log('gasUsed', receipt.gasUsed.toString());
 
     const aTokenAfter = await aToken.balanceOf(strategy.address);
