@@ -100,6 +100,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     function _stake(uint256 amount) internal override returns (uint256 stakedAmount) {
         uint256 pastReserveNormalizedIncome = lastAaveReserveNormalizedIncome;
         uint256 newReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
+        lastAaveReserveNormalizedIncome = newReserveNormalizedIncome;
 
         IERC20(address(_aToken)).safeApprove(address(aFraxStakingContract), amount);
         if (kekId == bytes32(0)) {
@@ -111,7 +112,6 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
             // Updating the `lastLiquidity` value
             lastLiquidity = (lastLiquidity * newReserveNormalizedIncome) / pastReserveNormalizedIncome + amount;
         }
-        lastAaveReserveNormalizedIncome = newReserveNormalizedIncome;
         stakedAmount = amount;
     }
 

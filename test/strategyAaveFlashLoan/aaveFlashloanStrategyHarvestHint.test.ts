@@ -25,7 +25,7 @@ import { getParamsOptim } from '../utils';
 const PRECISION = 3;
 const toOriginalBase = (n: BigNumber, base = 6) => n.mul(utils.parseUnits('1', base)).div(utils.parseUnits('1', 27));
 
-describe('AaveFlashloan Strat', () => {
+describe('AaveFlashloanHarvestHint', () => {
   // ATokens
   let aToken: ERC20, debtToken: ERC20;
   let aDAIToken: ERC20, debtDAIToken: ERC20;

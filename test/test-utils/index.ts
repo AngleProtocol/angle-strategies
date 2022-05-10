@@ -15,6 +15,12 @@ export async function deploy(
   return contract;
 }
 
+export async function latestTime(): Promise<number> {
+  const { timestamp } = await ethers.provider.getBlock(await ethers.provider.getBlockNumber());
+
+  return timestamp as number;
+}
+
 export const randomAddress = () => Wallet.createRandom().address;
 
 export async function impersonate(

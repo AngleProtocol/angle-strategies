@@ -78,6 +78,7 @@ let stkAave: IStakedAave;
 let aFraxStakingContract: IMockFraxUnifiedFarm;
 let oracleNativeReward: AggregatorV3Interface;
 let oracleStkAave: AggregatorV3Interface;
+let oneInch: string;
 const lockerStakeDAO = '0xCd3a267DE09196C48bbB1d9e842D7D7645cE448f';
 const fraxTimelock = '0x8412ebf45bAC1B340BbE8F318b928C466c4E39CA';
 
@@ -150,6 +151,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
       true,
       DAY,
     ));
+    oneInch = '0x1111111254fb6c44bAC0beD2854e76F90643097d';
   });
 
   describe('Contructor', () => {
@@ -173,8 +175,16 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
   });
 
   describe('Parameters', () => {
-    it('stakingPeriod', async () => {
+    it('success - well set', async () => {
       expect(await lenderAave.stakingPeriod()).to.be.equal(BigNumber.from(DAY.toString()));
+      expect(await lenderAave.cooldownSeconds()).to.be.equal(await stkAave.COOLDOWN_SECONDS());
+      expect(await lenderAave.unstakeWindow()).to.be.equal(await stkAave.UNSTAKE_WINDOW());
+      expect(await lenderAave.isIncentivised()).to.be.equal(true);
+      expect(await lenderAave.cooldownStkAave()).to.be.equal(true);
+      expect(await lenderAave.poolManager()).to.be.equal(manager.address);
+      expect(await lenderAave.want()).to.be.equal(token.address);
+      expect(await lenderAave.wantBase()).to.be.equal(parseUnits('1', await token.decimals()));
+      expect(await stkAave.allowance(lenderAave.address, oneInch)).to.be.equal(ethers.constants.MaxUint256);
     });
   });
 
@@ -189,10 +199,18 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
           .connect(user)
           .changeAllowance([aToken.address], [aFraxStakingContract.address], [ethers.constants.Zero]),
       ).to.be.revertedWith(guardianError);
+      await expect(lenderAave.connect(user).sweep(ZERO_ADDRESS, governor.address)).to.be.revertedWith(guardianError);
     });
   });
 
   describe('Keeper functions', () => {
+    describe('setAavePoolVariables', () => {
+      it('success - values well set', async () => {
+        await lenderAave.setAavePoolVariables();
+        expect(await lenderAave.cooldownSeconds()).to.be.equal(await stkAave.COOLDOWN_SECONDS());
+        expect(await lenderAave.unstakeWindow()).to.be.equal(await stkAave.UNSTAKE_WINDOW());
+      });
+    });
     describe('cooldown', () => {
       it('reverts - when not keeper', async () => {
         await expect(lenderAave.connect(user).cooldown()).to.be.revertedWith(keeperError);
@@ -268,6 +286,34 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
         expect(await nativeRewardToken.balanceOf(lenderAave.address)).to.be.equal(balanceBefore.sub(parseEther('100')));
         expect(await frax.balanceOf(lenderAave.address)).to.be.gt(parseEther('100'));
       });
+      it('reverts - FXS token swap but looses from slippage protection', async () => {
+        await setTokenBalanceFor(token, strategy.address, 1000000);
+        await (await strategy.connect(keeper)['harvest()']()).wait();
+
+        // let days pass to have a non negligible gain
+        await time.increase(DAY * 7);
+
+        await (await lenderAave.connect(user).claimRewardsExternal()).wait();
+        const balanceBefore = await nativeRewardToken.balanceOf(lenderAave.address);
+        expect(balanceBefore).to.be.gte(parseUnits('0', tokenDecimal));
+        expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
+        // Payload to swap 100 FXS to FRAX
+        const payload =
+          '0x2e95b6c80000000000000000000000003432b6a60d23ca0dfca7761b7ab56459d9c964d00000000000000000000000000000000000000000000000056bc7' +
+          '5e2d6310000000000000000000000000000000000000000000000000005b0bf8af86b3d154cc00000000000000000000000000000000000000000000000000' +
+          '00000000000080000000000000000000000000000000000000000000000000000000000000000100000000000000003b6d0340e1573b9d29e2183' +
+          'b1af0e743dc2754979a40d237cfee7c08';
+        await lenderAave
+          .connect(guardian)
+          .changeAllowance(
+            [nativeRewardToken.address],
+            ['0x1111111254fb6c44bAC0beD2854e76F90643097d'],
+            [parseEther('1000')],
+          );
+        await expect(lenderAave.connect(keeper).sellRewards(parseEther('10000000'), payload)).to.be.revertedWith(
+          'TooSmallAmount',
+        );
+      });
     });
   });
 
@@ -304,6 +350,31 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
 
         const veFXSMultiplierAfter = await aFraxStakingContract.veFXSMultiplier(lenderAave.address);
         expect(veFXSMultiplierAfter).to.be.gt(veFXSMultiplierBefore);
+      });
+    });
+    describe('sweep', () => {
+      it('reverts - protected token', async () => {
+        await expect(lenderAave.connect(guardian).sweep(token.address, guardian.address)).to.be.revertedWith(
+          'ProtectedToken',
+        );
+      });
+      it('success - balance correctly swept', async () => {
+        await setTokenBalanceFor(token, strategy.address, 1000000);
+        await (await strategy.connect(keeper)['harvest()']()).wait();
+
+        // let days pass to have a non negligible gain
+        await time.increase(DAY * 7);
+        // Accumulating stkAave and FXS
+        await (await lenderAave.connect(user).claimRewardsExternal()).wait();
+        const balanceBefore = await nativeRewardToken.balanceOf(lenderAave.address);
+        expect(balanceBefore).to.be.gte(parseUnits('0', tokenDecimal));
+        expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
+        expect(await nativeRewardToken.balanceOf(guardian.address)).to.be.equal(0);
+        expect(await stkAave.balanceOf(guardian.address)).to.be.equal(0);
+        await lenderAave.connect(guardian).sweep(nativeRewardToken.address, guardian.address);
+        await lenderAave.connect(guardian).sweep(stkAave.address, guardian.address);
+        expect(await nativeRewardToken.balanceOf(guardian.address)).to.be.gte(parseUnits('0', tokenDecimal));
+        expect(await stkAave.balanceOf(guardian.address)).to.be.gte(parseUnits('0', tokenDecimal));
       });
     });
     describe('changeAllowance', () => {
@@ -364,6 +435,16 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
         expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
           ethers.constants.MaxUint256,
         );
+        await lenderAave
+          .connect(guardian)
+          .changeAllowance(
+            [aToken.address],
+            [aFraxStakingContract.address],
+            [ethers.constants.MaxUint256.div(BigNumber.from('2'))],
+          );
+        expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
+          ethers.constants.MaxUint256.div(BigNumber.from('2')),
+        );
       });
     });
   });
@@ -375,6 +456,10 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
       // at mainnet fork time there is 1.22% coming from liquidity rate, 0.05% coming from incentives
       // and 0% as no funds deposited yet on the strat
       expect(apr).to.be.closeTo(parseUnits('0.0127', 18), parseUnits('0.001', 18));
+      const weightedAPR = await lenderAave.weightedApr();
+      const nav = await lenderAave.nav();
+      expect(nav).to.be.equal(0);
+      expect(weightedAPR).to.be.equal(0);
     });
     it('apr - no boost', async () => {
       await setTokenBalanceFor(token, strategy.address, 1000000);
@@ -383,6 +468,9 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
       // at mainnet fork time there is 1.22% coming from liquidity rate, 0.05% coming from incentives
       // and 11.58% (computed by hand because apr displyed on Frax front is wrong)
       expect(apr).to.be.closeTo(parseUnits('0.1285', 18), parseUnits('0.005', 18));
+      const weightedAPR = await lenderAave.weightedApr();
+      const nav = await lenderAave.nav();
+      expect(weightedAPR).to.be.equal(nav.mul(apr));
     });
     it('apr - with boost', async () => {
       await impersonate(fraxTimelock, async acc => {
@@ -487,7 +575,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
   });
 
   describe('Strategy withdraws', () => {
-    it(' withdraw - reverts - too soon', async () => {
+    it('withdraw - reverts - too soon', async () => {
       await setTokenBalanceFor(token, strategy.address, 1000000);
       await (await strategy.connect(keeper)['harvest()']()).wait();
       await setTokenBalanceFor(token, strategy.address, 1000000);

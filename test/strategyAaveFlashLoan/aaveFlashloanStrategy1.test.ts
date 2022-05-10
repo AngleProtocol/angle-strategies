@@ -23,7 +23,7 @@ import {
 } from '../../typechain';
 import { parseUnits } from 'ethers/lib/utils';
 
-describe('AaveFlashloan Strat', () => {
+describe('AaveFlashloan Strategy1', () => {
   // ATokens
   let aToken: ERC20, debtToken: ERC20;
 

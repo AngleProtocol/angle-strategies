@@ -5,7 +5,7 @@ import { expect } from '../test-utils/chai-setup';
 
 import { setup } from './setup_tests';
 
-describe('AaveFlashloan strategy', () => {
+describe('AaveFlashloan Strategy2', () => {
   it('scenario static', async () => {
     const {
       strategy,

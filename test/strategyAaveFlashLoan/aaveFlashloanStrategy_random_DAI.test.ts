@@ -13,7 +13,7 @@ async function setDaiBalanceFor(account: string, amount: number) {
   ]);
 }
 
-describe('AaveFlashloan strategy random (DAI)', () => {
+describe('AaveFlashloan strategy - Random DAI', () => {
   it('scenario random', async () => {
     const { _wantToken, strategy, lendingPool, poolManager, oldStrategy, realGuardian, richUSDCUser, aToken, harvest } =
       await setup(14456160, 'DAI');
