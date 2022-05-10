@@ -321,7 +321,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
     describe('setLockTime', () => {
       it('reverts - too small staking period', async () => {
         await expect(lenderAave.connect(guardian).setLockTime(ethers.constants.Zero)).to.be.revertedWith(
-          'StakingPeriodTooSmall',
+          'TooSmallStakingPeriod',
         );
       });
       it('success - staking period updated', async () => {
@@ -579,7 +579,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
       await setTokenBalanceFor(token, strategy.address, 1000000);
       await (await strategy.connect(keeper)['harvest()']()).wait();
       await setTokenBalanceFor(token, strategy.address, 1000000);
-      await expect(strategy.connect(keeper)['harvest()']()).to.be.rejectedWith('UnstakedTooSoon');
+      await expect(strategy.connect(keeper)['harvest()']()).to.be.reverted;
     });
     it('emergencyWithdraw - reverts - nothing to remove', async () => {
       await expect(lenderAave.connect(guardian).emergencyWithdraw(parseUnits('1000000', 18))).to.be.reverted;

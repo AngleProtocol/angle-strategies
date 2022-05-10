@@ -44,8 +44,6 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
 
     error NoLockedLiquidity();
     error TooSmallStakingPeriod();
-    error StakingPeriodTooSmall();
-    error UnstakedTooSoon();
 
     // ============================= Constructor ===================================
 
@@ -79,7 +77,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
 
     /// @notice Updates the staking period on the aFRAX staking contract
     function setLockTime(uint256 _stakingPeriod) external onlyRole(GUARDIAN_ROLE) {
-        if (_stakingPeriod < aFraxStakingContract.lock_time_min()) revert StakingPeriodTooSmall();
+        if (_stakingPeriod < aFraxStakingContract.lock_time_min()) revert TooSmallStakingPeriod();
         stakingPeriod = _stakingPeriod;
     }
 
@@ -120,7 +118,6 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     /// @dev This implementation assumes that there cannot any loss when staking on FRAX
     function _unstake(uint256 amount) internal override returns (uint256 freedAmount) {
         if (kekId == bytes32(0)) return 0;
-        if (block.timestamp - lastCreatedStake < stakingPeriod) revert UnstakedTooSoon();
 
         lastAaveReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
         freedAmount = aFraxStakingContract.withdrawLocked(kekId, address(this));
