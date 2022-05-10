@@ -3,7 +3,6 @@
 pragma solidity 0.8.12;
 
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import "../../../interfaces/external/compound/CErc20I.sol";
 import "../../../interfaces/external/compound/IComptroller.sol";
@@ -27,7 +26,6 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     // ==================== References to contracts =============================
 
     CErc20I public cToken;
-    uint256 public wantBase;
 
     // ============================= Constructor =============================
 
@@ -47,17 +45,9 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     ) external {
         _initialize(_strategy, _name, governorList, guardian, keeperList);
 
-        _setupRole(KEEPER_ROLE, guardian);
-        for (uint256 i = 0; i < keeperList.length; i++) {
-            _setupRole(KEEPER_ROLE, keeperList[i]);
-        }
-
-        _setRoleAdmin(KEEPER_ROLE, GUARDIAN_ROLE);
-
         cToken = CErc20I(_cToken);
         require(CErc20I(_cToken).underlying() == address(want), "wrong cToken");
 
-        wantBase = 10**IERC20Metadata(address(want)).decimals();
         want.safeApprove(_cToken, type(uint256).max);
         IERC20(comp).safeApprove(oneInch, type(uint256).max);
     }
@@ -137,7 +127,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
     /// @notice Check if assets are currently managed by this contract
     function hasAssets() external view override returns (bool) {
-        return cToken.balanceOf(address(this)) > 0 || want.balanceOf(address(this)) > 0;
+        return _nav() > 10 * wantBase;
     }
 
     // ============================= Governance =============================

@@ -3,6 +3,7 @@
 pragma solidity 0.8.12;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
@@ -35,6 +36,8 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
     address public override strategy;
     /// @notice Reference to the token lent
     IERC20 public want;
+    /// @notice Base of the asset handled by the lender
+    uint256 public wantBase;
 
     // ================================ Errors =====================================
 
@@ -80,7 +83,7 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
         _setupRole(STRATEGY_ROLE, _strategy);
         _setRoleAdmin(GUARDIAN_ROLE, STRATEGY_ROLE);
         _setRoleAdmin(STRATEGY_ROLE, GUARDIAN_ROLE);
-
+        wantBase = 10**IERC20Metadata(address(want)).decimals();
         want.safeApprove(_strategy, type(uint256).max);
     }
 

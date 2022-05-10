@@ -11,13 +11,6 @@ import "../../../interfaces/external/aave/IProtocolDataProvider.sol";
 import "../../../interfaces/external/aave/ILendingPool.sol";
 import "./GenericLenderBaseUpgradeable.sol";
 
-struct AaveReferences {
-    IAToken _aToken;
-    IProtocolDataProvider _protocolDataProvider;
-    IStakedAave _stkAave;
-    address _aave;
-}
-
 /// @title GenericAave
 /// @author Forked from https://github.com/Grandthrax/yearnV2-generic-lender-strat/blob/master/contracts/GenericLender/GenericAave.sol
 /// @notice A contract to lend any supported ERC20 to Aave and potentially stake them in an external staking contract
@@ -43,7 +36,6 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     // ========================= Constants and Parameters ==========================
     uint256 public cooldownSeconds;
     uint256 public unstakeWindow;
-    uint256 public wantBase;
     bool public cooldownStkAave;
     bool public isIncentivised;
     IAToken internal _aToken;
@@ -81,7 +73,6 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         isIncentivised = _isIncentivised;
         cooldownStkAave = true;
         IERC20(address(want)).safeApprove(address(_lendingPool), type(uint256).max);
-        wantBase = 10**IERC20Metadata(address(want)).decimals();
     }
 
     // ============================= External Functions ============================
@@ -153,8 +144,11 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     // =========================== External View Functions =========================
 
     /// @notice Checks if assets are currently managed by this contract
+    /// @dev We're considering that the strategy has no assets if it has less than 10 of the 
+    /// underlying asset in total to avoid the case where there is dust on Aave and we cannot
+    /// withdraw everything
     function hasAssets() external view override returns (bool) {
-        return _nav() > 0;
+        return _nav() > 10 * wantBase;
     }
 
     /// @notice Returns the current total of assets managed
@@ -164,8 +158,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
     /// @notice Returns the current balance of aTokens
     function underlyingBalanceStored() public view returns (uint256 balance) {
-        balance = _balanceAtoken();
-        balance += _stakedBalance();
+        balance = _balanceAtoken() + _stakedBalance();
     }
 
     /// @notice Returns an estimation of the current Annual Percentage Rate
