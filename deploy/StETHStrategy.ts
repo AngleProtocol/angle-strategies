@@ -11,20 +11,18 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
   const collats = ['WETH'];
 
   let guardian: string;
-  let ANGLE: string;
   let governor: string;
   let proxyAdmin: string;
 
   // if fork we suppose that we are in mainnet
+  // eslint-disable-next-line
   let json = (await import('./networks/mainnet.json')) as any;
   if (!network.live) {
     guardian = CONTRACTS_ADDRESSES[ChainId.MAINNET].Guardian!;
-    ANGLE = CONTRACTS_ADDRESSES[ChainId.MAINNET].ANGLE!;
     governor = CONTRACTS_ADDRESSES[ChainId.MAINNET].GovernanceMultiSig! as string;
     proxyAdmin = CONTRACTS_ADDRESSES[ChainId.MAINNET].ProxyAdmin! as string;
   } else {
     guardian = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].Guardian!;
-    ANGLE = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].ANGLE!;
     governor = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].GovernanceMultiSig! as string;
     proxyAdmin = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].ProxyAdmin! as string;
     json = await import('./networks/' + network.name + '.json');

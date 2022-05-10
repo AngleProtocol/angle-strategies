@@ -5,12 +5,20 @@ import { TransparentUpgradeableProxy__factory } from '../../typechain';
 
 export async function deploy(
   contractName: string,
+  // eslint-disable-next-line
   args: any[] = [],
+  // eslint-disable-next-line
   options: Record<string, any> & { libraries?: Record<string, string> } = {},
 ): Promise<Contract> {
   const factory = await ethers.getContractFactory(contractName, options);
   const contract = await factory.deploy(...args);
   return contract;
+}
+
+export async function latestTime(): Promise<number> {
+  const { timestamp } = await ethers.provider.getBlock(await ethers.provider.getBlockNumber());
+
+  return timestamp as number;
 }
 
 export const randomAddress = () => Wallet.createRandom().address;

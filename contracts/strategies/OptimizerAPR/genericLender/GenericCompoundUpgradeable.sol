@@ -3,7 +3,6 @@
 pragma solidity 0.8.12;
 
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import "../../../interfaces/external/compound/CErc20I.sol";
 import "../../../interfaces/external/compound/IComptroller.sol";
@@ -22,14 +21,20 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     AggregatorV3Interface public constant oracle = AggregatorV3Interface(0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5);
     IComptroller public constant comptroller = IComptroller(0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B);
     address public constant comp = 0xc00e94Cb662C3520282E6f5717214004A7f26888;
-    address public constant oneInch = 0x1111111254fb6c44bAC0beD2854e76F90643097d;
 
-    // ==================== References to contracts =============================
+    // ======================== References to contracts ============================
 
     CErc20I public cToken;
-    uint256 public wantBase;
 
-    // ============================= Constructor =============================
+    // =============================== Errors ======================================
+
+    error FailedToMint();
+    error FailedToRecoverETH();
+    error FailedToRedeem();
+    error InvalidOracleValue();
+    error WrongCToken();
+
+    // ============================= Constructor ===================================
 
     /// @notice Initializer of the `GenericCompound`
     /// @param _strategy Reference to the strategy using this lender
@@ -47,17 +52,9 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     ) external {
         _initialize(_strategy, _name, governorList, guardian, keeperList);
 
-        _setupRole(KEEPER_ROLE, guardian);
-        for (uint256 i = 0; i < keeperList.length; i++) {
-            _setupRole(KEEPER_ROLE, keeperList[i]);
-        }
-
-        _setRoleAdmin(KEEPER_ROLE, GUARDIAN_ROLE);
-
         cToken = CErc20I(_cToken);
-        require(CErc20I(_cToken).underlying() == address(want), "wrong cToken");
+        if (CErc20I(_cToken).underlying() != address(want)) revert WrongCToken();
 
-        wantBase = 10**IERC20Metadata(address(want)).decimals();
         want.safeApprove(_cToken, type(uint256).max);
         IERC20(comp).safeApprove(oneInch, type(uint256).max);
     }
@@ -67,7 +64,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     /// @notice Deposits the current balance of the contract to the lending platform
     function deposit() external override onlyRole(STRATEGY_ROLE) {
         uint256 balance = want.balanceOf(address(this));
-        require(cToken.mint(balance) == 0, "mint fail");
+        if (cToken.mint(balance) != 0) revert FailedToMint();
     }
 
     /// @notice Withdraws a given amount from lender
@@ -85,15 +82,10 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         return returned >= invested;
     }
 
-    // ============================= External View Functions =============================
-
-    /// @notice Helper function to get the current total of assets managed by the lender.
-    function nav() external view override returns (uint256) {
-        return _nav();
-    }
+    // ========================== External View Functions ==========================
 
     /// @notice Helper function the current balance of cTokens
-    function underlyingBalanceStored() public view returns (uint256 balance) {
+    function underlyingBalanceStored() public view override returns (uint256 balance) {
         uint256 currentCr = cToken.balanceOf(address(this));
         if (currentCr == 0) {
             balance = 0;
@@ -101,17 +93,6 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
             //The current exchange rate as an unsigned integer, scaled by 1e18.
             balance = (currentCr * cToken.exchangeRateStored()) / 1e18;
         }
-    }
-
-    /// @notice Returns an estimation of the current Annual Percentage Rate
-    function apr() external view override returns (uint256) {
-        return _apr();
-    }
-
-    /// @notice Returns an estimation of the current Annual Percentage Rate weighted by a factor
-    function weightedApr() external view override returns (uint256) {
-        uint256 a = _apr();
-        return a * _nav();
     }
 
     /// @notice Returns an estimation of the current Annual Percentage Rate after a new deposit
@@ -135,12 +116,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         return supplyRate * BLOCKS_PER_YEAR + _incentivesRate(amount);
     }
 
-    /// @notice Check if assets are currently managed by this contract
-    function hasAssets() external view override returns (bool) {
-        return cToken.balanceOf(address(this)) > 0 || want.balanceOf(address(this)) > 0;
-    }
-
-    // ============================= Governance =============================
+    // ================================= Governance ================================
 
     /// @notice Withdraws as much as possible in case of emergency and sends it to the `PoolManager`
     /// @param amount Amount to withdraw
@@ -152,16 +128,11 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         want.safeTransfer(address(poolManager), want.balanceOf(address(this)));
     }
 
-    // ============================= Internal Functions =============================
+    // ============================= Internal Functions ============================
 
     /// @notice See `apr`
-    function _apr() internal view returns (uint256) {
+    function _apr() internal view override returns (uint256) {
         return cToken.supplyRatePerBlock() * BLOCKS_PER_YEAR + _incentivesRate(0);
-    }
-
-    /// @notice See `nav`
-    function _nav() internal view returns (uint256) {
-        return want.balanceOf(address(this)) + underlyingBalanceStored();
     }
 
     /// @notice See `withdraw`
@@ -188,10 +159,10 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
             if (toWithdraw <= liquidity) {
                 // We can take all
-                require(cToken.redeemUnderlying(toWithdraw) == 0, "redeemUnderlying fail");
+                if (cToken.redeemUnderlying(toWithdraw) != 0) revert FailedToRedeem();
             } else {
                 // Take all we can
-                require(cToken.redeemUnderlying(liquidity) == 0, "redeemUnderlying fail");
+                if (cToken.redeemUnderlying(liquidity) != 0) revert FailedToRedeem();
             }
         }
         address[] memory holders = new address[](1);
@@ -231,7 +202,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
             return 0;
         }
         (uint80 roundId, int256 ratio, , , uint80 answeredInRound) = oracle.latestRoundData();
-        require(ratio > 0 && roundId <= answeredInRound, "100");
+        if (ratio == 0 || roundId > answeredInRound) revert InvalidOracleValue();
         uint256 castedRatio = uint256(ratio);
 
         // Checking whether we should multiply or divide by the ratio computed
@@ -249,7 +220,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     /// @notice Recovers ETH from the contract
     /// @param amount Amount to be recovered
     function recoverETH(address to, uint256 amount) external onlyRole(GUARDIAN_ROLE) {
-        require(payable(to).send(amount), "98");
+        if (!payable(to).send(amount)) revert FailedToRecoverETH();
     }
 
     receive() external payable {}

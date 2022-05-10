@@ -3,6 +3,7 @@
 pragma solidity 0.8.12;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
@@ -12,9 +13,9 @@ import "../../../interfaces/IGenericLender.sol";
 import "../../../interfaces/IPoolManager.sol";
 import "../../../interfaces/IStrategy.sol";
 
-/// @title GenericLenderBase
+/// @title GenericLenderBaseUpgradeable
 /// @author Forked from https://github.com/Grandthrax/yearnV2-generic-lender-strat/tree/master/contracts/GenericLender
-/// @notice A base contract to build contracts to lend assets
+/// @notice A base contract to build contracts that lend assets to protocols
 abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlUpgradeable {
     using SafeERC20 for IERC20;
 
@@ -22,30 +23,37 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
     bytes32 public constant STRATEGY_ROLE = keccak256("STRATEGY_ROLE");
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
-    // ==================== References to contracts =============================
-    address private constant oneInch = 0x1111111254fb6c44bAC0beD2854e76F90643097d;
+    // ======================= References to contracts =============================
 
-    // ==================== References to parameters ============================
+    address internal constant oneInch = 0x1111111254fb6c44bAC0beD2854e76F90643097d;
+
+    // ========================= References and Parameters =========================
+
     string public override lenderName;
     /// @notice Reference to the protocol's collateral poolManager
     IPoolManager public poolManager;
-
     /// @notice Reference to the `Strategy`
     address public override strategy;
-
     /// @notice Reference to the token lent
     IERC20 public want;
+    /// @notice Base of the asset handled by the lender
+    uint256 public wantBase;
+
+    // ================================ Errors =====================================
 
     error ErrorSwap();
     error IncompatibleLengths();
+    error ProtectedToken();
     error TooSmallAmount();
 
-    // ============================= Constructor =============================
+    // ================================ Initializer ================================
 
     /// @notice Initalizer of the `GenericLenderBase`
     /// @param _strategy Reference to the strategy using this lender
+    /// @param _name Name of the lender
     /// @param governorList List of addresses with governor privilege
     /// @param guardian Address of the guardian
+    /// @param keeperList List of keeper addresses
     function _initialize(
         address _strategy,
         string memory _name,
@@ -75,14 +83,51 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
         _setupRole(STRATEGY_ROLE, _strategy);
         _setRoleAdmin(GUARDIAN_ROLE, STRATEGY_ROLE);
         _setRoleAdmin(STRATEGY_ROLE, GUARDIAN_ROLE);
-
+        wantBase = 10**IERC20Metadata(address(want)).decimals();
         want.safeApprove(_strategy, type(uint256).max);
     }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}
 
-    // ============================= Governance =============================
+    // ============================ View Functions =================================
+
+    /// @notice Returns an estimation of the current Annual Percentage Rate
+    function apr() external view override returns (uint256) {
+        return _apr();
+    }
+
+    /// @notice Returns an estimation of the current Annual Percentage Rate weighted by a factor
+    function weightedApr() external view override returns (uint256) {
+        uint256 a = _apr();
+        return a * _nav();
+    }
+
+    /// @notice Helper function to get the current total of assets managed by the lender.
+    function nav() external view override returns (uint256) {
+        return _nav();
+    }
+
+    /// @notice Check if assets are currently managed by the lender
+    /// @dev We're considering that the strategy has no assets if it has less than 10 of the
+    /// underlying asset in total to avoid the case where there is dust remaining on the lending market we cannot
+    /// withdraw everything
+    function hasAssets() external view override returns (bool) {
+        return _nav() > 10 * wantBase;
+    }
+
+    /// @notice See `nav`
+    function _nav() internal view returns (uint256) {
+        return want.balanceOf(address(this)) + underlyingBalanceStored();
+    }
+
+    /// @notice See `apr`
+    function _apr() internal view virtual returns (uint256);
+
+    /// @notice Returns the current balance invested on the lender and related staking contracts
+    function underlyingBalanceStored() public view virtual returns (uint256 balance);
+
+    // ============================ Governance Functions ===========================
 
     /// @notice Override this to add all tokens/tokenized positions this contract
     /// manages on a *persistent* basis (e.g. not just for swapping back to
@@ -118,13 +163,14 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
     /// should be protected from sweeping in addition to `want`.
     function sweep(address _token, address to) external override onlyRole(GUARDIAN_ROLE) {
         address[] memory __protectedTokens = _protectedTokens();
-        for (uint256 i = 0; i < __protectedTokens.length; i++) require(_token != __protectedTokens[i], "93");
+        for (uint256 i = 0; i < __protectedTokens.length; i++)
+            if (_token == __protectedTokens[i]) revert ProtectedToken();
 
         IERC20(_token).safeTransfer(to, IERC20(_token).balanceOf(address(this)));
     }
 
-    /// @notice Changes allowance for a contract
-    /// @param tokens Addresses of the tokens for which approvals should be madee
+    /// @notice Changes allowance of a set of tokens to addresses
+    /// @param tokens Addresses of the tokens for which approvals should be made
     /// @param spenders Addresses to approve
     /// @param amounts Approval amounts for each address
     function changeAllowance(
@@ -145,7 +191,8 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
 
     /// @notice Swap earned _stkAave or Aave for `want` through 1Inch
     /// @param minAmountOut Minimum amount of `want` to receive for the swap to happen
-    /// @param payload Bytes needed for 1Inch API. Tokens swapped should be: _stkAave -> `want` or Aave -> `want`
+    /// @param payload Bytes needed for 1Inch API
+    /// @dev In the case of a contract lending to Aave, tokens swapped should typically be: _stkAave -> `want` or Aave -> `want`
     function sellRewards(uint256 minAmountOut, bytes memory payload) external onlyRole(KEEPER_ROLE) {
         //solhint-disable-next-line
         (bool success, bytes memory result) = oneInch.call(payload);

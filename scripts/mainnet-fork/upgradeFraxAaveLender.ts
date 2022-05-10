@@ -9,9 +9,8 @@ import {
   StableMasterFront__factory,
 } from '@angleprotocol/sdk/dist/constants/interfaces';
 
-import { expect } from '../../test/test-utils/chai-setup';
 import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
-import { network, ethers, deployments } from 'hardhat';
+import { network, ethers } from 'hardhat';
 import { parseUnits } from 'ethers/lib/utils';
 import {
   logGeneralInfo,
@@ -21,42 +20,21 @@ import {
   randomWithdraw,
   wait,
 } from '../../test/utils-interaction';
-import {
-  GenericAaveFraxStaker,
-  GenericAaveFraxStaker__factory,
-  GenericAaveNoStaker,
-  GenericAaveNoStaker__factory,
-  OptimizerAPRStrategy,
-  OptimizerAPRStrategy__factory,
-} from '../../typechain';
+import { OptimizerAPRStrategy, OptimizerAPRStrategy__factory } from '../../typechain';
 import { time } from '../../test/test-utils/helpers';
 import { DAY } from '../../test/contants';
 
 async function main() {
   // =============== Simulation parameters ====================
-  const { deployer, keeper: fakeKeeper } = await ethers.getNamedSigners();
-  const collat = 'FRAX';
-
-  const stableName = 'EUR';
+  const { deployer } = await ethers.getNamedSigners();
   const collateralName = 'FRAX';
 
   let strategyAddress: string;
-  let oldLenderAddress: string;
-  let newLenderAddress: string;
   let stableMasterAddress: string;
   let poolManagerAddress: string;
   let perpetualManagerAddress: string;
-  let guardian: string;
-  let governor: string;
-  let keeper: string;
-  let proxyAdmin: string;
 
-  // if fork we suppose that we are in mainnet
-  let json = (await import('../../deploy/networks/mainnet.json')) as any;
   if (!network.live) {
-    guardian = CONTRACTS_ADDRESSES[ChainId.MAINNET].Guardian!;
-    governor = CONTRACTS_ADDRESSES[ChainId.MAINNET].GovernanceMultiSig! as string;
-    proxyAdmin = CONTRACTS_ADDRESSES[ChainId.MAINNET].ProxyAdmin! as string;
     stableMasterAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.StableMaster as string;
     perpetualManagerAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]
       ?.PerpetualManager as string;
@@ -64,12 +42,7 @@ async function main() {
       ?.PoolManager as string;
     strategyAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
       ?.GenericOptimisedLender as string;
-    oldLenderAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collat]?.GenericAave as string;
-    keeper = '0xcC617C6f9725eACC993ac626C7efC6B96476916E';
   } else {
-    guardian = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].Guardian!;
-    governor = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].GovernanceMultiSig! as string;
-    proxyAdmin = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].ProxyAdmin! as string;
     stableMasterAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.StableMaster as string;
     perpetualManagerAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[
       collateralName
@@ -78,14 +51,9 @@ async function main() {
       ?.PoolManager as string;
     strategyAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
       ?.Strategies?.GenericOptimisedLender as string;
-    oldLenderAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collat]
-      ?.GenericAave as string;
-
-    json = await import('./networks/' + network.name + '.json');
-    keeper = fakeKeeper.address;
   }
 
-  newLenderAddress = (await deployments.get(`GenericAave_${stableName}_${collateralName}_Staker`)).address;
+  // const newLenderAddress = (await deployments.get(`GenericAave_${stableName}_${collateralName}_Staker`)).address;
 
   const stableMaster = new ethers.Contract(
     stableMasterAddress,
@@ -102,6 +70,7 @@ async function main() {
     OptimizerAPRStrategy__factory.createInterface(),
     deployer,
   ) as OptimizerAPRStrategy;
+  /*
   const oldLender = new ethers.Contract(
     oldLenderAddress,
     GenericAaveNoStaker__factory.createInterface(),
@@ -112,6 +81,7 @@ async function main() {
     GenericAaveFraxStaker__factory.createInterface(),
     deployer,
   ) as GenericAaveFraxStaker;
+  */
   const poolManager = new ethers.Contract(poolManagerAddress, PoolManager_Interface, deployer) as PoolManager;
 
   await network.provider.send('hardhat_setBalance', [deployer.address, parseUnits('1000000', 18).toHexString()]);

@@ -311,6 +311,7 @@ export const randomOpenPerp = async (
     })
     .map(x => {
       return x.args?._perpetualID;
+      // eslint-disable-next-line
     }) as any[];
   const perpData = await perpetualManager.perpetualData(perpId[0]);
 
@@ -343,6 +344,7 @@ export const closePerp = async (
 };
 
 export async function findBalancesSlot(tokenAddress: string): Promise<number> {
+  // eslint-disable-next-line
   const encode = (types: string[], values: any[]) => ethers.utils.defaultAbiCoder.encode(types, values);
   const account = ethers.constants.AddressZero;
   const probeA = encode(['uint'], [1]);

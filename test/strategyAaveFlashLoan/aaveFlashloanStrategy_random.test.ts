@@ -3,7 +3,7 @@ import { network } from 'hardhat';
 import { utils } from 'ethers';
 import { setup } from './setup_tests';
 
-describe('AaveFlashloan strategy random (USDC)', () => {
+describe('AaveFlashloan strategy - Random USDC', () => {
   it('scenario random', async () => {
     const { _wantToken, strategy, lendingPool, poolManager, oldStrategy, realGuardian, richUSDCUser, aToken, harvest } =
       await setup(14456160);

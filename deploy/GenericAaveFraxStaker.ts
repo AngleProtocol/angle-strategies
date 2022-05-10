@@ -18,8 +18,7 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
   let keeper: string;
   let proxyAdmin: string;
 
-  // if fork we suppose that we are in mainnet
-  let json = (await import('./networks/mainnet.json')) as any;
+  // If fork we suppose that we are in mainnet
   if (!network.live) {
     guardian = CONTRACTS_ADDRESSES[ChainId.MAINNET].Guardian!;
     governor = CONTRACTS_ADDRESSES[ChainId.MAINNET].GovernanceMultiSig! as string;
@@ -33,7 +32,6 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     proxyAdmin = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].ProxyAdmin! as string;
     strategyAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
       ?.Strategies?.GenericOptimisedLender as string;
-    json = await import('./networks/' + network.name + '.json');
     keeper = fakeKeeper.address;
   }
 
