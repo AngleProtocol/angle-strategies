@@ -496,13 +496,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// @dev stkAAVE require a "cooldown" period of 10 days before being claimed
     function _claimRewards() internal returns (uint256 stkAaveBalance) {
         stkAaveBalance = _balanceOfStkAave();
-        uint256 cooldownStatus;
-        if (stkAaveBalance > 0) {
-            cooldownStatus = _checkCooldown(); // don't check status if we have no stkAave
-        }
-
         // If it's the claim period claim
-        if (stkAaveBalance > 0 && cooldownStatus == 1) {
+        if (stkAaveBalance > 0 && _checkCooldown() == 1) {
             // redeem AAVE from stkAave
             _stkAave.claimRewards(address(this), type(uint256).max);
             _stkAave.redeem(address(this), stkAaveBalance);
