@@ -91,3 +91,16 @@ export async function expectApproxDelta(actual: BigNumber, expected: BigNumber, 
     await expect(expected.gte(actual.sub(margin))).to.be.true;
   }
 }
+
+export function expectApprox(value: BigNumberish, target: BigNumberish, error: number): void {
+  expect(value).to.be.lt(
+    BigNumber.from(target)
+      .mul((100 + error) * 1e10)
+      .div(100 * 1e10),
+  );
+  expect(value).to.be.gt(
+    BigNumber.from(target)
+      .mul((100 - error) * 1e10)
+      .div(100 * 1e10),
+  );
+}
