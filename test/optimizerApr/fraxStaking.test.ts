@@ -1,5 +1,5 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { BigNumber, utils, Signer } from 'ethers';
+import { BigNumber, utils } from 'ethers';
 import {
   AggregatorV3Interface,
   AggregatorV3Interface__factory,
