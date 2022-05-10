@@ -71,6 +71,7 @@ const keeperRole = ethers.utils.solidityKeccak256(['string'], ['KEEPER_ROLE']);
 let guardianError: string;
 let strategyError: string;
 let keeperError: string;
+let oneInch: string;
 
 // Start test block
 describe('OptimizerAPR - lenderAave', () => {
@@ -110,6 +111,7 @@ describe('OptimizerAPR - lenderAave', () => {
     guardianError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${guardianRole}`;
     strategyError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${strategyRole}`;
     keeperError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${keeperRole}`;
+    oneInch = '0x1111111254fb6c44bAC0beD2854e76F90643097d';
   });
 
   beforeEach(async () => {
@@ -152,6 +154,10 @@ describe('OptimizerAPR - lenderAave', () => {
       it('allowance - strategy', async () => {
         expect(await token.allowance(lenderAave.address, strategy.address)).to.be.equal(ethers.constants.MaxUint256);
       });
+      it('allowance - oneInch', async () => {
+        expect(await aave.allowance(lenderAave.address, oneInch)).to.be.equal(ethers.constants.MaxUint256);
+        expect(await stkAave.allowance(lenderAave.address, oneInch)).to.be.equal(ethers.constants.MaxUint256);
+      });
     });
 
     describe('constructor', () => {
@@ -180,15 +186,18 @@ describe('OptimizerAPR - lenderAave', () => {
       it('keeper role - lender', async () => {
         expect(await lenderAave.hasRole(keeperRole, keeper.address)).to.be.equal(true);
         expect(await lenderAave.hasRole(keeperRole, user.address)).to.be.equal(false);
+        expect(await lenderAave.getRoleAdmin(keeperRole)).to.be.equal(guardianRole);
       });
       it('guardian role - lender', async () => {
         expect(await lenderAave.hasRole(guardianRole, guardian.address)).to.be.equal(true);
         expect(await lenderAave.hasRole(guardianRole, user.address)).to.be.equal(false);
         expect(await lenderAave.hasRole(guardianRole, governor.address)).to.be.equal(true);
+        expect(await lenderAave.getRoleAdmin(guardianRole)).to.be.equal(strategyRole);
       });
       it('strategy role', async () => {
         expect(await lenderAave.hasRole(strategyRole, strategy.address)).to.be.equal(true);
         expect(await lenderAave.hasRole(strategyRole, user.address)).to.be.equal(false);
+        expect(await lenderAave.getRoleAdmin(strategyRole)).to.be.equal(guardianRole);
       });
       it('addKeeper - reverts nonGuardian', async () => {
         await expect(lenderAave.connect(user).grantRole(keeperRole, user.address)).to.be.revertedWith(guardianRole);
@@ -247,12 +256,12 @@ describe('OptimizerAPR - lenderAave', () => {
     });
 
     describe('View functions', () => {
-      it('apr ', async () => {
+      it('apr', async () => {
         const apr = await lenderAave.connect(keeper).apr();
         // at mainnet fork time there is 1.193% coming from liquidity rate and 0.050% coming from incentives
         expect(apr).to.be.closeTo(parseUnits('0.0124', 18), parseUnits('0.001', 18));
       });
-      it('apr ', async () => {
+      it('aprAfterDeposit', async () => {
         const aprAfterDepositSupposed = await lenderAave
           .connect(keeper)
           .aprAfterDeposit(parseUnits('10000000', tokenDecimal));
@@ -268,18 +277,21 @@ describe('OptimizerAPR - lenderAave', () => {
 
     describe('Strategy deposits and withdraw', () => {
       it('deposit -success ', async () => {
+        expect(await lenderAave.hasAssets()).to.be.equal(false);
         await setTokenBalanceFor(token, strategy.address, 1000000);
         await (await strategy.connect(keeper)['harvest()']()).wait();
         const balanceToken = await lenderAave.nav();
         const balanceTokenStrat = await token.balanceOf(strategy.address);
         expect(balanceToken).to.be.equal(parseUnits('1000000', tokenDecimal));
         expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
+        expect(await lenderAave.hasAssets()).to.be.equal(true);
       });
       it('withdrawEmergency - success', async () => {
         await setTokenBalanceFor(token, strategy.address, 1000000);
         await (await strategy.connect(keeper)['harvest()']()).wait();
         await (await lenderAave.connect(guardian).emergencyWithdraw(parseUnits('1000000', 18))).wait();
         expect(await token.balanceOf(manager.address)).to.be.equal(parseUnits('1000000', tokenDecimal));
+        expect(await lenderAave.hasAssets()).to.be.equal(false);
       });
       it('withdraw - success', async () => {
         await setTokenBalanceFor(token, strategy.address, 1000000);

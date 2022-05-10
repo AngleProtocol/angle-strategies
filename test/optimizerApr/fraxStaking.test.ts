@@ -153,11 +153,22 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
   });
 
   describe('Contructor', () => {
-    it('reverts - too small saking period', async () => {
+    it('reverts - too small saking period and already initialized', async () => {
       const lender = (await deployUpgradeable(new GenericAaveFraxStaker__factory(guardian))) as GenericAaveFraxStaker;
       await expect(
         lender.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address], 0),
       ).to.be.revertedWith('TooSmallStakingPeriod()');
+      await expect(
+        lenderAave.initialize(
+          strategy.address,
+          'test',
+          true,
+          [governor.address],
+          guardian.address,
+          [keeper.address],
+          0,
+        ),
+      ).to.be.revertedWith('Initializable: contract is already initialized');
     });
   });
 
@@ -168,43 +179,16 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
   });
 
   describe('AccessControl', () => {
-    it('setLockTime - reverts Guardian', async () => {
+    it('reverts - guardian only functions', async () => {
       await expect(lenderAave.connect(user).setLockTime(ethers.constants.Zero)).to.be.revertedWith(guardianError);
-    });
-    it('setProxyBoost - reverts Guardian', async () => {
       await expect(lenderAave.connect(user).setProxyBoost(ethers.constants.AddressZero)).to.be.revertedWith(
         guardianError,
       );
-    });
-    it('changeAllowance - reverts Guardian', async () => {
       await expect(
         lenderAave
           .connect(user)
           .changeAllowance([aToken.address], [aFraxStakingContract.address], [ethers.constants.Zero]),
       ).to.be.revertedWith(guardianError);
-    });
-    it('changeAllowance - reverts length', async () => {
-      await expect(
-        lenderAave.connect(guardian).changeAllowance([], [aFraxStakingContract.address], [ethers.constants.Zero]),
-      ).to.be.revertedWith('IncompatibleLengths');
-      await expect(lenderAave.connect(guardian).changeAllowance([], [], [ethers.constants.Zero])).to.be.revertedWith(
-        'IncompatibleLengths',
-      );
-      await expect(
-        lenderAave
-          .connect(guardian)
-          .changeAllowance([ZERO_ADDRESS], [ZERO_ADDRESS, ZERO_ADDRESS], [ethers.constants.Zero]),
-      ).to.be.revertedWith('IncompatibleLengths');
-      await expect(
-        lenderAave
-          .connect(guardian)
-          .changeAllowance([ZERO_ADDRESS], [ZERO_ADDRESS], [ethers.constants.Zero, ethers.constants.Zero]),
-      ).to.be.revertedWith('IncompatibleLengths');
-      await expect(
-        lenderAave
-          .connect(guardian)
-          .changeAllowance([ZERO_ADDRESS, ZERO_ADDRESS], [ZERO_ADDRESS], [ethers.constants.Zero]),
-      ).to.be.revertedWith('IncompatibleLengths');
     });
   });
 
@@ -288,70 +272,99 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
   });
 
   describe('Governance functions', () => {
-    it('setLockTime - revert', async () => {
-      await expect(lenderAave.connect(guardian).setLockTime(ethers.constants.Zero)).to.be.revertedWith(
-        'StakingPeriodTooSmall',
-      );
-    });
-    it('setLockTime', async () => {
-      await lenderAave.connect(guardian).setLockTime(parseUnits((2 * DAY).toString(), 0));
-      expect(await lenderAave.stakingPeriod()).to.be.equal(parseUnits((2 * DAY).toString(), 0));
-    });
-    it('setProxyBoost', async () => {
-      const veFXSMultiplierBefore = await aFraxStakingContract.veFXSMultiplier(lenderAave.address);
-      await impersonate(fraxTimelock, async acc => {
-        await network.provider.send('hardhat_setBalance', [
-          fraxTimelock,
-          utils.parseEther('1').toHexString().replace('0x0', '0x'),
-        ]);
-        await (await aFraxStakingContract.connect(acc).toggleValidVeFXSProxy(lockerStakeDAO)).wait();
+    describe('setLockTime', () => {
+      it('reverts - too small staking period', async () => {
+        await expect(lenderAave.connect(guardian).setLockTime(ethers.constants.Zero)).to.be.revertedWith(
+          'StakingPeriodTooSmall',
+        );
       });
-      await impersonate(lockerStakeDAO, async acc => {
-        await network.provider.send('hardhat_setBalance', [
-          lockerStakeDAO,
-          utils.parseEther('1').toHexString().replace('0x0', '0x'),
-        ]);
-        await (await aFraxStakingContract.connect(acc).proxyToggleStaker(lenderAave.address)).wait();
+      it('success - staking period updated', async () => {
+        await lenderAave.connect(guardian).setLockTime(parseUnits((2 * DAY).toString(), 0));
+        expect(await lenderAave.stakingPeriod()).to.be.equal(parseUnits((2 * DAY).toString(), 0));
       });
-      await lenderAave.connect(guardian).setProxyBoost(lockerStakeDAO);
+    });
+    describe('setProxyBoost', () => {
+      it('success - proxy boost set', async () => {
+        const veFXSMultiplierBefore = await aFraxStakingContract.veFXSMultiplier(lenderAave.address);
+        await impersonate(fraxTimelock, async acc => {
+          await network.provider.send('hardhat_setBalance', [
+            fraxTimelock,
+            utils.parseEther('1').toHexString().replace('0x0', '0x'),
+          ]);
+          await (await aFraxStakingContract.connect(acc).toggleValidVeFXSProxy(lockerStakeDAO)).wait();
+        });
+        await impersonate(lockerStakeDAO, async acc => {
+          await network.provider.send('hardhat_setBalance', [
+            lockerStakeDAO,
+            utils.parseEther('1').toHexString().replace('0x0', '0x'),
+          ]);
+          await (await aFraxStakingContract.connect(acc).proxyToggleStaker(lenderAave.address)).wait();
+        });
+        await lenderAave.connect(guardian).setProxyBoost(lockerStakeDAO);
 
-      const veFXSMultiplierAfter = await aFraxStakingContract.veFXSMultiplier(lenderAave.address);
-      expect(veFXSMultiplierAfter).to.be.gt(veFXSMultiplierBefore);
+        const veFXSMultiplierAfter = await aFraxStakingContract.veFXSMultiplier(lenderAave.address);
+        expect(veFXSMultiplierAfter).to.be.gt(veFXSMultiplierBefore);
+      });
     });
-    it('changeAllowance', async () => {
-      await lenderAave
-        .connect(guardian)
-        .changeAllowance([aToken.address], [aFraxStakingContract.address], [ethers.constants.Zero]);
-      expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
-        ethers.constants.Zero,
-      );
-      await lenderAave
-        .connect(guardian)
-        .changeAllowance(
-          [aToken.address],
-          [aFraxStakingContract.address],
-          [ethers.constants.MaxUint256.div(BigNumber.from('2'))],
+    describe('changeAllowance', () => {
+      it('reverts - incompatible length', async () => {
+        await expect(
+          lenderAave.connect(guardian).changeAllowance([], [aFraxStakingContract.address], [ethers.constants.Zero]),
+        ).to.be.revertedWith('IncompatibleLengths');
+        await expect(lenderAave.connect(guardian).changeAllowance([], [], [ethers.constants.Zero])).to.be.revertedWith(
+          'IncompatibleLengths',
         );
-      expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
-        ethers.constants.MaxUint256.div(BigNumber.from('2')),
-      );
-      // doesn't change anything
-      await lenderAave
-        .connect(guardian)
-        .changeAllowance(
-          [aToken.address],
-          [aFraxStakingContract.address],
-          [ethers.constants.MaxUint256.div(BigNumber.from('2'))],
+        await expect(
+          lenderAave
+            .connect(guardian)
+            .changeAllowance([ZERO_ADDRESS], [ZERO_ADDRESS, ZERO_ADDRESS], [ethers.constants.Zero]),
+        ).to.be.revertedWith('IncompatibleLengths');
+        await expect(
+          lenderAave
+            .connect(guardian)
+            .changeAllowance([ZERO_ADDRESS], [ZERO_ADDRESS], [ethers.constants.Zero, ethers.constants.Zero]),
+        ).to.be.revertedWith('IncompatibleLengths');
+        await expect(
+          lenderAave
+            .connect(guardian)
+            .changeAllowance([ZERO_ADDRESS, ZERO_ADDRESS], [ZERO_ADDRESS], [ethers.constants.Zero]),
+        ).to.be.revertedWith('IncompatibleLengths');
+      });
+      it('success - allowance changed', async () => {
+        await lenderAave
+          .connect(guardian)
+          .changeAllowance([aToken.address], [aFraxStakingContract.address], [ethers.constants.Zero]);
+        expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
+          ethers.constants.Zero,
         );
-      expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
-        ethers.constants.MaxUint256.div(BigNumber.from('2')),
-      );
-      await lenderAave
-        .connect(guardian)
-        .changeAllowance([aToken.address], [aFraxStakingContract.address], [ethers.constants.MaxUint256]);
-      expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
-        ethers.constants.MaxUint256,
-      );
+        await lenderAave
+          .connect(guardian)
+          .changeAllowance(
+            [aToken.address],
+            [aFraxStakingContract.address],
+            [ethers.constants.MaxUint256.div(BigNumber.from('2'))],
+          );
+        expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
+          ethers.constants.MaxUint256.div(BigNumber.from('2')),
+        );
+        // doesn't change anything
+        await lenderAave
+          .connect(guardian)
+          .changeAllowance(
+            [aToken.address],
+            [aFraxStakingContract.address],
+            [ethers.constants.MaxUint256.div(BigNumber.from('2'))],
+          );
+        expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
+          ethers.constants.MaxUint256.div(BigNumber.from('2')),
+        );
+        await lenderAave
+          .connect(guardian)
+          .changeAllowance([aToken.address], [aFraxStakingContract.address], [ethers.constants.MaxUint256]);
+        expect(await aToken.allowance(lenderAave.address, aFraxStakingContract.address)).to.be.equal(
+          ethers.constants.MaxUint256,
+        );
+      });
     });
   });
 
@@ -411,7 +424,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
   });
 
   describe('Strategy deposits', () => {
-    it('deposit - success - no previous lock', async () => {
+    it('success - no previous lock', async () => {
       expect(await lenderAave.kekId()).to.be.equal(ethers.constants.HashZero);
       // expect(await lenderAave.lastAaveLiquidityIndex()).to.be.equal(ethers.constants.Zero);
       expect(await lenderAave.lastCreatedStake()).to.be.equal(ethers.constants.Zero);
@@ -430,7 +443,27 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
       expect(underlyingBalance).to.be.closeTo(parseUnits('1000000', tokenDecimal), parseUnits('10', tokenDecimal));
       expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
     });
-    it('deposit - success - with previous lock', async () => {
+    it('success - very small amount deposited and hence considering that strategy has no assets', async () => {
+      expect(await lenderAave.kekId()).to.be.equal(ethers.constants.HashZero);
+      // expect(await lenderAave.lastAaveLiquidityIndex()).to.be.equal(ethers.constants.Zero);
+      expect(await lenderAave.lastCreatedStake()).to.be.equal(ethers.constants.Zero);
+
+      await setTokenBalanceFor(token, strategy.address, 1);
+
+      const timestamp = await latestTime();
+      await (await strategy.connect(keeper)['harvest()']()).wait();
+      expect(await lenderAave.kekId()).to.not.eq('');
+      expect(await lenderAave.lastCreatedStake()).to.be.gte(timestamp);
+
+      const underlyingBalance = await lenderAave.underlyingBalanceStored();
+      const balanceToken = await lenderAave.nav();
+      const balanceTokenStrat = await token.balanceOf(strategy.address);
+      expect(balanceToken).to.be.equal(parseUnits('1', tokenDecimal));
+      expect(underlyingBalance).to.be.closeTo(parseUnits('1', tokenDecimal), parseUnits('10', tokenDecimal));
+      expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
+      expect(await lenderAave.hasAssets()).to.be.equal(false);
+    });
+    it('success - with previous lock', async () => {
       // going through the poolManager to not have to withdraw funds (because it would think we made a huge profit)
       await setTokenBalanceFor(token, manager.address, 1000000);
       await (await strategy.connect(keeper)['harvest()']()).wait();
@@ -454,13 +487,13 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
   });
 
   describe('Strategy withdraws', () => {
-    it('withdraw - revert - too soon', async () => {
+    it(' withdraw - reverts - too soon', async () => {
       await setTokenBalanceFor(token, strategy.address, 1000000);
       await (await strategy.connect(keeper)['harvest()']()).wait();
       await setTokenBalanceFor(token, strategy.address, 1000000);
       await expect(strategy.connect(keeper)['harvest()']()).to.be.rejectedWith('UnstakedTooSoon');
     });
-    it('emergencyWithdraw - revert - nothing to remove', async () => {
+    it('emergencyWithdraw - reverts - nothing to remove', async () => {
       await expect(lenderAave.connect(guardian).emergencyWithdraw(parseUnits('1000000', 18))).to.be.reverted;
     });
     it('emergencyWithdraw - success', async () => {
