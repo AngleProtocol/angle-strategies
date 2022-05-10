@@ -372,7 +372,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     /// @notice Gets the amount of aTokens currently staked
     function _stakedBalance() internal view virtual returns (uint256);
 
-    /// @notice Gets the APR from staking additional `amount` of aTokens in the associated staking 
+    /// @notice Gets the APR from staking additional `amount` of aTokens in the associated staking
     /// contract
     /// @param amount Virtual amount to be staked
     function _stakingApr(uint256 amount) internal view virtual returns (uint256);

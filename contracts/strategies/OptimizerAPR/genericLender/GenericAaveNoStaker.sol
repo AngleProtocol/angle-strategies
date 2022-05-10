@@ -7,10 +7,9 @@ import "./GenericAaveUpgradeable.sol";
 /// @title GenericAaveNoStaker
 /// @author  Angle Core Team
 /// @notice Only deposit onto Aave lendingPool with no staking
-/// @dev In this implementation, we just have to override the base functions with constant amounts as nothing is 
+/// @dev In this implementation, we just have to override the base functions with constant amounts as nothing is
 /// staked in an external contract
 contract GenericAaveNoStaker is GenericAaveUpgradeable {
-
     // ================================ Constructor ================================
 
     /// @notice Wrapper on top of the `initializeAave` method

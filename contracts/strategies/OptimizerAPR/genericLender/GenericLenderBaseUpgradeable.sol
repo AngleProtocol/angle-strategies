@@ -109,7 +109,7 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
     }
 
     /// @notice Check if assets are currently managed by the lender
-    /// @dev We're considering that the strategy has no assets if it has less than 10 of the 
+    /// @dev We're considering that the strategy has no assets if it has less than 10 of the
     /// underlying asset in total to avoid the case where there is dust remaining on the lending market we cannot
     /// withdraw everything
     function hasAssets() external view override returns (bool) {
@@ -126,7 +126,6 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
 
     /// @notice Returns the current balance invested on the lender and related staking contracts
     function underlyingBalanceStored() public view virtual returns (uint256 balance);
-
 
     // ============================ Governance Functions ===========================
 

@@ -132,9 +132,9 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
             lastLiquidity = amountFRAXControlled;
             IERC20(address(_aToken)).safeApprove(address(aFraxStakingContract), amountFRAXControlled);
             kekId = aFraxStakingContract.stakeLocked(amountFRAXControlled, stakingPeriod);
-            
+
             // We need to round down the `freedAmount` value because values can be rounded down when transfering aTokens
-            // and we may stake slightly less than desired: to play it safe in all cases and avoid multiple calls, we 
+            // and we may stake slightly less than desired: to play it safe in all cases and avoid multiple calls, we
             // systematically round down
             freedAmount = amount - 1;
         } else {
@@ -191,7 +191,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     /// @dev Uses Chainlink spot price
     /// @dev This implementation assumes that 1 FRAX = 1 USD, as it does not do any FRAX -> USD conversion
     function _estimatedFXSToWant(uint256 amount) internal view returns (uint256) {
-        (, int256 fxsPriceUSD, , , ) = oracleFXS.latestRoundData(); 
+        (, int256 fxsPriceUSD, , , ) = oracleFXS.latestRoundData();
         // fxsPriceUSD is in base 8
         return (uint256(fxsPriceUSD) * amount) / 1e8;
     }

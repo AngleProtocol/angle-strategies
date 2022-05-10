@@ -22,11 +22,19 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     IComptroller public constant comptroller = IComptroller(0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B);
     address public constant comp = 0xc00e94Cb662C3520282E6f5717214004A7f26888;
 
-    // ==================== References to contracts =============================
+    // ======================== References to contracts ============================
 
     CErc20I public cToken;
 
-    // ============================= Constructor =============================
+    // =============================== Errors ======================================
+
+    error FailedToMint();
+    error FailedToRecoverETH();
+    error FailedToRedeem();
+    error InvalidOracleValue();
+    error WrongCToken();
+
+    // ============================= Constructor ===================================
 
     /// @notice Initializer of the `GenericCompound`
     /// @param _strategy Reference to the strategy using this lender
@@ -45,7 +53,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         _initialize(_strategy, _name, governorList, guardian, keeperList);
 
         cToken = CErc20I(_cToken);
-        require(CErc20I(_cToken).underlying() == address(want), "wrong cToken");
+        if (CErc20I(_cToken).underlying() != address(want)) revert WrongCToken();
 
         want.safeApprove(_cToken, type(uint256).max);
         IERC20(comp).safeApprove(oneInch, type(uint256).max);
@@ -56,7 +64,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     /// @notice Deposits the current balance of the contract to the lending platform
     function deposit() external override onlyRole(STRATEGY_ROLE) {
         uint256 balance = want.balanceOf(address(this));
-        require(cToken.mint(balance) == 0, "mint fail");
+        if (cToken.mint(balance) != 0) revert FailedToMint();
     }
 
     /// @notice Withdraws a given amount from lender
@@ -74,7 +82,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         return returned >= invested;
     }
 
-    // ============================= External View Functions =============================
+    // ========================== External View Functions ==========================
 
     /// @notice Helper function the current balance of cTokens
     function underlyingBalanceStored() public view override returns (uint256 balance) {
@@ -108,7 +116,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         return supplyRate * BLOCKS_PER_YEAR + _incentivesRate(amount);
     }
 
-    // ============================= Governance =============================
+    // ================================= Governance ================================
 
     /// @notice Withdraws as much as possible in case of emergency and sends it to the `PoolManager`
     /// @param amount Amount to withdraw
@@ -120,7 +128,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         want.safeTransfer(address(poolManager), want.balanceOf(address(this)));
     }
 
-    // ============================= Internal Functions =============================
+    // ============================= Internal Functions ============================
 
     /// @notice See `apr`
     function _apr() internal view override returns (uint256) {
@@ -151,10 +159,10 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
             if (toWithdraw <= liquidity) {
                 // We can take all
-                require(cToken.redeemUnderlying(toWithdraw) == 0, "redeemUnderlying fail");
+                if (cToken.redeemUnderlying(toWithdraw) != 0) revert FailedToRedeem();
             } else {
                 // Take all we can
-                require(cToken.redeemUnderlying(liquidity) == 0, "redeemUnderlying fail");
+                if (cToken.redeemUnderlying(liquidity) != 0) revert FailedToRedeem();
             }
         }
         address[] memory holders = new address[](1);
@@ -194,7 +202,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
             return 0;
         }
         (uint80 roundId, int256 ratio, , , uint80 answeredInRound) = oracle.latestRoundData();
-        require(ratio > 0 && roundId <= answeredInRound, "100");
+        if (ratio == 0 || roundId > answeredInRound) revert InvalidOracleValue();
         uint256 castedRatio = uint256(ratio);
 
         // Checking whether we should multiply or divide by the ratio computed
@@ -212,7 +220,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     /// @notice Recovers ETH from the contract
     /// @param amount Amount to be recovered
     function recoverETH(address to, uint256 amount) external onlyRole(GUARDIAN_ROLE) {
-        require(payable(to).send(amount), "98");
+        if (!payable(to).send(amount)) revert FailedToRecoverETH();
     }
 
     receive() external payable {}
