@@ -25,7 +25,7 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
 
     // ======================= References to contracts =============================
 
-    address private constant oneInch = 0x1111111254fb6c44bAC0beD2854e76F90643097d;
+    address internal constant oneInch = 0x1111111254fb6c44bAC0beD2854e76F90643097d;
 
     // ========================= References and Parameters =========================
 
@@ -89,6 +89,44 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}
+
+    // ============================ View Functions =================================
+
+    /// @notice Returns an estimation of the current Annual Percentage Rate
+    function apr() external view override returns (uint256) {
+        return _apr();
+    }
+
+    /// @notice Returns an estimation of the current Annual Percentage Rate weighted by a factor
+    function weightedApr() external view override returns (uint256) {
+        uint256 a = _apr();
+        return a * _nav();
+    }
+
+    /// @notice Helper function to get the current total of assets managed by the lender.
+    function nav() external view override returns (uint256) {
+        return _nav();
+    }
+
+    /// @notice Check if assets are currently managed by the lender
+    /// @dev We're considering that the strategy has no assets if it has less than 10 of the 
+    /// underlying asset in total to avoid the case where there is dust remaining on the lending market we cannot
+    /// withdraw everything
+    function hasAssets() external view override returns (bool) {
+        return _nav() > 10 * wantBase;
+    }
+
+    /// @notice See `nav`
+    function _nav() internal view returns (uint256) {
+        return want.balanceOf(address(this)) + underlyingBalanceStored();
+    }
+
+    /// @notice See `apr`
+    function _apr() internal view virtual returns (uint256);
+
+    /// @notice Returns the current balance invested on the lender and related staking contracts
+    function underlyingBalanceStored() public view virtual returns (uint256 balance);
+
 
     // ============================ Governance Functions ===========================
 

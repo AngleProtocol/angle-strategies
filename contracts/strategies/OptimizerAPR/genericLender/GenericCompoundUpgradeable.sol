@@ -21,7 +21,6 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     AggregatorV3Interface public constant oracle = AggregatorV3Interface(0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5);
     IComptroller public constant comptroller = IComptroller(0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B);
     address public constant comp = 0xc00e94Cb662C3520282E6f5717214004A7f26888;
-    address public constant oneInch = 0x1111111254fb6c44bAC0beD2854e76F90643097d;
 
     // ==================== References to contracts =============================
 
@@ -77,13 +76,8 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
     // ============================= External View Functions =============================
 
-    /// @notice Helper function to get the current total of assets managed by the lender.
-    function nav() external view override returns (uint256) {
-        return _nav();
-    }
-
     /// @notice Helper function the current balance of cTokens
-    function underlyingBalanceStored() public view returns (uint256 balance) {
+    function underlyingBalanceStored() public view override returns (uint256 balance) {
         uint256 currentCr = cToken.balanceOf(address(this));
         if (currentCr == 0) {
             balance = 0;
@@ -91,17 +85,6 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
             //The current exchange rate as an unsigned integer, scaled by 1e18.
             balance = (currentCr * cToken.exchangeRateStored()) / 1e18;
         }
-    }
-
-    /// @notice Returns an estimation of the current Annual Percentage Rate
-    function apr() external view override returns (uint256) {
-        return _apr();
-    }
-
-    /// @notice Returns an estimation of the current Annual Percentage Rate weighted by a factor
-    function weightedApr() external view override returns (uint256) {
-        uint256 a = _apr();
-        return a * _nav();
     }
 
     /// @notice Returns an estimation of the current Annual Percentage Rate after a new deposit
@@ -125,11 +108,6 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         return supplyRate * BLOCKS_PER_YEAR + _incentivesRate(amount);
     }
 
-    /// @notice Check if assets are currently managed by this contract
-    function hasAssets() external view override returns (bool) {
-        return _nav() > 10 * wantBase;
-    }
-
     // ============================= Governance =============================
 
     /// @notice Withdraws as much as possible in case of emergency and sends it to the `PoolManager`
@@ -145,13 +123,8 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     // ============================= Internal Functions =============================
 
     /// @notice See `apr`
-    function _apr() internal view returns (uint256) {
+    function _apr() internal view override returns (uint256) {
         return cToken.supplyRatePerBlock() * BLOCKS_PER_YEAR + _incentivesRate(0);
-    }
-
-    /// @notice See `nav`
-    function _nav() internal view returns (uint256) {
-        return want.balanceOf(address(this)) + underlyingBalanceStored();
     }
 
     /// @notice See `withdraw`

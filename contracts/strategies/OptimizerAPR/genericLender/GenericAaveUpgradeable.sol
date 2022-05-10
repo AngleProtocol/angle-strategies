@@ -73,6 +73,9 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         isIncentivised = _isIncentivised;
         cooldownStkAave = true;
         IERC20(address(want)).safeApprove(address(_lendingPool), type(uint256).max);
+        // Approve swap router spend
+        IERC20(address(_stkAave)).safeApprove(oneInch, type(uint256).max);
+        IERC20(address(_aave)).safeApprove(oneInch, type(uint256).max);
     }
 
     // ============================= External Functions ============================
@@ -143,33 +146,9 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
     // =========================== External View Functions =========================
 
-    /// @notice Checks if assets are currently managed by this contract
-    /// @dev We're considering that the strategy has no assets if it has less than 10 of the 
-    /// underlying asset in total to avoid the case where there is dust on Aave and we cannot
-    /// withdraw everything
-    function hasAssets() external view override returns (bool) {
-        return _nav() > 10 * wantBase;
-    }
-
-    /// @notice Returns the current total of assets managed
-    function nav() external view override returns (uint256) {
-        return _nav();
-    }
-
     /// @notice Returns the current balance of aTokens
-    function underlyingBalanceStored() public view returns (uint256 balance) {
+    function underlyingBalanceStored() public view override returns (uint256 balance) {
         balance = _balanceAtoken() + _stakedBalance();
-    }
-
-    /// @notice Returns an estimation of the current Annual Percentage Rate
-    function apr() external view override returns (uint256) {
-        return _apr();
-    }
-
-    /// @notice Returns an estimation of the current Annual Percentage Rate weighted by a factor
-    function weightedApr() external view override returns (uint256) {
-        uint256 a = _apr();
-        return a * _nav();
     }
 
     /// @notice Returns an estimation of the current Annual Percentage Rate after a new deposit
@@ -256,7 +235,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     }
 
     /// @notice See `apr`
-    function _apr() internal view returns (uint256) {
+    function _apr() internal view override returns (uint256) {
         (
             uint256 availableLiquidity,
             uint256 totalStableDebt,
@@ -291,11 +270,6 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
             }
         }
         return 0;
-    }
-
-    /// @notice See `nav`
-    function _nav() internal view returns (uint256) {
-        return want.balanceOf(address(this)) + underlyingBalanceStored();
     }
 
     /// @notice See `withdraw`
