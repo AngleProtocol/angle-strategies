@@ -132,7 +132,7 @@ describe('StrategyStETH', () => {
             stETH.address,
             parseUnits('3', 9),
           ),
-        ).to.be.revertedWith('0');
+        ).to.be.revertedWith('ZeroAddress');
       });
       it('reverts - zero governor address', async () => {
         const strategy = (await deployUpgradeable(new StETHStrategy__factory(guardian))) as StETHStrategy;
@@ -147,7 +147,7 @@ describe('StrategyStETH', () => {
             stETH.address,
             parseUnits('3', 9),
           ),
-        ).to.be.revertedWith('0');
+        ).to.be.revertedWith('ZeroAddress');
       });
       it('reverts - zero keeper address', async () => {
         const strategy = (await deployUpgradeable(new StETHStrategy__factory(guardian))) as StETHStrategy;
@@ -162,7 +162,7 @@ describe('StrategyStETH', () => {
             stETH.address,
             parseUnits('3', 9),
           ),
-        ).to.be.revertedWith('0');
+        ).to.be.revertedWith('ZeroAddress');
       });
       it('reverts - want != weth', async () => {
         const strategy = (await deployUpgradeable(new StETHStrategy__factory(guardian))) as StETHStrategy;

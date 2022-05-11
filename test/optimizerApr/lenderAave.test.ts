@@ -15,7 +15,7 @@ import {
 } from '../../typechain';
 import { gwei } from '../../utils/bignumber';
 import { deploy, deployUpgradeable, latestTime, impersonate } from '../test-utils';
-import hre, { ethers, network } from 'hardhat';
+import { ethers, network } from 'hardhat';
 import { expect } from '../test-utils/chai-setup';
 import { BASE_TOKENS } from '../utils';
 import { parseUnits, parseEther } from 'ethers/lib/utils';

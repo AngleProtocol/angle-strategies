@@ -21,7 +21,7 @@ import { logBN } from '../utils-interaction';
 import { setDaiBalanceFor } from './aaveFlashloanStrategy_random_DAI.test';
 import { parseUnits } from 'ethers/lib/utils';
 
-describe('AaveFlashloan Strat - Coverage', () => {
+describe('AaveFlashloanStrategy - Coverage', () => {
   // ATokens
   let aToken: ERC20, debtToken: ERC20;
 
@@ -161,78 +161,12 @@ describe('AaveFlashloan Strat - Coverage', () => {
       expect(borrows).to.equal(ethers.constants.Zero);
     });
 
-    it('sellRewards - cooldown triggered', async () => {
-      expect(await stkAave.balanceOf(strategy.address)).to.equal(0);
-      expect(await aave.balanceOf(strategy.address)).to.equal(0);
-
-      await network.provider.send('evm_increaseTime', [3600 * 24 * 2]); // forward 2 day
-      await network.provider.send('evm_mine');
-      await strategy.connect(keeper)['harvest()']({ gasLimit: 3e6 });
-
-      const chainId = 1;
-      const oneInchParams = qs.stringify({
-        fromTokenAddress: stkAave.address,
-        toTokenAddress: wantToken.address,
-        fromAddress: strategy.address,
-        amount: parseUnits('3.59', 18).toString(),
-        slippage: 50,
-        disableEstimate: true,
-      });
-      const url = `https://api.1inch.exchange/v4.0/${chainId}/swap?${oneInchParams}`;
-
-      const res = await axios.get(url);
-      const payload = res.data.tx.data;
-
-      await strategy.connect(keeper).claimRewards();
-      await strategy.connect(keeper).sellRewards(0, payload);
-
-      const stkAaveAfter = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));
-
-      expect(stkAaveAfter).to.be.closeTo(0, 0.01);
-
-      await network.provider.send('evm_increaseTime', [3600 * 24 * 5]); // forward 5 days
-      await network.provider.send('evm_mine');
-
-      // cooldown triggered
-      await strategy.connect(keeper)['harvest()']({ gasLimit: 3e6 });
-    });
-
-    it('sellRewards - not claiming', async () => {
-      expect(await stkAave.balanceOf(strategy.address)).to.equal(0);
-      expect(await aave.balanceOf(strategy.address)).to.equal(0);
-
-      await network.provider.send('evm_increaseTime', [3600 * 24 * 2]); // forward 1 day
-      await network.provider.send('evm_mine');
-      await strategy.connect(keeper)['harvest()']({ gasLimit: 3e6 });
-
-      const chainId = 1;
-      const oneInchParams = qs.stringify({
-        fromTokenAddress: stkAave.address,
-        toTokenAddress: wantToken.address,
-        fromAddress: strategy.address,
-        amount: parseUnits('3.59', 18).toString(),
-        slippage: 50,
-        disableEstimate: true,
-      });
-      const url = `https://api.1inch.exchange/v4.0/${chainId}/swap?${oneInchParams}`;
-
-      const res = await axios.get(url);
-      const payload = res.data.tx.data;
-
-      await strategy.connect(keeper).claimRewards();
-      await strategy.connect(keeper).sellRewards(0, payload);
-
-      const stkAaveAfter = parseFloat(utils.formatUnits(await stkAave.balanceOf(strategy.address)));
-
-      expect(stkAaveAfter).to.be.closeTo(0, 0.01);
-    });
-
     it('onFlashLoan - revert', async () => {
       await expect(
         strategy
           .connect(keeper)
           .onFlashLoan(keeper.address, keeper.address, ethers.constants.Zero, ethers.constants.Zero, '0x'),
-      ).to.be.revertedWith('1');
+      ).to.be.revertedWith('InvalidSender');
     });
 
     it('cooldownStkAave - too soon', async () => {

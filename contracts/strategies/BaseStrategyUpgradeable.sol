@@ -44,6 +44,11 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
     /// @notice See note on `setEmergencyExit()`
     bool public emergencyExit;
 
+    // ============================ Errors =========================================
+
+    error InvalidToken();
+    error ZeroAddress();
+
     // ============================ Constructor ====================================
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -62,7 +67,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
         poolManager = IPoolManager(_poolManager);
         want = IERC20(poolManager.token());
         wantBase = 10**(IERC20Metadata(address(want)).decimals());
-        require(guardian != address(0) && governor != address(0) && governor != guardian, "0");
+        if (guardian == address(0) || governor == address(0) || governor == guardian) revert ZeroAddress();
         // AccessControl
         // Governor is guardian so no need for a governor role
         _setupRole(GUARDIAN_ROLE, guardian);
@@ -73,7 +78,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
 
         // Initializing roles first
         for (uint256 i = 0; i < keepers.length; i++) {
-            require(keepers[i] != address(0), "0");
+            if (keepers[i] == address(0)) revert ZeroAddress();
             _setupRole(KEEPER_ROLE, keepers[i]);
         }
         _setRoleAdmin(KEEPER_ROLE, GUARDIAN_ROLE);
@@ -304,13 +309,13 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUp
     /// Implement `_protectedTokens()` to specify any additional tokens that
     /// should be protected from sweeping in addition to `want`.
     function sweep(address _token, address to) external onlyRole(GUARDIAN_ROLE) {
-        require(_token != address(want), "93");
+        if (_token == address(want)) revert InvalidToken();
 
         address[] memory __protectedTokens = _protectedTokens();
         for (uint256 i = 0; i < __protectedTokens.length; i++)
             // In the strategy we use so far, the only protectedToken is the want token
             // and this has been checked above
-            require(_token != __protectedTokens[i], "93");
+            if (_token == __protectedTokens[i]) revert InvalidToken();
 
         IERC20(_token).safeTransfer(to, IERC20(_token).balanceOf(address(this)));
     }

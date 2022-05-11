@@ -108,6 +108,15 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     IAToken private _aToken;
     IVariableDebtToken private _debtToken;
 
+    // ================================== Errors ===================================
+
+    error ErrorSwap();
+    error InvalidSender();
+    error InvalidSetOfParameters();
+    error InvalidWithdrawCheck();
+    error TooSmallAmountOut();
+    error TooHighParameterValue();
+
     // ============================ Initializer ====================================
 
     /// @notice Constructor of the `Strategy`
@@ -363,7 +372,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         }
 
         if (boolParams.withdrawCheck) {
-            require(_amountNeeded == _liquidatedAmount + _loss, "54"); // dev: withdraw safety check
+            if (_amountNeeded != _liquidatedAmount + _loss) revert InvalidWithdrawCheck(); // dev: withdraw safety check
         }
     }
 
@@ -386,14 +395,13 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     ) external onlyRole(GUARDIAN_ROLE) {
         (uint256 ltv, uint256 liquidationThreshold) = _getProtocolCollatRatios(address(want));
         (uint256 daiLtv, ) = _getProtocolCollatRatios(_dai);
-        require(
-            _targetCollatRatio < liquidationThreshold &&
-                _maxCollatRatio < liquidationThreshold &&
-                _targetCollatRatio < _maxCollatRatio &&
-                _maxBorrowCollatRatio < ltv &&
-                _daiBorrowCollatRatio < daiLtv,
-            "8"
-        );
+        if (
+            _targetCollatRatio >= liquidationThreshold ||
+            _maxCollatRatio >= liquidationThreshold ||
+            _targetCollatRatio >= _maxCollatRatio ||
+            _maxBorrowCollatRatio >= ltv ||
+            _daiBorrowCollatRatio >= daiLtv
+        ) revert InvalidSetOfParameters();
 
         targetCollatRatio = _targetCollatRatio;
         maxCollatRatio = _maxCollatRatio;
@@ -407,7 +415,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         uint256 _minRatio,
         uint8 _maxIterations
     ) external onlyRole(GUARDIAN_ROLE) {
-        require(_minRatio < maxBorrowCollatRatio && _maxIterations > 0 && _maxIterations < 16, "8");
+        if (_minRatio >= maxBorrowCollatRatio || _maxIterations == 0 || _maxIterations >= 16)
+            revert InvalidSetOfParameters();
         minWant = _minWant;
         minRatio = _minRatio;
         maxIterations = _maxIterations;
@@ -420,7 +429,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
     /// @notice Sets the discount factor for the StkAAVE price
     function setDiscountFactor(uint256 _discountFactor) external onlyRole(GUARDIAN_ROLE) {
-        require(_discountFactor < 10000, "4");
+        if (_discountFactor > 10000) revert TooHighParameterValue();
         discountFactor = _discountFactor;
     }
 
@@ -471,7 +480,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         if (!success) _revertBytes(result);
 
         uint256 amountOut = abi.decode(result, (uint256));
-        require(amountOut >= minAmountOut, "15");
+        if (amountOut < minAmountOut) revert TooSmallAmountOut();
     }
 
     /// @notice Flashload callback, as defined by EIP-3156
@@ -484,7 +493,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         uint256,
         bytes calldata data
     ) external override returns (bytes32) {
-        require(msg.sender == FlashMintLib.LENDER && initiator == address(this), "1");
+        if (msg.sender != FlashMintLib.LENDER || initiator != address(this)) revert InvalidSender();
         (bool deficit, uint256 amountWant) = abi.decode(data, (bool, uint256));
 
         return FlashMintLib.loanLogic(deficit, amountWant, amount, address(want));
@@ -993,6 +1002,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
                 revert(add(32, errMsg), mload(errMsg))
             }
         }
-        revert("117");
+        revert ErrorSwap();
     }
 }
