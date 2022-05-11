@@ -3,8 +3,6 @@ import { ethers, network } from 'hardhat';
 import { utils, Contract } from 'ethers';
 import { expect } from '../test-utils/chai-setup';
 import { deploy, impersonate } from '../test-utils';
-import axios from 'axios';
-import qs from 'qs';
 import {
   AaveFlashloanStrategy,
   FlashMintLib,
