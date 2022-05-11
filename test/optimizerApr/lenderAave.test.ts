@@ -105,7 +105,8 @@ describe('OptimizerAPR - lenderAave', () => {
         {
           forking: {
             jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
-            blockNumber: hre.config.networks.hardhat.forking?.blockNumber,
+            // Changing mainnet fork block breaks some tests
+            blockNumber: 14679410,
           },
         },
       ],
@@ -412,11 +413,9 @@ describe('OptimizerAPR - lenderAave', () => {
       const cooldownTimestamp = await stkAave.stakersCooldowns(lenderAave.address);
       expect(cooldownTimestamp).to.be.equal(await latestTime());
       const stkAaveHolder = '0x32B61Bb22Cbe4834bc3e73DcE85280037D944a4D';
+      const balanceStorage = utils.parseEther('1').toHexString().replace('0x0', '0x');
       await impersonate(stkAaveHolder, async acc => {
-        await network.provider.send('hardhat_setBalance', [
-          stkAaveHolder,
-          utils.parseEther('1').toHexString().replace('0x0', '0x'),
-        ]);
+        await network.provider.send('hardhat_setBalance', [stkAaveHolder, balanceStorage]);
         await (await stkAave.connect(acc).transfer(lenderAave.address, parseEther('1'))).wait();
       });
       // will change stkAave into Aave

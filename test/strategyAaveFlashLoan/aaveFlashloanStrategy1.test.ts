@@ -3,6 +3,7 @@ import { ethers, network } from 'hardhat';
 import { utils, constants, BigNumber, Contract } from 'ethers';
 import { expect } from '../test-utils/chai-setup';
 import { deploy, impersonate } from '../test-utils';
+import { expectApprox } from '../../utils/bignumber';
 import axios from 'axios';
 import qs from 'qs';
 import {
@@ -365,7 +366,7 @@ describe('AaveFlashloan Strategy1', () => {
       await strategy.connect(keeper)['harvest(uint256)'](_guessedBorrowed, { gasLimit: 3e6 });
 
       const { deposits, borrows } = await strategy.getCurrentPosition();
-      expect(borrows).to.equal(_guessedBorrowed);
+      expectApprox(borrows, _guessedBorrowed, 0.1);
       const totalAssets = (await wantToken.balanceOf(strategy.address)).add(deposits).sub(borrows);
       const debtRatio = (await poolManager.strategies(strategy.address)).debtRatio;
 

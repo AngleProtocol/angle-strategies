@@ -79,6 +79,7 @@ let aFraxStakingContract: IMockFraxUnifiedFarm;
 let oracleNativeReward: AggregatorV3Interface;
 let oracleStkAave: AggregatorV3Interface;
 let oneInch: string;
+let amountStorage: string;
 const lockerStakeDAO = '0xCd3a267DE09196C48bbB1d9e842D7D7645cE448f';
 const fraxTimelock = '0x8412ebf45bAC1B340BbE8F318b928C466c4E39CA';
 
@@ -152,6 +153,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
       DAY,
     ));
     oneInch = '0x1111111254fb6c44bAC0beD2854e76F90643097d';
+    amountStorage = utils.parseEther('1').toHexString().replace('0x0', '0x');
   });
 
   describe('Contructor', () => {
@@ -218,10 +220,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
       });
       it('success - cooldown activated', async () => {
         await impersonate(stkAaveHolder, async acc => {
-          await network.provider.send('hardhat_setBalance', [
-            stkAaveHolder,
-            utils.parseEther('1').toHexString().replace('0x0', '0x'),
-          ]);
+          await network.provider.send('hardhat_setBalance', [stkAaveHolder, amountStorage]);
           await (await stkAave.connect(acc).transfer(lenderAave.address, parseEther('1'))).wait();
         });
         await lenderAave.connect(keeper).cooldown();
@@ -321,7 +320,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
     describe('setLockTime', () => {
       it('reverts - too small staking period', async () => {
         await expect(lenderAave.connect(guardian).setLockTime(ethers.constants.Zero)).to.be.revertedWith(
-          'StakingPeriodTooSmall',
+          'TooSmallStakingPeriod',
         );
       });
       it('success - staking period updated', async () => {
@@ -333,17 +332,11 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
       it('success - proxy boost set', async () => {
         const veFXSMultiplierBefore = await aFraxStakingContract.veFXSMultiplier(lenderAave.address);
         await impersonate(fraxTimelock, async acc => {
-          await network.provider.send('hardhat_setBalance', [
-            fraxTimelock,
-            utils.parseEther('1').toHexString().replace('0x0', '0x'),
-          ]);
+          await network.provider.send('hardhat_setBalance', [fraxTimelock, amountStorage]);
           await (await aFraxStakingContract.connect(acc).toggleValidVeFXSProxy(lockerStakeDAO)).wait();
         });
         await impersonate(lockerStakeDAO, async acc => {
-          await network.provider.send('hardhat_setBalance', [
-            lockerStakeDAO,
-            utils.parseEther('1').toHexString().replace('0x0', '0x'),
-          ]);
+          await network.provider.send('hardhat_setBalance', [lockerStakeDAO, amountStorage]);
           await (await aFraxStakingContract.connect(acc).proxyToggleStaker(lenderAave.address)).wait();
         });
         await lenderAave.connect(guardian).setProxyBoost(lockerStakeDAO);
@@ -474,17 +467,11 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
     });
     it('apr - with boost', async () => {
       await impersonate(fraxTimelock, async acc => {
-        await network.provider.send('hardhat_setBalance', [
-          fraxTimelock,
-          utils.parseEther('1').toHexString().replace('0x0', '0x'),
-        ]);
+        await network.provider.send('hardhat_setBalance', [fraxTimelock, amountStorage]);
         await (await aFraxStakingContract.connect(acc).toggleValidVeFXSProxy(lockerStakeDAO)).wait();
       });
       await impersonate(lockerStakeDAO, async acc => {
-        await network.provider.send('hardhat_setBalance', [
-          lockerStakeDAO,
-          utils.parseEther('1').toHexString().replace('0x0', '0x'),
-        ]);
+        await network.provider.send('hardhat_setBalance', [lockerStakeDAO, amountStorage]);
         await (await aFraxStakingContract.connect(acc).proxyToggleStaker(lenderAave.address)).wait();
       });
       await lenderAave.connect(guardian).setProxyBoost(lockerStakeDAO);
@@ -579,7 +566,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
       await setTokenBalanceFor(token, strategy.address, 1000000);
       await (await strategy.connect(keeper)['harvest()']()).wait();
       await setTokenBalanceFor(token, strategy.address, 1000000);
-      await expect(strategy.connect(keeper)['harvest()']()).to.be.rejectedWith('UnstakedTooSoon');
+      await expect(strategy.connect(keeper)['harvest()']()).to.be.reverted;
     });
     it('emergencyWithdraw - reverts - nothing to remove', async () => {
       await expect(lenderAave.connect(guardian).emergencyWithdraw(parseUnits('1000000', 18))).to.be.reverted;
@@ -658,10 +645,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
     it('withdraw - success - no new locker', async () => {
       // change lock period
       await impersonate(fraxTimelock, async acc => {
-        await network.provider.send('hardhat_setBalance', [
-          fraxTimelock,
-          utils.parseEther('1').toHexString().replace('0x0', '0x'),
-        ]);
+        await network.provider.send('hardhat_setBalance', [fraxTimelock, amountStorage]);
         await (
           await aFraxStakingContract
             .connect(acc)
@@ -704,11 +688,9 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
     });
     it('withdraw - success - no liquidity left', async () => {
       // change lock period
+
       await impersonate(fraxTimelock, async acc => {
-        await network.provider.send('hardhat_setBalance', [
-          fraxTimelock,
-          utils.parseEther('1').toHexString().replace('0x0', '0x'),
-        ]);
+        await network.provider.send('hardhat_setBalance', [fraxTimelock, amountStorage]);
         await (
           await aFraxStakingContract
             .connect(acc)
@@ -735,10 +717,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
 
       // remove liquidity from Aave
       await impersonate(aToken.address, async acc => {
-        await network.provider.send('hardhat_setBalance', [
-          aToken.address,
-          utils.parseEther('1').toHexString().replace('0x0', '0x'),
-        ]);
+        await network.provider.send('hardhat_setBalance', [aToken.address, amountStorage]);
         const liquidityAave = await token.balanceOf(aToken.address);
         await (await token.connect(acc).transfer(keeper.address, liquidityAave)).wait();
       });
@@ -764,10 +743,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
     it('withdraw - success - few liquidity left', async () => {
       // change lock period
       await impersonate(fraxTimelock, async acc => {
-        await network.provider.send('hardhat_setBalance', [
-          fraxTimelock,
-          utils.parseEther('1').toHexString().replace('0x0', '0x'),
-        ]);
+        await network.provider.send('hardhat_setBalance', [fraxTimelock, amountStorage]);
         await (
           await aFraxStakingContract
             .connect(acc)
@@ -794,10 +770,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
 
       // remove liquidity from Aave
       await impersonate(aToken.address, async acc => {
-        await network.provider.send('hardhat_setBalance', [
-          aToken.address,
-          utils.parseEther('1').toHexString().replace('0x0', '0x'),
-        ]);
+        await network.provider.send('hardhat_setBalance', [aToken.address, amountStorage]);
         const liquidityAave = await token.balanceOf(aToken.address);
         await (
           await token.connect(acc).transfer(keeper.address, liquidityAave.sub(parseUnits('1', tokenDecimal)))
@@ -885,17 +858,11 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
     });
     it('claimRewardsExternal - success - verify apr with boost', async () => {
       await impersonate(fraxTimelock, async acc => {
-        await network.provider.send('hardhat_setBalance', [
-          fraxTimelock,
-          utils.parseEther('1').toHexString().replace('0x0', '0x'),
-        ]);
+        await network.provider.send('hardhat_setBalance', [fraxTimelock, amountStorage]);
         await (await aFraxStakingContract.connect(acc).toggleValidVeFXSProxy(lockerStakeDAO)).wait();
       });
       await impersonate(lockerStakeDAO, async acc => {
-        await network.provider.send('hardhat_setBalance', [
-          lockerStakeDAO,
-          utils.parseEther('1').toHexString().replace('0x0', '0x'),
-        ]);
+        await network.provider.send('hardhat_setBalance', [lockerStakeDAO, amountStorage]);
         await (await aFraxStakingContract.connect(acc).proxyToggleStaker(lenderAave.address)).wait();
       });
       await lenderAave.connect(guardian).setProxyBoost(lockerStakeDAO);
