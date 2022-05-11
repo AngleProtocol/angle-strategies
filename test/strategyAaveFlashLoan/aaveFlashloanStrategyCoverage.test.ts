@@ -17,6 +17,8 @@ import {
   PoolManager,
   IAaveIncentivesController,
 } from '../../typechain';
+import { logBN } from '../utils-interaction';
+import { setDaiBalanceFor } from './aaveFlashloanStrategy_random_DAI.test';
 import { parseUnits } from 'ethers/lib/utils';
 
 describe('AaveFlashloan Strat - Coverage', () => {
@@ -37,13 +39,12 @@ describe('AaveFlashloan Strat - Coverage', () => {
   let poolManager: PoolManager;
   let incentivesController: IAaveIncentivesController;
   let flashMintLib: FlashMintLib;
-
   let strategy: AaveFlashloanStrategy;
 
   // ReserveInterestRateStrategy for USDC
-  const reserveInterestRateStrategyUSDC = '0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27';
+  // const reserveInterestRateStrategy = '0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27';
   // ReserveInterestRateStrategy for DAI
-  // const reserveInterestRateStrategyDAI = '0xfffE32106A68aA3eD39CcCE673B646423EEaB62a';
+  const reserveInterestRateStrategy = '0xfffE32106A68aA3eD39CcCE673B646423EEaB62a';
 
   beforeEach(async () => {
     await network.provider.request({
@@ -58,7 +59,10 @@ describe('AaveFlashloan Strat - Coverage', () => {
       ],
     });
 
-    wantToken = (await ethers.getContractAt(ERC20__factory.abi, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')) as ERC20;
+    // const tokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+    const tokenAddress = '0x6B175474E89094C44Da98b954EedeAC495271d0F';
+
+    wantToken = (await ethers.getContractAt(ERC20__factory.abi, tokenAddress)) as ERC20;
     aave = (await ethers.getContractAt(ERC20__factory.abi, '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9')) as ERC20;
     stkAave = (await ethers.getContractAt(
       IStakedAave__factory.abi,
@@ -89,27 +93,25 @@ describe('AaveFlashloan Strat - Coverage', () => {
     ]);
     strategy = new Contract(proxy.address, AaveFlashloanStrategy__factory.abi, deployer) as AaveFlashloanStrategy;
 
-    await strategy.initialize(
-      poolManager.address,
-      reserveInterestRateStrategyUSDC,
-      governor.address,
-      guardian.address,
-      [keeper.address],
-    );
+    await strategy.initialize(poolManager.address, reserveInterestRateStrategy, governor.address, guardian.address, [
+      keeper.address,
+    ]);
 
     aToken = (await ethers.getContractAt(ERC20__factory.abi, '0xBcca60bB61934080951369a648Fb03DF4F96263C')) as ERC20;
     debtToken = (await ethers.getContractAt(ERC20__factory.abi, '0x619beb58998eD2278e08620f97007e1116D5D25b')) as ERC20;
   });
 
   describe('Strategy', () => {
-    const _startAmountUSDC = utils.parseUnits((2_000_000).toString(), 6);
+    const _startAmount = 1_000_000_000;
 
     beforeEach(async () => {
       await (await poolManager.addStrategy(strategy.address, utils.parseUnits('0.75', 9))).wait();
 
       await impersonate('0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3', async acc => {
-        await wantToken.connect(acc).transfer(user.address, _startAmountUSDC);
+        await wantToken.connect(acc).transfer(user.address, _startAmount);
       });
+
+      await setDaiBalanceFor(user.address, _startAmount);
 
       // sending funds to emission controller
       await network.provider.send('hardhat_setBalance', [
@@ -123,7 +125,7 @@ describe('AaveFlashloan Strat - Coverage', () => {
         utils.parseEther('100').toHexString().replace('0x0', '0x'),
       ]);
 
-      await wantToken.connect(user).transfer(poolManager.address, _startAmountUSDC);
+      await wantToken.connect(user).transfer(poolManager.address, _startAmount);
 
       await strategy.connect(keeper)['harvest()']({ gasLimit: 3e6 });
     });
@@ -249,6 +251,10 @@ describe('AaveFlashloan Strat - Coverage', () => {
       const aaveBalanceAfterRedeem = parseFloat(utils.formatUnits(await aave.balanceOf(strategy.address), 18));
 
       expect(aaveBalanceAfterRedeem).to.be.closeTo(aaveBalanceBefore, 0.1);
+    });
+    it('estimatedAPR', async () => {
+      const estimatedAPR = await strategy.estimatedAPR();
+      expect(estimatedAPR).to.be.closeTo(parseUnits('0.0406', 18), parseUnits('0.005', 18));
     });
   });
 });
