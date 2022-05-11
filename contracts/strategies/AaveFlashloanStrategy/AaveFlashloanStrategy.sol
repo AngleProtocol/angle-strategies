@@ -358,6 +358,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
         // we need to free funds
         uint256 amountRequired = _amountNeeded - wantBalance;
+
         _freeFunds(amountRequired, deposits, borrows);
         // Updating the `wantBalance` variable
         wantBalance = _balanceOfWant();
@@ -545,8 +546,12 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         uint256 realAssets = deposits - borrows;
         uint256 newBorrow = _getBorrowFromSupply(realAssets - Math.min(amountToFree, realAssets), targetCollatRatio);
 
-        // repay required amount
-        _leverDownTo(newBorrow, deposits, borrows);
+        if (borrows != 0) {
+            // repay required amount
+            _leverDownTo(newBorrow, deposits, borrows);
+        } else {
+            _withdrawCollateral(Math.min(amountToFree, deposits));
+        }
 
         return _balanceOfWant();
     }
@@ -651,6 +656,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         // Deposit back to get `targetCollatRatio` (we always need to leave this in this ratio)
         uint256 _targetCollatRatio = targetCollatRatio;
         uint256 targetDeposit = _getDepositFromBorrow(currentBorrowed, _targetCollatRatio, deposits);
+
         if (targetDeposit > deposits) {
             uint256 toDeposit = targetDeposit - deposits;
             if (toDeposit > minWant) {
