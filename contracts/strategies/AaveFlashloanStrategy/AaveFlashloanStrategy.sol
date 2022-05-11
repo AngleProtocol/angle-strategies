@@ -852,8 +852,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         if (_totalAssets == 0 || totalVariableDebt == 0 || _aToken.totalSupply() == 0) return 0;
 
         (uint256 deposits, uint256 borrows) = getCurrentPosition();
-        uint256 yearlyRewardsATokenInUSDC;
-        uint256 yearlyRewardsDebtTokenInUSDC;
+        uint256 yearlyRewardsATokenInUSD;
+        uint256 yearlyRewardsDebtTokenInUSD;
         {
             uint256 stkAavePriceInWant = _estimatedStkAaveToWant(1 ether);
             (uint256 emissionPerSecondAToken, , ) = (_aToken.getIncentivesController()).assets(address(_aToken));
@@ -863,21 +863,21 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
             uint256 yearlyEmissionsAToken = emissionPerSecondAToken * 60 * 60 * 24 * 365; // BASE: 18
             uint256 yearlyEmissionsDebtToken = emissionPerSecondDebtToken * 60 * 60 * 24 * 365; // BASE: 18
-            yearlyRewardsATokenInUSDC = ((deposits * yearlyEmissionsAToken * stkAavePriceInWant * 10**9) /
-                _aToken.totalSupply()); // BASE 27 + want
-            yearlyRewardsDebtTokenInUSDC = ((borrows * yearlyEmissionsDebtToken * stkAavePriceInWant * 10**9) /
-                totalVariableDebt); // BASE 27 + want
+            yearlyRewardsATokenInUSD =
+                ((deposits * yearlyEmissionsAToken) / _aToken.totalSupply()) *
+                stkAavePriceInWant; // BASE 18 + want
+            yearlyRewardsDebtTokenInUSD =
+                ((borrows * yearlyEmissionsDebtToken) / totalVariableDebt) *
+                stkAavePriceInWant; // BASE 18 + want
         }
 
         return
-            (liquidityRate *
-                deposits +
-                yearlyRewardsATokenInUSDC +
-                yearlyRewardsDebtTokenInUSDC -
-                variableBorrowRate *
-                borrows) /
-            _totalAssets /
-            10**9; // BASE 18
+            ((liquidityRate * deposits) /
+                10**9 +
+                yearlyRewardsATokenInUSD +
+                yearlyRewardsDebtTokenInUSD -
+                (variableBorrowRate * borrows) /
+                10**9) / _totalAssets; // BASE 18
     }
 
     /// @notice Returns the `want` balance

@@ -71,7 +71,7 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
       curvePool,
       wETH,
       stETH,
-      parseUnits('3.9', 9),
+      parseUnits('3.9', 16),
     ]);
 
     const proxyStrategy = await deploy('StETHStrategy', {
