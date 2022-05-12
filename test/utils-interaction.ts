@@ -368,11 +368,10 @@ export async function findBalancesSlot(tokenAddress: string): Promise<number> {
   throw Error('Balances slot not found!');
 }
 
-export async function setTokenBalanceFor(token: ERC20, account: string, amount: BigNumberish) {
+export async function setTokenBalanceFor(token: ERC20, account: string, amount: BigNumberish, balanceSlot = 0) {
   // for FRAX we know it's 0
   // const balanceSlot = await findBalancesSlot(token.address);
   // console.log('the balance slot is ', balanceSlot);
-  const balanceSlot = 0;
   const balanceStorage = utils.solidityKeccak256(['uint256', 'uint256'], [account, balanceSlot]).replace('0x0', '0x');
   const amountStorage = utils.hexZeroPad(utils.parseUnits(amount.toString(), await token.decimals()).toHexString(), 32);
 
