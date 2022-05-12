@@ -99,7 +99,7 @@ describe('AaveFlashloanStrategy - Coverage', () => {
     debtToken = (await ethers.getContractAt(ERC20__factory.abi, '0x619beb58998eD2278e08620f97007e1116D5D25b')) as ERC20;
   });
 
-  describe('Strategy', () => {
+  describe('Strategy Scenario', () => {
     const _startAmount = 1_000_000_000;
 
     beforeEach(async () => {
@@ -111,17 +111,13 @@ describe('AaveFlashloanStrategy - Coverage', () => {
 
       await setDaiBalanceFor(user.address, _startAmount);
 
+      const replacing = utils.parseEther('100').toHexString().replace('0x0', '0x');
+
       // sending funds to emission controller
-      await network.provider.send('hardhat_setBalance', [
-        '0xEE56e2B3D491590B5b31738cC34d5232F378a8D5',
-        utils.parseEther('100').toHexString().replace('0x0', '0x'),
-      ]);
+      await network.provider.send('hardhat_setBalance', ['0xEE56e2B3D491590B5b31738cC34d5232F378a8D5', replacing]);
 
       // sending funds to strategy
-      await network.provider.send('hardhat_setBalance', [
-        strategy.address,
-        utils.parseEther('100').toHexString().replace('0x0', '0x'),
-      ]);
+      await network.provider.send('hardhat_setBalance', [strategy.address, replacing]);
 
       await wantToken.connect(user).transfer(poolManager.address, _startAmount);
 
