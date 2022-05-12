@@ -518,10 +518,12 @@ describe('StrategyStETH', () => {
   });
   describe('sweep', () => {
     it('reverts - wETH', async () => {
-      await expect(strategy.connect(guardian).sweep(wETH.address, governor.address)).to.be.revertedWith('93');
+      await expect(strategy.connect(guardian).sweep(wETH.address, governor.address)).to.be.revertedWith('InvalidToken');
     });
     it('reverts - stETH', async () => {
-      await expect(strategy.connect(guardian).sweep(stETH.address, governor.address)).to.be.revertedWith('93');
+      await expect(strategy.connect(guardian).sweep(stETH.address, governor.address)).to.be.revertedWith(
+        'InvalidToken',
+      );
     });
   });
   describe('harvest - other cases', () => {

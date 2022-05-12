@@ -652,6 +652,11 @@ describe('AaveFlashloanStrategy - Main test file', () => {
         expect(aaveBefore).to.equal(0);
         expect(stkAaveAfter).to.be.equal(stkAaveBefore.sub(parseUnits('1', 16)));
         expect(aaveAfter).to.be.gt(0);
+        // Checking if we can sweep
+        expect(await aave.balanceOf(guardian.address)).to.be.equal(0);
+        await strategy.connect(guardian).sweep(aave.address, guardian.address);
+        expect(await aave.balanceOf(guardian.address)).to.be.gt(0);
+        expect(await aave.balanceOf(strategy.address)).to.be.equal(0);
       });
       it('reverts - because of slippage protection', async () => {
         await network.provider.send('evm_increaseTime', [3600 * 24 * 1]); // forward 1 day
@@ -852,12 +857,15 @@ describe('AaveFlashloanStrategy - Main test file', () => {
         expect(await wantToken.balanceOf(strategy.address)).to.equal(0);
       });
       it('success - flashloan more than maxLiquidity', async () => {
-        const balanceStorage = utils.solidityKeccak256(['uint256', 'uint256'], [strategy.address, 9]);
+        const balanceStorage = utils
+          .solidityKeccak256(['uint256', 'uint256'], [strategy.address, 9])
+          .replace('0x0', '0x');
+        const amountTx = utils.hexZeroPad(utils.parseUnits('900000000', 6).toHexString(), 32);
 
         await network.provider.send('hardhat_setStorageAt', [
           '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-          balanceStorage.replace('0x0', '0x'),
-          utils.hexZeroPad(utils.parseUnits('900000000', 6).toHexString(), 32),
+          balanceStorage,
+          amountTx,
         ]);
 
         await impersonate('0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3', async acc => {
