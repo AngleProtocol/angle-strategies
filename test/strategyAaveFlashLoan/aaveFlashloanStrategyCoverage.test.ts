@@ -20,6 +20,8 @@ import {
 import { findBalancesSlot, logBN, setTokenBalanceFor } from '../utils-interaction';
 import { parseUnits } from 'ethers/lib/utils';
 import { BASE_PARAMS } from '../utils';
+import qs from 'qs';
+import axios from 'axios';
 
 describe('AaveFlashloanStrategy - Coverage', () => {
   // ATokens

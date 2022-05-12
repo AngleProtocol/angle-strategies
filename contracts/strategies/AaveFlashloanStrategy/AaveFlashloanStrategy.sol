@@ -543,10 +543,16 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     ) internal returns (uint256) {
         if (amountToFree == 0) return 0;
 
-        uint256 realAssets = deposits - borrows;
-        uint256 newBorrow = _getBorrowFromSupply(realAssets - Math.min(amountToFree, realAssets), targetCollatRatio);
-
+        // If borrows is null, then we cannot use `_leverDownTo` to free funds,
+        // as newBorrow will also be null (because `targetCollatRatio` == 0). It will lead to
+        // no action taken in the function. To free funds in this case we only need to withdrawCollateral
+        // without any regards to the collateral ratio as it can only be 0
         if (borrows != 0) {
+            uint256 realAssets = deposits - borrows;
+            uint256 newBorrow = _getBorrowFromSupply(
+                realAssets - Math.min(amountToFree, realAssets),
+                targetCollatRatio
+            );
             // repay required amount
             _leverDownTo(newBorrow, deposits, borrows);
         } else {
