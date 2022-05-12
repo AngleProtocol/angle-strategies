@@ -132,7 +132,7 @@ describe('StrategyStETH', () => {
             stETH.address,
             parseUnits('3', 9),
           ),
-        ).to.be.revertedWith('0');
+        ).to.be.revertedWith('ZeroAddress');
       });
       it('reverts - zero governor address', async () => {
         const strategy = (await deployUpgradeable(new StETHStrategy__factory(guardian))) as StETHStrategy;
@@ -147,7 +147,7 @@ describe('StrategyStETH', () => {
             stETH.address,
             parseUnits('3', 9),
           ),
-        ).to.be.revertedWith('0');
+        ).to.be.revertedWith('ZeroAddress');
       });
       it('reverts - zero keeper address', async () => {
         const strategy = (await deployUpgradeable(new StETHStrategy__factory(guardian))) as StETHStrategy;
@@ -162,7 +162,7 @@ describe('StrategyStETH', () => {
             stETH.address,
             parseUnits('3', 9),
           ),
-        ).to.be.revertedWith('0');
+        ).to.be.revertedWith('ZeroAddress');
       });
       it('reverts - want != weth', async () => {
         const strategy = (await deployUpgradeable(new StETHStrategy__factory(guardian))) as StETHStrategy;
@@ -518,10 +518,12 @@ describe('StrategyStETH', () => {
   });
   describe('sweep', () => {
     it('reverts - wETH', async () => {
-      await expect(strategy.connect(guardian).sweep(wETH.address, governor.address)).to.be.revertedWith('93');
+      await expect(strategy.connect(guardian).sweep(wETH.address, governor.address)).to.be.revertedWith('InvalidToken');
     });
     it('reverts - stETH', async () => {
-      await expect(strategy.connect(guardian).sweep(stETH.address, governor.address)).to.be.revertedWith('93');
+      await expect(strategy.connect(guardian).sweep(stETH.address, governor.address)).to.be.revertedWith(
+        'InvalidToken',
+      );
     });
   });
   describe('harvest - other cases', () => {

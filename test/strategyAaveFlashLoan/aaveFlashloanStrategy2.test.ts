@@ -6,7 +6,7 @@ import { expect } from '../test-utils/chai-setup';
 import { setup } from './setup_tests';
 import { parseUnits } from 'ethers/lib/utils';
 
-describe('AaveFlashloan Strategy2', () => {
+describe('AaveFlashloanStrategy - Scenario', () => {
   it('scenario static', async () => {
     const {
       strategy,

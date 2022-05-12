@@ -36,7 +36,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     // ================================ Parameters =================================
 
     /// @notice Minimum amount of aFRAX to stake
-    uint256 private constant minStakingAmount = 1000 * 1e18; // 100 aFrax
+    uint256 private constant minStakingAmount = 1000 * 1e18; // 1000 aFrax
     /// @notice Staking duration
     uint256 public stakingPeriod;
 
