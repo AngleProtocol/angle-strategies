@@ -102,7 +102,11 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
         {
           forking: {
             jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
+<<<<<<< HEAD
             blockNumber: 14786812,
+=======
+            blockNumber: 14786806,
+>>>>>>> b41249a (most tests working - chaotic issue with withdraw - success - restake)
           },
         },
       ],
