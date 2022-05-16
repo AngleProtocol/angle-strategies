@@ -3,9 +3,9 @@
 pragma solidity 0.8.12;
 
 import "../../../interfaces/external/frax/IFraxUnifiedFarmTemplate.sol";
-import "../../../interfaces/external/convex/frax/IBooster.sol";
-import "../../../interfaces/external/convex/frax/IPoolRegistry.sol";
-import "../../../interfaces/external/convex/frax/IFeeRegistry.sol";
+import "../../../interfaces/external/convex/frax/IBoosterFrax.sol";
+import "../../../interfaces/external/convex/frax/IPoolRegistryFrax.sol";
+import "../../../interfaces/external/convex/frax/IFeeRegistryFrax.sol";
 import "../../../interfaces/external/convex/frax/IStakingProxyERC20.sol";
 
 import "./GenericAaveUpgradeable.sol";
@@ -21,9 +21,9 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
 
     AggregatorV3Interface private constant oracleFXS =
         AggregatorV3Interface(0x6Ebc52C8C1089be9eB3945C4350B68B8E4C2233f);
-    IBooster private constant booster = IBooster(0x9cA3EC5f627ad5D92498Fd1b006b35577760ba9A);
-    IPoolRegistry private constant poolRegistry = IPoolRegistry(0x41a5881c17185383e19Df6FA4EC158a6F4851A69);
-    IFeeRegistry private constant feeRegistry = IFeeRegistry(0xC9aCB83ADa68413a6Aa57007BC720EE2E2b3C46D);
+    IBoosterFrax private constant booster = IBoosterFrax(0x9cA3EC5f627ad5D92498Fd1b006b35577760ba9A);
+    IPoolRegistryFrax private constant poolRegistry = IPoolRegistryFrax(0x41a5881c17185383e19Df6FA4EC158a6F4851A69);
+    IFeeRegistryFrax private constant feeRegistry = IFeeRegistryFrax(0xC9aCB83ADa68413a6Aa57007BC720EE2E2b3C46D);
     uint256 private constant convexPid = 2;
 
     IFraxUnifiedFarmTemplate private constant aFraxStakingContract =
@@ -145,12 +145,13 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
             lastLiquidity = amountFRAXControlled;
             IERC20(address(_aToken)).safeApprove(address(vault), amountFRAXControlled);
             kekId = keccak256(abi.encodePacked(address(vault), block.timestamp, amountFRAXControlled, uint256(0)));
+
             vault.stakeLocked(amountFRAXControlled, stakingPeriod);
 
             // We need to round down the `freedAmount` value because values can be rounded down when transfering aTokens
             // and we may stake slightly less than desired: to play it safe in all cases and avoid multiple calls, we
             // systematically round down
-            freedAmount = amount - 1;
+            freedAmount = amount;
         } else {
             lastLiquidity = 0;
             lastCreatedStake = 0;
