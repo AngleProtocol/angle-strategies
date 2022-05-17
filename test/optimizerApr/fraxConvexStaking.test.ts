@@ -102,7 +102,7 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
         {
           forking: {
             jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
-            blockNumber: 14786806,
+            blockNumber: 14786816,
           },
         },
       ],
@@ -165,245 +165,245 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
     amountStorage = utils.parseEther('1').toHexString().replace('0x0', '0x');
   });
 
-  describe('Contructor', () => {
-    it('reverts - too small saking period and already initialized', async () => {
-      const lender = (await deployUpgradeable(
-        new GenericAaveFraxConvexStaker__factory(guardian),
-      )) as GenericAaveFraxConvexStaker;
-      await expect(
-        lender.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address], 0),
-      ).to.be.revertedWith('TooSmallStakingPeriod()');
-      await expect(
-        lenderAave.initialize(
-          strategy.address,
-          'test',
-          true,
-          [governor.address],
-          guardian.address,
-          [keeper.address],
-          0,
-        ),
-      ).to.be.revertedWith('Initializable: contract is already initialized');
-    });
-  });
+  // describe('Contructor', () => {
+  //   it('reverts - too small saking period and already initialized', async () => {
+  //     const lender = (await deployUpgradeable(
+  //       new GenericAaveFraxConvexStaker__factory(guardian),
+  //     )) as GenericAaveFraxConvexStaker;
+  //     await expect(
+  //       lender.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address], 0),
+  //     ).to.be.revertedWith('TooSmallStakingPeriod()');
+  //     await expect(
+  //       lenderAave.initialize(
+  //         strategy.address,
+  //         'test',
+  //         true,
+  //         [governor.address],
+  //         guardian.address,
+  //         [keeper.address],
+  //         0,
+  //       ),
+  //     ).to.be.revertedWith('Initializable: contract is already initialized');
+  //   });
+  // });
 
-  describe('Parameters', () => {
-    it('success - well set', async () => {
-      expect(await lenderAave.stakingPeriod()).to.be.equal(BigNumber.from(DAY.toString()));
-      expect(await lenderAave.cooldownSeconds()).to.be.equal(await stkAave.COOLDOWN_SECONDS());
-      expect(await lenderAave.unstakeWindow()).to.be.equal(await stkAave.UNSTAKE_WINDOW());
-      expect(await lenderAave.isIncentivised()).to.be.equal(true);
-      expect(await lenderAave.cooldownStkAave()).to.be.equal(true);
-      expect(await lenderAave.poolManager()).to.be.equal(manager.address);
-      expect(await lenderAave.want()).to.be.equal(token.address);
-      expect(await lenderAave.wantBase()).to.be.equal(parseUnits('1', await token.decimals()));
-      expect(await stkAave.allowance(lenderAave.address, oneInch)).to.be.equal(ethers.constants.MaxUint256);
-    });
-  });
+  // describe('Parameters', () => {
+  //   it('success - well set', async () => {
+  //     expect(await lenderAave.stakingPeriod()).to.be.equal(BigNumber.from(DAY.toString()));
+  //     expect(await lenderAave.cooldownSeconds()).to.be.equal(await stkAave.COOLDOWN_SECONDS());
+  //     expect(await lenderAave.unstakeWindow()).to.be.equal(await stkAave.UNSTAKE_WINDOW());
+  //     expect(await lenderAave.isIncentivised()).to.be.equal(true);
+  //     expect(await lenderAave.cooldownStkAave()).to.be.equal(true);
+  //     expect(await lenderAave.poolManager()).to.be.equal(manager.address);
+  //     expect(await lenderAave.want()).to.be.equal(token.address);
+  //     expect(await lenderAave.wantBase()).to.be.equal(parseUnits('1', await token.decimals()));
+  //     expect(await stkAave.allowance(lenderAave.address, oneInch)).to.be.equal(ethers.constants.MaxUint256);
+  //   });
+  // });
 
-  describe('AccessControl', () => {
-    it('reverts - guardian only functions', async () => {
-      await expect(lenderAave.connect(user).setLockTime(ethers.constants.Zero)).to.be.revertedWith(guardianError);
-      await expect(
-        lenderAave
-          .connect(user)
-          .changeAllowance([aToken.address], [aFraxStakingContract.address], [ethers.constants.Zero]),
-      ).to.be.revertedWith(guardianError);
-      await expect(lenderAave.connect(user).sweep(ZERO_ADDRESS, governor.address)).to.be.revertedWith(guardianError);
-    });
-  });
+  // describe('AccessControl', () => {
+  //   it('reverts - guardian only functions', async () => {
+  //     await expect(lenderAave.connect(user).setLockTime(ethers.constants.Zero)).to.be.revertedWith(guardianError);
+  //     await expect(
+  //       lenderAave
+  //         .connect(user)
+  //         .changeAllowance([aToken.address], [aFraxStakingContract.address], [ethers.constants.Zero]),
+  //     ).to.be.revertedWith(guardianError);
+  //     await expect(lenderAave.connect(user).sweep(ZERO_ADDRESS, governor.address)).to.be.revertedWith(guardianError);
+  //   });
+  // });
 
-  describe('Keeper functions', () => {
-    describe('setAavePoolVariables', () => {
-      it('success - values well set', async () => {
-        await lenderAave.setAavePoolVariables();
-        expect(await lenderAave.cooldownSeconds()).to.be.equal(await stkAave.COOLDOWN_SECONDS());
-        expect(await lenderAave.unstakeWindow()).to.be.equal(await stkAave.UNSTAKE_WINDOW());
-      });
-    });
-    describe('cooldown', () => {
-      it('reverts - when not keeper', async () => {
-        await expect(lenderAave.connect(user).cooldown()).to.be.revertedWith(keeperError);
-        await expect(lenderAave.connect(keeper).cooldown()).to.be.revertedWith('INVALID_BALANCE_ON_COOLDOWN');
-      });
-      it('success - cooldown activated', async () => {
-        await impersonate(stkAaveHolder, async acc => {
-          await network.provider.send('hardhat_setBalance', [stkAaveHolder, amountStorage]);
-          await (await stkAave.connect(acc).transfer(lenderAave.address, parseEther('1'))).wait();
-        });
-        await lenderAave.connect(keeper).cooldown();
-        expect(await stkAave.stakersCooldowns(lenderAave.address)).to.be.equal(await latestTime());
-      });
-    });
-    // describe('sellRewards', () => {
-    //   it('reverts - when not keeper or incorrect payload', async () => {
-    //     await expect(lenderAave.connect(user).sellRewards(0, '0x')).to.be.revertedWith(keeperError);
-    //     await expect(lenderAave.connect(keeper).sellRewards(0, '0x')).to.be.reverted;
-    //     // Payload for swapping 10**(-6) AAVE to USDC
-    //     const payload =
-    //       '0x2e95b6c80000000000000000000000007fc66500c84a76ad7e9c93437bfc5ac33e2ddae9000000000000000000000000000000000000000000000000000000e8d4a510' +
-    //       '00000000000000000000000000000000000000000000000000000000000000007' +
-    //       '200000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000002000' +
-    //       '00000000000003b6d03409909d09656fce21d1904f662b99382b887a9c5da80000000000000003b6d0340466d82b7d15af812fb6c788d7b15c635fa933499cfee7c08';
-    //     await expect(lenderAave.connect(keeper).sellRewards(0, payload)).to.be.reverted;
-    //   });
-    //   it('reverts - when 1Inch router was not approved', async () => {
-    //     await setTokenBalanceFor(token, strategy.address, 1000000);
-    //     await (await strategy.connect(keeper)['harvest()']()).wait();
+  // describe('Keeper functions', () => {
+  //   describe('setAavePoolVariables', () => {
+  //     it('success - values well set', async () => {
+  //       await lenderAave.setAavePoolVariables();
+  //       expect(await lenderAave.cooldownSeconds()).to.be.equal(await stkAave.COOLDOWN_SECONDS());
+  //       expect(await lenderAave.unstakeWindow()).to.be.equal(await stkAave.UNSTAKE_WINDOW());
+  //     });
+  //   });
+  //   describe('cooldown', () => {
+  //     it('reverts - when not keeper', async () => {
+  //       await expect(lenderAave.connect(user).cooldown()).to.be.revertedWith(keeperError);
+  //       await expect(lenderAave.connect(keeper).cooldown()).to.be.revertedWith('INVALID_BALANCE_ON_COOLDOWN');
+  //     });
+  //     it('success - cooldown activated', async () => {
+  //       await impersonate(stkAaveHolder, async acc => {
+  //         await network.provider.send('hardhat_setBalance', [stkAaveHolder, amountStorage]);
+  //         await (await stkAave.connect(acc).transfer(lenderAave.address, parseEther('1'))).wait();
+  //       });
+  //       await lenderAave.connect(keeper).cooldown();
+  //       expect(await stkAave.stakersCooldowns(lenderAave.address)).to.be.equal(await latestTime());
+  //     });
+  //   });
+  //   // describe('sellRewards', () => {
+  //   //   it('reverts - when not keeper or incorrect payload', async () => {
+  //   //     await expect(lenderAave.connect(user).sellRewards(0, '0x')).to.be.revertedWith(keeperError);
+  //   //     await expect(lenderAave.connect(keeper).sellRewards(0, '0x')).to.be.reverted;
+  //   //     // Payload for swapping 10**(-6) AAVE to USDC
+  //   //     const payload =
+  //   //       '0x2e95b6c80000000000000000000000007fc66500c84a76ad7e9c93437bfc5ac33e2ddae9000000000000000000000000000000000000000000000000000000e8d4a510' +
+  //   //       '00000000000000000000000000000000000000000000000000000000000000007' +
+  //   //       '200000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000002000' +
+  //   //       '00000000000003b6d03409909d09656fce21d1904f662b99382b887a9c5da80000000000000003b6d0340466d82b7d15af812fb6c788d7b15c635fa933499cfee7c08';
+  //   //     await expect(lenderAave.connect(keeper).sellRewards(0, payload)).to.be.reverted;
+  //   //   });
+  //   //   it('reverts - when 1Inch router was not approved', async () => {
+  //   //     await setTokenBalanceFor(token, strategy.address, 1000000);
+  //   //     await (await strategy.connect(keeper)['harvest()']()).wait();
 
-    //     // let days pass to have a non negligible gain
-    //     await time.increase(DAY * 7);
+  //   //     // let days pass to have a non negligible gain
+  //   //     await time.increase(DAY * 7);
 
-    //     await (await lenderAave.connect(user).claimRewardsExternal()).wait();
-    //     expect(await nativeRewardToken.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
-    //     expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
-    //     // Payload to swap 100 FXS to FRAX
-    //     const payload =
-    //       '0x2e95b6c80000000000000000000000003432b6a60d23ca0dfca7761b7ab56459d9c964d00000000000000000000000000000000000000000000000056bc7' +
-    //       '5e2d6310000000000000000000000000000000000000000000000000005b0bf8af86b3d154cc00000000000000000000000000000000000000000000000000' +
-    //       '00000000000080000000000000000000000000000000000000000000000000000000000000000100000000000000003b6d0340e1573b9d29e2183' +
-    //       'b1af0e743dc2754979a40d237cfee7c08';
-    //     await expect(lenderAave.connect(keeper).sellRewards(0, payload)).to.be.reverted;
-    //   });
-    //   it('success - FXS token swap', async () => {
-    //     await setTokenBalanceFor(token, strategy.address, 1000000);
-    //     await (await strategy.connect(keeper)['harvest()']()).wait();
+  //   //     await (await lenderAave.connect(user).claimRewardsExternal()).wait();
+  //   //     expect(await nativeRewardToken.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
+  //   //     expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
+  //   //     // Payload to swap 100 FXS to FRAX
+  //   //     const payload =
+  //   //       '0x2e95b6c80000000000000000000000003432b6a60d23ca0dfca7761b7ab56459d9c964d00000000000000000000000000000000000000000000000056bc7' +
+  //   //       '5e2d6310000000000000000000000000000000000000000000000000005b0bf8af86b3d154cc00000000000000000000000000000000000000000000000000' +
+  //   //       '00000000000080000000000000000000000000000000000000000000000000000000000000000100000000000000003b6d0340e1573b9d29e2183' +
+  //   //       'b1af0e743dc2754979a40d237cfee7c08';
+  //   //     await expect(lenderAave.connect(keeper).sellRewards(0, payload)).to.be.reverted;
+  //   //   });
+  //   //   it('success - FXS token swap', async () => {
+  //   //     await setTokenBalanceFor(token, strategy.address, 1000000);
+  //   //     await (await strategy.connect(keeper)['harvest()']()).wait();
 
-    //     // let days pass to have a non negligible gain
-    //     await time.increase(DAY * 7);
+  //   //     // let days pass to have a non negligible gain
+  //   //     await time.increase(DAY * 7);
 
-    //     await (await lenderAave.connect(user).claimRewardsExternal()).wait();
-    //     const balanceBefore = await nativeRewardToken.balanceOf(lenderAave.address);
-    //     expect(balanceBefore).to.be.gte(parseUnits('0', tokenDecimal));
-    //     expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
-    //     // Payload to swap 100 FXS to FRAX
-    //     const payload =
-    //       '0x2e95b6c80000000000000000000000003432b6a60d23ca0dfca7761b7ab56459d9c964d00000000000000000000000000000000000000000000000056bc7' +
-    //       '5e2d6310000000000000000000000000000000000000000000000000005b0bf8af86b3d154cc00000000000000000000000000000000000000000000000000' +
-    //       '00000000000080000000000000000000000000000000000000000000000000000000000000000100000000000000003b6d0340e1573b9d29e2183' +
-    //       'b1af0e743dc2754979a40d237cfee7c08';
-    //     await lenderAave
-    //       .connect(guardian)
-    //       .changeAllowance(
-    //         [nativeRewardToken.address],
-    //         ['0x1111111254fb6c44bAC0beD2854e76F90643097d'],
-    //         [parseEther('1000')],
-    //       );
-    //     await lenderAave.connect(keeper).sellRewards(0, payload);
-    //     expect(await nativeRewardToken.balanceOf(lenderAave.address)).to.be.equal(balanceBefore.sub(parseEther('100')));
-    //     expect(await frax.balanceOf(lenderAave.address)).to.be.gt(parseEther('100'));
-    //   });
-    //   it('reverts - FXS token swap but looses from slippage protection', async () => {
-    //     await setTokenBalanceFor(token, strategy.address, 1000000);
-    //     await (await strategy.connect(keeper)['harvest()']()).wait();
+  //   //     await (await lenderAave.connect(user).claimRewardsExternal()).wait();
+  //   //     const balanceBefore = await nativeRewardToken.balanceOf(lenderAave.address);
+  //   //     expect(balanceBefore).to.be.gte(parseUnits('0', tokenDecimal));
+  //   //     expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
+  //   //     // Payload to swap 100 FXS to FRAX
+  //   //     const payload =
+  //   //       '0x2e95b6c80000000000000000000000003432b6a60d23ca0dfca7761b7ab56459d9c964d00000000000000000000000000000000000000000000000056bc7' +
+  //   //       '5e2d6310000000000000000000000000000000000000000000000000005b0bf8af86b3d154cc00000000000000000000000000000000000000000000000000' +
+  //   //       '00000000000080000000000000000000000000000000000000000000000000000000000000000100000000000000003b6d0340e1573b9d29e2183' +
+  //   //       'b1af0e743dc2754979a40d237cfee7c08';
+  //   //     await lenderAave
+  //   //       .connect(guardian)
+  //   //       .changeAllowance(
+  //   //         [nativeRewardToken.address],
+  //   //         ['0x1111111254fb6c44bAC0beD2854e76F90643097d'],
+  //   //         [parseEther('1000')],
+  //   //       );
+  //   //     await lenderAave.connect(keeper).sellRewards(0, payload);
+  //   //     expect(await nativeRewardToken.balanceOf(lenderAave.address)).to.be.equal(balanceBefore.sub(parseEther('100')));
+  //   //     expect(await frax.balanceOf(lenderAave.address)).to.be.gt(parseEther('100'));
+  //   //   });
+  //   //   it('reverts - FXS token swap but looses from slippage protection', async () => {
+  //   //     await setTokenBalanceFor(token, strategy.address, 1000000);
+  //   //     await (await strategy.connect(keeper)['harvest()']()).wait();
 
-    //     // let days pass to have a non negligible gain
-    //     await time.increase(DAY * 7);
+  //   //     // let days pass to have a non negligible gain
+  //   //     await time.increase(DAY * 7);
 
-    //     await (await lenderAave.connect(user).claimRewardsExternal()).wait();
-    //     const balanceBefore = await nativeRewardToken.balanceOf(lenderAave.address);
-    //     expect(balanceBefore).to.be.gte(parseUnits('0', tokenDecimal));
-    //     expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
-    //     // Payload to swap 100 FXS to FRAX
-    //     const payload =
-    //       '0x2e95b6c80000000000000000000000003432b6a60d23ca0dfca7761b7ab56459d9c964d00000000000000000000000000000000000000000000000056bc7' +
-    //       '5e2d6310000000000000000000000000000000000000000000000000005b0bf8af86b3d154cc00000000000000000000000000000000000000000000000000' +
-    //       '00000000000080000000000000000000000000000000000000000000000000000000000000000100000000000000003b6d0340e1573b9d29e2183' +
-    //       'b1af0e743dc2754979a40d237cfee7c08';
-    //     await lenderAave
-    //       .connect(guardian)
-    //       .changeAllowance(
-    //         [nativeRewardToken.address],
-    //         ['0x1111111254fb6c44bAC0beD2854e76F90643097d'],
-    //         [parseEther('1000')],
-    //       );
-    //     await expect(lenderAave.connect(keeper).sellRewards(parseEther('10000000'), payload)).to.be.revertedWith(
-    //       'TooSmallAmount',
-    //     );
-    //   });
-    // });
-  });
+  //   //     await (await lenderAave.connect(user).claimRewardsExternal()).wait();
+  //   //     const balanceBefore = await nativeRewardToken.balanceOf(lenderAave.address);
+  //   //     expect(balanceBefore).to.be.gte(parseUnits('0', tokenDecimal));
+  //   //     expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
+  //   //     // Payload to swap 100 FXS to FRAX
+  //   //     const payload =
+  //   //       '0x2e95b6c80000000000000000000000003432b6a60d23ca0dfca7761b7ab56459d9c964d00000000000000000000000000000000000000000000000056bc7' +
+  //   //       '5e2d6310000000000000000000000000000000000000000000000000005b0bf8af86b3d154cc00000000000000000000000000000000000000000000000000' +
+  //   //       '00000000000080000000000000000000000000000000000000000000000000000000000000000100000000000000003b6d0340e1573b9d29e2183' +
+  //   //       'b1af0e743dc2754979a40d237cfee7c08';
+  //   //     await lenderAave
+  //   //       .connect(guardian)
+  //   //       .changeAllowance(
+  //   //         [nativeRewardToken.address],
+  //   //         ['0x1111111254fb6c44bAC0beD2854e76F90643097d'],
+  //   //         [parseEther('1000')],
+  //   //       );
+  //   //     await expect(lenderAave.connect(keeper).sellRewards(parseEther('10000000'), payload)).to.be.revertedWith(
+  //   //       'TooSmallAmount',
+  //   //     );
+  //   //   });
+  //   // });
+  // });
 
-  describe('Governance functions', () => {
-    describe('setLockTime', () => {
-      it('reverts - too small staking period', async () => {
-        await expect(lenderAave.connect(guardian).setLockTime(ethers.constants.Zero)).to.be.revertedWith(
-          'TooSmallStakingPeriod',
-        );
-      });
-      it('success - staking period updated', async () => {
-        await lenderAave.connect(guardian).setLockTime(parseUnits((2 * DAY).toString(), 0));
-        expect(await lenderAave.stakingPeriod()).to.be.equal(parseUnits((2 * DAY).toString(), 0));
-      });
-    });
-    describe('setProxyBoost', () => {
-      it('success - proxy boost set', async () => {
-        const veFXSMultiplierConvex = await aFraxStakingContract.veFXSMultiplier(await lenderAave.vault());
-        expect(veFXSMultiplierConvex).to.be.equal(parseUnits('2', 18));
-      });
-    });
-    describe('sweep', () => {
-      it('reverts - protected token', async () => {
-        await expect(lenderAave.connect(guardian).sweep(token.address, guardian.address)).to.be.revertedWith(
-          'ProtectedToken',
-        );
-      });
-      it('success - balance correctly swept', async () => {
-        await setTokenBalanceFor(token, strategy.address, 1000000);
-        await (await strategy.connect(keeper)['harvest()']()).wait();
+  // describe('Governance functions', () => {
+  //   describe('setLockTime', () => {
+  //     it('reverts - too small staking period', async () => {
+  //       await expect(lenderAave.connect(guardian).setLockTime(ethers.constants.Zero)).to.be.revertedWith(
+  //         'TooSmallStakingPeriod',
+  //       );
+  //     });
+  //     it('success - staking period updated', async () => {
+  //       await lenderAave.connect(guardian).setLockTime(parseUnits((2 * DAY).toString(), 0));
+  //       expect(await lenderAave.stakingPeriod()).to.be.equal(parseUnits((2 * DAY).toString(), 0));
+  //     });
+  //   });
+  //   describe('setProxyBoost', () => {
+  //     it('success - proxy boost set', async () => {
+  //       const veFXSMultiplierConvex = await aFraxStakingContract.veFXSMultiplier(await lenderAave.vault());
+  //       expect(veFXSMultiplierConvex).to.be.equal(parseUnits('2', 18));
+  //     });
+  //   });
+  //   describe('sweep', () => {
+  //     it('reverts - protected token', async () => {
+  //       await expect(lenderAave.connect(guardian).sweep(token.address, guardian.address)).to.be.revertedWith(
+  //         'ProtectedToken',
+  //       );
+  //     });
+  //     it('success - balance correctly swept', async () => {
+  //       await setTokenBalanceFor(token, strategy.address, 1000000);
+  //       await (await strategy.connect(keeper)['harvest()']()).wait();
 
-        // let days pass to have a non negligible gain
-        await time.increase(DAY * 7);
-        // Accumulating stkAave and FXS
-        await (await lenderAave.connect(user).claimRewardsExternal()).wait();
-        const balanceBefore = await nativeRewardToken.balanceOf(lenderAave.address);
-        expect(balanceBefore).to.be.gte(parseUnits('0', tokenDecimal));
-        expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
-        expect(await nativeRewardToken.balanceOf(guardian.address)).to.be.equal(0);
-        expect(await stkAave.balanceOf(guardian.address)).to.be.equal(0);
-        await lenderAave.connect(guardian).sweep(nativeRewardToken.address, guardian.address);
-        await lenderAave.connect(guardian).sweep(stkAave.address, guardian.address);
-        expect(await nativeRewardToken.balanceOf(guardian.address)).to.be.gte(parseUnits('0', tokenDecimal));
-        expect(await stkAave.balanceOf(guardian.address)).to.be.gte(parseUnits('0', tokenDecimal));
-      });
-    });
-  });
+  //       // let days pass to have a non negligible gain
+  //       await time.increase(DAY * 7);
+  //       // Accumulating stkAave and FXS
+  //       await (await lenderAave.connect(user).claimRewardsExternal()).wait();
+  //       const balanceBefore = await nativeRewardToken.balanceOf(lenderAave.address);
+  //       expect(balanceBefore).to.be.gte(parseUnits('0', tokenDecimal));
+  //       expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
+  //       expect(await nativeRewardToken.balanceOf(guardian.address)).to.be.equal(0);
+  //       expect(await stkAave.balanceOf(guardian.address)).to.be.equal(0);
+  //       await lenderAave.connect(guardian).sweep(nativeRewardToken.address, guardian.address);
+  //       await lenderAave.connect(guardian).sweep(stkAave.address, guardian.address);
+  //       expect(await nativeRewardToken.balanceOf(guardian.address)).to.be.gte(parseUnits('0', tokenDecimal));
+  //       expect(await stkAave.balanceOf(guardian.address)).to.be.gte(parseUnits('0', tokenDecimal));
+  //     });
+  //   });
+  // });
 
-  describe('View functions', () => {
-    it('apr - no funds', async () => {
-      await (await strategy.connect(keeper)['harvest()']()).wait();
-      const apr = await lenderAave.connect(keeper).apr();
-      // at mainnet fork time there is 1.84% coming from liquidity rate, 0.02% coming from incentives
-      // and 0% as no funds deposited yet on the strat
-      expect(apr).to.be.closeTo(parseUnits('0.0186', 18), parseUnits('0.001', 18));
-      const weightedAPR = await lenderAave.weightedApr();
-      const nav = await lenderAave.nav();
-      expect(nav).to.be.equal(0);
-      expect(weightedAPR).to.be.equal(0);
-    });
-    it('apr - convex boost', async () => {
-      await setTokenBalanceFor(token, strategy.address, 1000000);
-      await (await strategy.connect(keeper)['harvest()']()).wait();
-      const apr = await lenderAave.connect(keeper).apr();
-      // at mainnet fork time there is 1.84% coming from liquidity rate, 0.02% coming from incentives
-      // and 15.6% (computed by hand because apr displyed on Frax front is wrong)
-      expect(apr).to.be.closeTo(parseUnits('0.173', 18), parseUnits('0.005', 18));
-      const weightedAPR = await lenderAave.weightedApr();
-      const nav = await lenderAave.nav();
-      expect(weightedAPR).to.be.equal(nav.mul(apr));
-    });
-    it('aprAfterDeposit', async () => {
-      const aprAfterDepositSupposed = await lenderAave
-        .connect(keeper)
-        .aprAfterDeposit(parseUnits('10000000', tokenDecimal));
+  // describe('View functions', () => {
+  //   it('apr - no funds', async () => {
+  //     await (await strategy.connect(keeper)['harvest()']()).wait();
+  //     const apr = await lenderAave.connect(keeper).apr();
+  //     // at mainnet fork time there is 1.84% coming from liquidity rate, 0.02% coming from incentives
+  //     // and 0% as no funds deposited yet on the strat
+  //     expect(apr).to.be.closeTo(parseUnits('0.0186', 18), parseUnits('0.001', 18));
+  //     const weightedAPR = await lenderAave.weightedApr();
+  //     const nav = await lenderAave.nav();
+  //     expect(nav).to.be.equal(0);
+  //     expect(weightedAPR).to.be.equal(0);
+  //   });
+  //   it('apr - convex boost', async () => {
+  //     await setTokenBalanceFor(token, strategy.address, 1000000);
+  //     await (await strategy.connect(keeper)['harvest()']()).wait();
+  //     const apr = await lenderAave.connect(keeper).apr();
+  //     // at mainnet fork time there is 1.84% coming from liquidity rate, 0.02% coming from incentives
+  //     // and 15.6% (computed by hand because apr displyed on Frax front is wrong)
+  //     expect(apr).to.be.closeTo(parseUnits('0.173', 18), parseUnits('0.005', 18));
+  //     const weightedAPR = await lenderAave.weightedApr();
+  //     const nav = await lenderAave.nav();
+  //     expect(weightedAPR).to.be.equal(nav.mul(apr));
+  //   });
+  //   it('aprAfterDeposit', async () => {
+  //     const aprAfterDepositSupposed = await lenderAave
+  //       .connect(keeper)
+  //       .aprAfterDeposit(parseUnits('10000000', tokenDecimal));
 
-      // Do the deposit and see if the values are indeed equals
-      await setTokenBalanceFor(token, strategy.address, 10000000);
-      await (await strategy.connect(keeper)['harvest()']()).wait();
-      const aprReal = await lenderAave.connect(keeper).apr();
-      expect(aprAfterDepositSupposed).to.be.closeTo(aprReal, parseUnits('0.001', 18));
-    });
-  });
+  //     // Do the deposit and see if the values are indeed equals
+  //     await setTokenBalanceFor(token, strategy.address, 10000000);
+  //     await (await strategy.connect(keeper)['harvest()']()).wait();
+  //     const aprReal = await lenderAave.connect(keeper).apr();
+  //     expect(aprAfterDepositSupposed).to.be.closeTo(aprReal, parseUnits('0.001', 18));
+  //   });
+  // });
 
   describe('Strategy deposits', () => {
     it('success - no previous lock', async () => {
@@ -449,6 +449,28 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       // going through the poolManager to not have to withdraw funds (because it would think we made a huge profit)
       await setTokenBalanceFor(token, manager.address, 1000000);
       await (await strategy.connect(keeper)['harvest()']()).wait();
+      const kekId = await lenderAave.kekId();
+      const stakerCreated = await lenderAave.lastCreatedStake();
+      await setTokenBalanceFor(token, manager.address, 1000000);
+      await (await strategy.connect(keeper)['harvest()']()).wait();
+
+      const kekIdAfter = await lenderAave.kekId();
+      const stakerCreatedAfter = await lenderAave.lastCreatedStake();
+      expect(kekIdAfter).to.be.equal(kekId);
+      expect(stakerCreatedAfter).to.be.equal(stakerCreated);
+
+      const underlyingBalance = await lenderAave.underlyingBalanceStored();
+      const balanceToken = await lenderAave.nav();
+      const balanceTokenStrat = await token.balanceOf(strategy.address);
+      expect(balanceToken).to.be.closeTo(parseUnits('2000000', tokenDecimal), parseUnits('1000', tokenDecimal));
+      expect(underlyingBalance).to.be.closeTo(parseUnits('2000000', tokenDecimal), parseUnits('1000', tokenDecimal));
+      expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
+    });
+    it('success - with previous lock and time elapsed ', async () => {
+      // going through the poolManager to not have to withdraw funds (because it would think we made a huge profit)
+      await setTokenBalanceFor(token, manager.address, 1000000);
+      await (await strategy.connect(keeper)['harvest()']()).wait();
+      await time.increase(DAY / 2);
       const kekId = await lenderAave.kekId();
       const stakerCreated = await lenderAave.lastCreatedStake();
       await setTokenBalanceFor(token, manager.address, 1000000);
@@ -532,7 +554,8 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       console.log('after the first harvest');
       // to let some surplus on the poolManager
       await manager.connect(guardian).updateStrategyDebtRatio(strategy.address, parseUnits('0.5', 9));
-      await (await strategy.connect(keeper)['harvest()']()).wait();
+      const tx = await (await strategy.connect(keeper)['harvest()']()).wait();
+      console.log('tx ', tx.transactionHash);
       // currently rate is at 1.84% so for 7 days we roughly divide by 52 --> 0.035% over the period
       const earnings = parseUnits('1000350', tokenDecimal);
 
@@ -705,64 +728,64 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
     });
   });
 
-  describe('Handle rewards', () => {
-    it('claimRewardsExternal - success - FXS+stkAave reward', async () => {
-      await setTokenBalanceFor(token, strategy.address, 1000000);
-      await (await strategy.connect(keeper)['harvest()']()).wait();
+  // describe('Handle rewards', () => {
+  //   it('claimRewardsExternal - success - FXS+stkAave reward', async () => {
+  //     await setTokenBalanceFor(token, strategy.address, 1000000);
+  //     await (await strategy.connect(keeper)['harvest()']()).wait();
 
-      // let days pass to have a non negligible gain
-      await time.increase(DAY * 7);
+  //     // let days pass to have a non negligible gain
+  //     await time.increase(DAY * 7);
 
-      await (await lenderAave.connect(user).claimRewardsExternal()).wait();
+  //     await (await lenderAave.connect(user).claimRewardsExternal()).wait();
 
-      expect(await nativeRewardToken.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
-      expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
-    });
-    it('claimRewardsExternal - success - verify apr', async () => {
-      const investAmount = 1000000;
-      await setTokenBalanceFor(token, strategy.address, investAmount);
-      await (await strategy.connect(keeper)['harvest()']()).wait();
+  //     expect(await nativeRewardToken.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
+  //     expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
+  //   });
+  //   it('claimRewardsExternal - success - verify apr', async () => {
+  //     const investAmount = 1000000;
+  //     await setTokenBalanceFor(token, strategy.address, investAmount);
+  //     await (await strategy.connect(keeper)['harvest()']()).wait();
 
-      const aprSupposed = await lenderAave.connect(keeper).apr();
+  //     const aprSupposed = await lenderAave.connect(keeper).apr();
 
-      // let days pass to have a non negligible gain
-      await time.increase(DAY * 7);
+  //     // let days pass to have a non negligible gain
+  //     await time.increase(DAY * 7);
 
-      await (await lenderAave.connect(user).claimRewardsExternal()).wait();
+  //     await (await lenderAave.connect(user).claimRewardsExternal()).wait();
 
-      let rewardNative = await nativeRewardToken.balanceOf(lenderAave.address);
-      let rewardStkAave = await stkAave.balanceOf(lenderAave.address);
-      rewardNative = rewardNative.mul((await oracleNativeReward.latestRoundData()).answer).div(parseUnits('1', 8));
-      rewardStkAave = rewardStkAave.mul((await oracleStkAave.latestRoundData()).answer).div(parseUnits('1', 8));
-      const interestToken = (await lenderAave.nav()).sub(parseUnits(investAmount.toString(), tokenDecimal));
-      // console.log(`FXS reward in USD:\t${logBN(rewardNative)}`);
-      // console.log(`stkAave reward in USD:\t${logBN(rewardStkAave)}`);
-      // console.log(`interest in USD:\t${logBN(interestToken)}`);
+  //     let rewardNative = await nativeRewardToken.balanceOf(lenderAave.address);
+  //     let rewardStkAave = await stkAave.balanceOf(lenderAave.address);
+  //     rewardNative = rewardNative.mul((await oracleNativeReward.latestRoundData()).answer).div(parseUnits('1', 8));
+  //     rewardStkAave = rewardStkAave.mul((await oracleStkAave.latestRoundData()).answer).div(parseUnits('1', 8));
+  //     const interestToken = (await lenderAave.nav()).sub(parseUnits(investAmount.toString(), tokenDecimal));
+  //     // console.log(`FXS reward in USD:\t${logBN(rewardNative)}`);
+  //     // console.log(`stkAave reward in USD:\t${logBN(rewardStkAave)}`);
+  //     // console.log(`interest in USD:\t${logBN(interestToken)}`);
 
-      // console.log(
-      //   `FXS apr:\t${logBN(
-      //     parseUnits('52', 18)
-      //       .mul(rewardNative.mul(parseUnits('0.95', 4)))
-      //       .div(parseUnits(investAmount.toString(), 22)),
-      //   )}`,
-      // );
-      // console.log(
-      //   `stkAave apr:\t${logBN(
-      //     parseUnits('52', 18)
-      //       .mul(rewardStkAave.mul(parseUnits('0.95', 4)))
-      //       .div(parseUnits(investAmount.toString(), 22)),
-      //   )}`,
-      // );
-      // console.log(`interest apr:\t${logBN(parseUnits('52', 18).mul(interestToken).div(parseUnits(investAmount.toString(), 18)))}`);
+  //     // console.log(
+  //     //   `FXS apr:\t${logBN(
+  //     //     parseUnits('52', 18)
+  //     //       .mul(rewardNative.mul(parseUnits('0.95', 4)))
+  //     //       .div(parseUnits(investAmount.toString(), 22)),
+  //     //   )}`,
+  //     // );
+  //     // console.log(
+  //     //   `stkAave apr:\t${logBN(
+  //     //     parseUnits('52', 18)
+  //     //       .mul(rewardStkAave.mul(parseUnits('0.95', 4)))
+  //     //       .div(parseUnits(investAmount.toString(), 22)),
+  //     //   )}`,
+  //     // );
+  //     // console.log(`interest apr:\t${logBN(parseUnits('52', 18).mul(interestToken).div(parseUnits(investAmount.toString(), 18)))}`);
 
-      // we roughly multiply by 52 weeks and don't take into account compounding
-      const impliedApr = parseUnits('52', 18)
-        .mul(rewardNative.add(rewardStkAave).add(interestToken))
-        .div(parseUnits(investAmount.toString(), 18));
+  //     // we roughly multiply by 52 weeks and don't take into account compounding
+  //     const impliedApr = parseUnits('52', 18)
+  //       .mul(rewardNative.add(rewardStkAave).add(interestToken))
+  //       .div(parseUnits(investAmount.toString(), 18));
 
-      console.log(`supposed apr --> implied apr:\t${logBN(aprSupposed)} --> ${logBN(impliedApr)}`);
+  //     console.log(`supposed apr --> implied apr:\t${logBN(aprSupposed)} --> ${logBN(impliedApr)}`);
 
-      expect(impliedApr).to.be.closeTo(aprSupposed, parseUnits('0.005', 18));
-    });
-  });
+  //     expect(impliedApr).to.be.closeTo(aprSupposed, parseUnits('0.005', 18));
+  //   });
+  // });
 });
