@@ -236,4 +236,35 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         // fxsPriceUSD is in base 8
         return (uint256(fxsPriceUSD) * amount) / 1e8;
     }
+
+    /**
+     * @dev Multiplies two ray, rounding half up to the nearest ray
+     * @param a Ray
+     * @param b Ray
+     * @return The result of a*b, in ray
+     **/
+    function rayMul(uint256 a, uint256 b) internal pure returns (uint256) {
+        if (a == 0 || b == 0) {
+            return 0;
+        }
+
+        require(a <= (type(uint256).max - halfRAY) / b, "muk");
+
+        return (a * b + halfRAY) / RAY;
+    }
+
+    /**
+     * @dev Divides two ray, rounding half up to the nearest ray
+     * @param a Ray
+     * @param b Ray
+     * @return The result of a/b, in ray
+     **/
+    function rayDiv(uint256 a, uint256 b) internal pure returns (uint256) {
+        require(b != 0, "div 0");
+        uint256 halfB = b / 2;
+
+        require(a <= (type(uint256).max - halfB) / RAY, "div");
+
+        return (a * RAY + halfB) / b;
+    }
 }
