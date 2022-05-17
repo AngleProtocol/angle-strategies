@@ -102,11 +102,7 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
         {
           forking: {
             jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
-<<<<<<< HEAD
             blockNumber: 14786812,
-=======
-            blockNumber: 14786806,
->>>>>>> b41249a (most tests working - chaotic issue with withdraw - success - restake)
           },
         },
       ],
@@ -489,7 +485,8 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
 
       // to let some surplus on the poolManager
       await manager.connect(guardian).updateStrategyDebtRatio(strategy.address, parseUnits('0.5', 9));
-      await (await strategy.connect(keeper)['harvest()']()).wait();
+      const tx = await (await strategy.connect(keeper)['harvest()']()).wait();
+      console.log('tx ', tx.transactionHash);
       // currently rate is at 1.84% so for 7 days we roughly divide by 52 --> 0.035% over the period
       const earnings = parseUnits('1000350', tokenDecimal);
 
@@ -662,64 +659,64 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
     });
   });
 
-  describe('Handle rewards', () => {
-    it('claimRewardsExternal - success - FXS+stkAave reward', async () => {
-      await setTokenBalanceFor(token, strategy.address, 1000000);
-      await (await strategy.connect(keeper)['harvest()']()).wait();
+  // describe('Handle rewards', () => {
+  //   it('claimRewardsExternal - success - FXS+stkAave reward', async () => {
+  //     await setTokenBalanceFor(token, strategy.address, 1000000);
+  //     await (await strategy.connect(keeper)['harvest()']()).wait();
 
-      // let days pass to have a non negligible gain
-      await time.increase(DAY * 7);
+  //     // let days pass to have a non negligible gain
+  //     await time.increase(DAY * 7);
 
-      await (await lenderAave.connect(user).claimRewardsExternal()).wait();
+  //     await (await lenderAave.connect(user).claimRewardsExternal()).wait();
 
-      expect(await nativeRewardToken.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
-      expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
-    });
-    it('claimRewardsExternal - success - verify apr', async () => {
-      const investAmount = 1000000;
-      await setTokenBalanceFor(token, strategy.address, investAmount);
-      await (await strategy.connect(keeper)['harvest()']()).wait();
+  //     expect(await nativeRewardToken.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
+  //     expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
+  //   });
+  //   it('claimRewardsExternal - success - verify apr', async () => {
+  //     const investAmount = 1000000;
+  //     await setTokenBalanceFor(token, strategy.address, investAmount);
+  //     await (await strategy.connect(keeper)['harvest()']()).wait();
 
-      const aprSupposed = await lenderAave.connect(keeper).apr();
+  //     const aprSupposed = await lenderAave.connect(keeper).apr();
 
-      // let days pass to have a non negligible gain
-      await time.increase(DAY * 7);
+  //     // let days pass to have a non negligible gain
+  //     await time.increase(DAY * 7);
 
-      await (await lenderAave.connect(user).claimRewardsExternal()).wait();
+  //     await (await lenderAave.connect(user).claimRewardsExternal()).wait();
 
-      let rewardNative = await nativeRewardToken.balanceOf(lenderAave.address);
-      let rewardStkAave = await stkAave.balanceOf(lenderAave.address);
-      rewardNative = rewardNative.mul((await oracleNativeReward.latestRoundData()).answer).div(parseUnits('1', 8));
-      rewardStkAave = rewardStkAave.mul((await oracleStkAave.latestRoundData()).answer).div(parseUnits('1', 8));
-      const interestToken = (await lenderAave.nav()).sub(parseUnits(investAmount.toString(), tokenDecimal));
-      // console.log(`FXS reward in USD:\t${logBN(rewardNative)}`);
-      // console.log(`stkAave reward in USD:\t${logBN(rewardStkAave)}`);
-      // console.log(`interest in USD:\t${logBN(interestToken)}`);
+  //     let rewardNative = await nativeRewardToken.balanceOf(lenderAave.address);
+  //     let rewardStkAave = await stkAave.balanceOf(lenderAave.address);
+  //     rewardNative = rewardNative.mul((await oracleNativeReward.latestRoundData()).answer).div(parseUnits('1', 8));
+  //     rewardStkAave = rewardStkAave.mul((await oracleStkAave.latestRoundData()).answer).div(parseUnits('1', 8));
+  //     const interestToken = (await lenderAave.nav()).sub(parseUnits(investAmount.toString(), tokenDecimal));
+  //     // console.log(`FXS reward in USD:\t${logBN(rewardNative)}`);
+  //     // console.log(`stkAave reward in USD:\t${logBN(rewardStkAave)}`);
+  //     // console.log(`interest in USD:\t${logBN(interestToken)}`);
 
-      // console.log(
-      //   `FXS apr:\t${logBN(
-      //     parseUnits('52', 18)
-      //       .mul(rewardNative.mul(parseUnits('0.95', 4)))
-      //       .div(parseUnits(investAmount.toString(), 22)),
-      //   )}`,
-      // );
-      // console.log(
-      //   `stkAave apr:\t${logBN(
-      //     parseUnits('52', 18)
-      //       .mul(rewardStkAave.mul(parseUnits('0.95', 4)))
-      //       .div(parseUnits(investAmount.toString(), 22)),
-      //   )}`,
-      // );
-      // console.log(`interest apr:\t${logBN(parseUnits('52', 18).mul(interestToken).div(parseUnits(investAmount.toString(), 18)))}`);
+  //     // console.log(
+  //     //   `FXS apr:\t${logBN(
+  //     //     parseUnits('52', 18)
+  //     //       .mul(rewardNative.mul(parseUnits('0.95', 4)))
+  //     //       .div(parseUnits(investAmount.toString(), 22)),
+  //     //   )}`,
+  //     // );
+  //     // console.log(
+  //     //   `stkAave apr:\t${logBN(
+  //     //     parseUnits('52', 18)
+  //     //       .mul(rewardStkAave.mul(parseUnits('0.95', 4)))
+  //     //       .div(parseUnits(investAmount.toString(), 22)),
+  //     //   )}`,
+  //     // );
+  //     // console.log(`interest apr:\t${logBN(parseUnits('52', 18).mul(interestToken).div(parseUnits(investAmount.toString(), 18)))}`);
 
-      // we roughly multiply by 52 weeks and don't take into account compounding
-      const impliedApr = parseUnits('52', 18)
-        .mul(rewardNative.add(rewardStkAave).add(interestToken))
-        .div(parseUnits(investAmount.toString(), 18));
+  //     // we roughly multiply by 52 weeks and don't take into account compounding
+  //     const impliedApr = parseUnits('52', 18)
+  //       .mul(rewardNative.add(rewardStkAave).add(interestToken))
+  //       .div(parseUnits(investAmount.toString(), 18));
 
-      console.log(`supposed apr --> implied apr:\t${logBN(aprSupposed)} --> ${logBN(impliedApr)}`);
+  //     console.log(`supposed apr --> implied apr:\t${logBN(aprSupposed)} --> ${logBN(impliedApr)}`);
 
-      expect(impliedApr).to.be.closeTo(aprSupposed, parseUnits('0.005', 18));
-    });
-  });
+  //     expect(impliedApr).to.be.closeTo(aprSupposed, parseUnits('0.005', 18));
+  //   });
+  // });
 });
