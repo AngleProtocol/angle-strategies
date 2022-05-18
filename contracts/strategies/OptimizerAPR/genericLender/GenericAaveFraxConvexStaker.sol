@@ -114,33 +114,37 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         uint256 newReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
         lastAaveReserveNormalizedIncome = newReserveNormalizedIncome;
 
-        IERC20(address(_aToken)).safeApprove(address(vault), amount);
+        // Rounding errors due to Aave transfer that do not actually transfer the amount specified but an underlying balance
+        // that is corrected by an index (with function rayMul and rayDiv), when withd
+        console.log("amountFRAXControlled ", amount);
+        amount = _roundingATokenAmount(amount, newReserveNormalizedIncome);
+        console.log("post processed ", amount);
+
+        _changeAllowance(IERC20(address(_aToken)), address(vault), amount);
         if (kekId == bytes32(0)) {
             lastLiquidity = amount;
             lastCreatedStake = block.timestamp;
             kekId = keccak256(abi.encodePacked(address(vault), block.timestamp, amount, uint256(0)));
             vault.stakeLocked(amount, stakingPeriod);
         } else {
-            vault.lockAdditional(kekId, amount);
             // Updating the `lastLiquidity` value
             lastLiquidity = (lastLiquidity * newReserveNormalizedIncome) / pastReserveNormalizedIncome + amount;
+            vault.lockAdditional(kekId, amount);
         }
         stakedAmount = amount;
     }
 
     /// @notice Implementation of the `_unstake` function
     /// @dev If the minimum staking period is not finished, the function will revert
-    /// @dev This implementation assumes that there cannot any loss when staking on FRAX
+    /// @dev This implementation assumes that there cannot be any loss when staking on FRAX
     function _unstake(uint256 amount) internal override returns (uint256 freedAmount) {
         if (kekId == bytes32(0)) return 0;
 
-        lastAaveReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
+        uint256 lastAaveReserveNormalizedIncome_ = _lendingPool.getReserveNormalizedIncome(address(want));
+        lastAaveReserveNormalizedIncome = lastAaveReserveNormalizedIncome_;
 
-        // need to make the difference between now and before
-        freedAmount = _aToken.balanceOf(address(this));
         vault.withdrawLocked(kekId);
-        uint256 prevABalance = _aToken.balanceOf(address(this));
-        freedAmount = prevABalance - freedAmount;
+        freedAmount = _aToken.balanceOf(address(this));
 
         console.log("we want ", amount);
         console.log("we freed ", freedAmount);
@@ -152,32 +156,20 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
 
             // Rounding errors due to Aave transfer that do not actually transfer the amount specified but an underlying balance
             // that is corrected by an index (with function rayMul and rayDiv), when withd
-            uint256 lastAaveReserveNormalizedIncome_ = lastAaveReserveNormalizedIncome;
             console.log("amountFRAXControlled ", amountFRAXControlled);
-            uint256 amountFRAXControlled_ = (amountFRAXControlled * RAY + (lastAaveReserveNormalizedIncome_ / 2)) /
-                lastAaveReserveNormalizedIncome_;
-            amountFRAXControlled_ = ((amountFRAXControlled_ *
-                lastAaveReserveNormalizedIncome_ -
-                lastAaveReserveNormalizedIncome_ /
-                2) / RAY);
-            // uint256 amountFRAXControlled_ = rayDiv(amountFRAXControlled, lastAaveReserveNormalizedIncome_);
-            // amountFRAXControlled_ = rayMul(amountFRAXControlled, lastAaveReserveNormalizedIncome_);
-
-            console.log("post processed ", amountFRAXControlled_);
+            amountFRAXControlled = _roundingATokenAmount(amountFRAXControlled, lastAaveReserveNormalizedIncome_);
+            console.log("post processed ", amountFRAXControlled);
 
             lastLiquidity = amountFRAXControlled;
-            IERC20(address(_aToken)).safeApprove(address(vault), amountFRAXControlled);
+            _changeAllowance(IERC20(address(_aToken)), address(vault), amountFRAXControlled);
             kekId = keccak256(abi.encodePacked(address(vault), block.timestamp, amountFRAXControlled, uint256(0)));
 
-            console.log("prev aToken balance ", prevABalance);
-
             vault.stakeLocked(amountFRAXControlled, stakingPeriod);
+
             uint256 postABalance = _aToken.balanceOf(address(this));
             console.log("post aToken balance ", postABalance);
-            console.log("we sent aFRAX: ", prevABalance - postABalance);
-            // We need to round down the `freedAmount` value because values can be rounded down when transfering aTokens
-            // and we may stake slightly less than desired: to play it safe in all cases and avoid multiple calls, we
-            // systematically round down
+            console.log("we sent aFRAX: ", freedAmount - postABalance);
+            // We are limited on withdraw from Aave by the liquidity available and our aToken balance
             freedAmount = amount > postABalance ? postABalance : amount;
         } else {
             lastLiquidity = 0;
@@ -190,6 +182,17 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
     function _stakedBalance() internal view override returns (uint256 amount) {
         uint256 reserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
         return (lastLiquidity * reserveNormalizedIncome) / lastAaveReserveNormalizedIncome;
+    }
+
+    function _roundingATokenAmount(uint256 amount, uint256 lastAaveReserveNormalizedIncome_)
+        internal
+        pure
+        returns (uint256 roundedAmount)
+    {
+        roundedAmount = (amount * RAY + (lastAaveReserveNormalizedIncome_ / 2)) / lastAaveReserveNormalizedIncome_;
+        roundedAmount = ((roundedAmount * lastAaveReserveNormalizedIncome_ - lastAaveReserveNormalizedIncome_ / 2) /
+            RAY);
+        // uint256 roundedAmount = amount;
     }
 
     /// @notice Get stakingAPR after staking an additional `amount`
