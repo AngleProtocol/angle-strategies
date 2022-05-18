@@ -17,8 +17,11 @@ import {
   IProtocolDataProvider__factory,
   IProtocolDataProvider,
 } from '../../typechain';
-import { findBalancesSlot, setTokenBalanceFor } from '../utils-interaction';
+import { findBalancesSlot, logBN, setTokenBalanceFor } from '../utils-interaction';
 import { parseUnits } from 'ethers/lib/utils';
+import { BASE_PARAMS } from '../utils';
+import qs from 'qs';
+import axios from 'axios';
 
 describe('AaveFlashloanStrategy - Coverage', () => {
   // ATokens
@@ -43,9 +46,9 @@ describe('AaveFlashloanStrategy - Coverage', () => {
   let strategy: AaveFlashloanStrategy;
 
   // ReserveInterestRateStrategy for USDC
-  // const reserveInterestRateStrategy = '0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27';
+  const reserveInterestRateStrategy = '0x8Cae0596bC1eD42dc3F04c4506cfe442b3E74e27';
   // ReserveInterestRateStrategy for DAI
-  const reserveInterestRateStrategy = '0xfffE32106A68aA3eD39CcCE673B646423EEaB62a';
+  // const reserveInterestRateStrategy = '0xfffE32106A68aA3eD39CcCE673B646423EEaB62a';
 
   beforeEach(async () => {
     await network.provider.request({
@@ -60,8 +63,8 @@ describe('AaveFlashloanStrategy - Coverage', () => {
       ],
     });
 
-    // const tokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
-    const tokenAddress = '0x6B175474E89094C44Da98b954EedeAC495271d0F';
+    const tokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+    // const tokenAddress = '0x6B175474E89094C44Da98b954EedeAC495271d0F';
 
     wantToken = (await ethers.getContractAt(ERC20__factory.abi, tokenAddress)) as ERC20;
     decimalsToken = await wantToken.decimals();
@@ -155,48 +158,143 @@ describe('AaveFlashloanStrategy - Coverage', () => {
         await incentivesController
           .connect(acc)
           .configureAssets([aToken.address, debtToken.address], [ethers.constants.Zero, ethers.constants.Zero]);
+
+        await strategy.connect(keeper)['harvest(uint256)'](ethers.constants.Zero, { gasLimit: 3e6 });
+        const { borrows } = await strategy.getCurrentPosition();
+        expect(borrows).to.be.equal(ethers.constants.Zero);
       });
 
-      await strategy.connect(guardian).setBoolParams({
-        isFlashMintActive: true,
-        automaticallyComputeCollatRatio: (await strategy.boolParams()).automaticallyComputeCollatRatio,
-        withdrawCheck: false,
-        cooldownStkAave: (await strategy.boolParams()).cooldownStkAave,
+      it('onFlashLoan - revert', async () => {
+        await expect(
+          strategy
+            .connect(keeper)
+            .onFlashLoan(keeper.address, keeper.address, ethers.constants.Zero, ethers.constants.Zero, '0x'),
+        ).to.be.revertedWith('InvalidSender');
       });
 
-      await strategy.connect(keeper)['harvest(uint256)'](ethers.constants.Zero, { gasLimit: 3e6 });
-      const { borrows } = await strategy.getCurrentPosition();
-      expect(borrows).to.be.equal(ethers.constants.Zero);
-    });
+      it('cooldownStkAave - too soon', async () => {
+        await strategy['harvest()']({ gasLimit: 3e6 });
+        await expect((await strategy.boolParams()).cooldownStkAave).to.be.true;
 
-    it('onFlashLoan - revert', async () => {
-      await expect(
-        strategy
-          .connect(keeper)
-          .onFlashLoan(keeper.address, keeper.address, ethers.constants.Zero, ethers.constants.Zero, '0x'),
-      ).to.be.revertedWith('InvalidSender');
-    });
+        await network.provider.send('evm_increaseTime', [3600 * 24]);
+        await network.provider.send('evm_mine');
+        await strategy['harvest()']({ gasLimit: 3e6 });
 
-    it('cooldownStkAave - too soon', async () => {
-      await strategy['harvest()']({ gasLimit: 3e6 });
-      await expect((await strategy.boolParams()).cooldownStkAave).to.be.true;
+        await network.provider.send('evm_increaseTime', [3600 * 24 * 5]); // forward 11 days
+        await network.provider.send('evm_mine');
 
-      await network.provider.send('evm_increaseTime', [3600 * 24]);
-      await network.provider.send('evm_mine');
-      await strategy['harvest()']({ gasLimit: 3e6 });
+        const aaveBalanceBefore = parseFloat(utils.formatUnits(await aave.balanceOf(strategy.address), 18));
+        await strategy['harvest()']({ gasLimit: 3e6 });
+        const aaveBalanceAfterRedeem = parseFloat(utils.formatUnits(await aave.balanceOf(strategy.address), 18));
 
-      await network.provider.send('evm_increaseTime', [3600 * 24 * 5]); // forward 11 days
-      await network.provider.send('evm_mine');
+        expect(aaveBalanceAfterRedeem).to.be.closeTo(aaveBalanceBefore, 0.1);
+      });
+      it('estimatedAPR', async () => {
+        const estimatedAPR = await strategy.estimatedAPR();
+        expect(estimatedAPR).to.be.closeTo(parseUnits('0.026836', 18), parseUnits('0.005', 18));
+      });
 
-      const aaveBalanceBefore = parseFloat(utils.formatUnits(await aave.balanceOf(strategy.address), 18));
-      await strategy['harvest()']({ gasLimit: 3e6 });
-      const aaveBalanceAfterRedeem = parseFloat(utils.formatUnits(await aave.balanceOf(strategy.address), 18));
+      describe('freeFunds', () => {
+        // We should in anycase be able to be at the target debt ratio
+        it('Large borrow', async () => {
+          await strategy.connect(keeper)['harvest(uint256)'](ethers.constants.Zero, { gasLimit: 3e6 });
 
-      expect(aaveBalanceAfterRedeem).to.be.closeTo(aaveBalanceBefore, 0.1);
-    });
-    it('estimatedAPR', async () => {
-      const estimatedAPR = await strategy.estimatedAPR();
-      expect(estimatedAPR).to.be.closeTo(parseUnits('0.026836', 18), parseUnits('0.005', 18));
+          let { borrows } = await strategy.getCurrentPosition();
+          expect(borrows).to.gt(ethers.constants.Zero);
+
+          await impersonate(poolManager.address, async acc => {
+            const balanceStorage = utils.parseEther('1').toHexString().replace('0x0', '0x');
+            await network.provider.send('hardhat_setBalance', [acc.address, balanceStorage]);
+            const balanceManager = await wantToken.balanceOf(acc.address);
+            await wantToken.connect(acc).transfer(user.address, balanceManager);
+            expect(balanceManager).to.gt(ethers.constants.Zero);
+          });
+
+          await strategy.connect(keeper)['harvest(uint256)'](ethers.constants.Zero, { gasLimit: 3e6 });
+          ({ borrows } = await strategy.getCurrentPosition());
+          expect(borrows).to.gt(ethers.constants.Zero);
+          const balanceManager = await wantToken.balanceOf(poolManager.address);
+          const totalAsset = await poolManager.getTotalAsset();
+          const debtRatio = await poolManager.debtRatio();
+          expect(balanceManager).to.closeTo(
+            totalAsset.mul(BASE_PARAMS.sub(debtRatio)).div(BASE_PARAMS),
+            parseUnits('100', decimalsToken),
+          );
+        });
+
+        it('Small borrow', async () => {
+          const emissionAToken = (await incentivesController.assets(aToken.address)).emissionPerSecond;
+          const emissionDebtToken = (await incentivesController.assets(debtToken.address)).emissionPerSecond;
+          const multiplier = parseUnits('0.5985', 4);
+          const basePoint = parseUnits('1', 4);
+
+          // reduce the emission to limit leverage
+          await impersonate('0xEE56e2B3D491590B5b31738cC34d5232F378a8D5', async acc => {
+            await incentivesController
+              .connect(acc)
+              .configureAssets(
+                [aToken.address, debtToken.address],
+                [emissionAToken.mul(multiplier).div(basePoint), emissionDebtToken.mul(multiplier).div(basePoint)],
+              );
+          });
+
+          await strategy.connect(keeper)['harvest(uint256)'](ethers.constants.Zero, { gasLimit: 3e6 });
+
+          let { borrows } = await strategy.getCurrentPosition();
+          expect(borrows).to.gt(ethers.constants.Zero);
+
+          await impersonate(poolManager.address, async acc => {
+            const balanceStorage = utils.parseEther('1').toHexString().replace('0x0', '0x');
+            await network.provider.send('hardhat_setBalance', [acc.address, balanceStorage]);
+            const balanceManager = await wantToken.balanceOf(acc.address);
+            await wantToken.connect(acc).transfer(user.address, balanceManager);
+            expect(balanceManager).to.gt(ethers.constants.Zero);
+          });
+
+          await strategy.connect(keeper)['harvest(uint256)'](ethers.constants.Zero, { gasLimit: 3e6 });
+          const { borrows: newBorrows } = await strategy.getCurrentPosition();
+          expect(borrows).to.lt(newBorrows);
+          const balanceManager = await wantToken.balanceOf(poolManager.address);
+          const totalAsset = await poolManager.getTotalAsset();
+          const debtRatio = await poolManager.debtRatio();
+          expect(balanceManager).to.closeTo(
+            totalAsset.mul(BASE_PARAMS.sub(debtRatio)).div(BASE_PARAMS),
+            parseUnits('100', decimalsToken),
+          );
+        });
+        it('No borrow', async () => {
+          await impersonate('0xEE56e2B3D491590B5b31738cC34d5232F378a8D5', async acc => {
+            await incentivesController
+              .connect(acc)
+              .configureAssets([aToken.address, debtToken.address], [ethers.constants.Zero, ethers.constants.Zero]);
+          });
+
+          await strategy.connect(keeper)['harvest(uint256)'](ethers.constants.Zero, { gasLimit: 3e6 });
+
+          let { borrows } = await strategy.getCurrentPosition();
+          expect(borrows).to.equal(ethers.constants.Zero);
+
+          await impersonate(poolManager.address, async acc => {
+            const balanceStorage = utils.parseEther('1').toHexString().replace('0x0', '0x');
+            await network.provider.send('hardhat_setBalance', [acc.address, balanceStorage]);
+
+            const balanceManager = await wantToken.balanceOf(acc.address);
+            await wantToken.connect(acc).transfer(user.address, balanceManager);
+            expect(balanceManager).to.gt(ethers.constants.Zero);
+          });
+
+          await strategy.connect(keeper)['harvest(uint256)'](ethers.constants.Zero, { gasLimit: 3e6 });
+          ({ borrows } = await strategy.getCurrentPosition());
+          expect(borrows).to.equal(ethers.constants.Zero);
+          const balanceManager = await wantToken.balanceOf(poolManager.address);
+          const totalAsset = await poolManager.getTotalAsset();
+          const debtRatio = await poolManager.debtRatio();
+          expect(balanceManager).to.closeTo(
+            totalAsset.mul(BASE_PARAMS.sub(debtRatio)).div(BASE_PARAMS),
+            parseUnits('100', decimalsToken),
+          );
+        });
+      });
     });
   });
 });
