@@ -182,9 +182,10 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         pure
         returns (uint256 roundedAmount)
     {
-        uint256 halfIndex = lastAaveReserveNormalizedIncome_ / 2;
-        roundedAmount = (amount * RAY + halfIndex) / lastAaveReserveNormalizedIncome_;
-        roundedAmount = (roundedAmount * lastAaveReserveNormalizedIncome_ - halfIndex) / RAY;
+        roundedAmount = (amount * RAY + (lastAaveReserveNormalizedIncome_ / 2)) / lastAaveReserveNormalizedIncome_;
+        roundedAmount = ((roundedAmount * lastAaveReserveNormalizedIncome_ - lastAaveReserveNormalizedIncome_ / 2) /
+            RAY);
+        // uint256 roundedAmount = amount;
     }
 
     /// @notice Get stakingAPR after staking an additional `amount`

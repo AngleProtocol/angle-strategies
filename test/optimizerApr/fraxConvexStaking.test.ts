@@ -337,143 +337,175 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
     });
   });
 
-  describe('Strategy deposits', () => {
-    it('success - no previous lock', async () => {
-      expect(await lenderAave.kekId()).to.be.equal(ethers.constants.HashZero);
-      // expect(await lenderAave.lastAaveLiquidityIndex()).to.be.equal(ethers.constants.Zero);
-      expect(await lenderAave.lastCreatedStake()).to.be.equal(ethers.constants.Zero);
+  // describe('Strategy deposits', () => {
+  //   it('success - no previous lock', async () => {
+  //     expect(await lenderAave.kekId()).to.be.equal(ethers.constants.HashZero);
+  //     // expect(await lenderAave.lastAaveLiquidityIndex()).to.be.equal(ethers.constants.Zero);
+  //     expect(await lenderAave.lastCreatedStake()).to.be.equal(ethers.constants.Zero);
 
-      await setTokenBalanceFor(token, strategy.address, 1000000);
+  //     await setTokenBalanceFor(token, strategy.address, 1000000);
 
-      const timestamp = await latestTime();
-      await (await strategy.connect(keeper)['harvest()']()).wait();
-      expect(await lenderAave.kekId()).to.not.eq('');
-      expect(await lenderAave.lastCreatedStake()).to.be.gte(timestamp);
+  //     const timestamp = await latestTime();
+  //     await (await strategy.connect(keeper)['harvest()']()).wait();
+  //     expect(await lenderAave.kekId()).to.not.eq('');
+  //     expect(await lenderAave.lastCreatedStake()).to.be.gte(timestamp);
 
-      const underlyingBalance = await lenderAave.underlyingBalanceStored();
-      const balanceToken = await lenderAave.nav();
-      const balanceTokenStrat = await token.balanceOf(strategy.address);
-      expect(balanceToken).to.be.equal(parseUnits('1000000', tokenDecimal));
-      expect(underlyingBalance).to.be.closeTo(parseUnits('1000000', tokenDecimal), parseUnits('10', tokenDecimal));
-      expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
-    });
-    it('success - very small amount deposited and hence considering that strategy has no assets', async () => {
-      expect(await lenderAave.kekId()).to.be.equal(ethers.constants.HashZero);
-      // expect(await lenderAave.lastAaveLiquidityIndex()).to.be.equal(ethers.constants.Zero);
-      expect(await lenderAave.lastCreatedStake()).to.be.equal(ethers.constants.Zero);
+  //     const underlyingBalance = await lenderAave.underlyingBalanceStored();
+  //     const balanceToken = await lenderAave.nav();
+  //     const balanceTokenStrat = await token.balanceOf(strategy.address);
+  //     expect(balanceToken).to.be.equal(parseUnits('1000000', tokenDecimal));
+  //     expect(underlyingBalance).to.be.closeTo(parseUnits('1000000', tokenDecimal), parseUnits('10', tokenDecimal));
+  //     expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
+  //   });
+  //   it('success - very small amount deposited and hence considering that strategy has no assets', async () => {
+  //     expect(await lenderAave.kekId()).to.be.equal(ethers.constants.HashZero);
+  //     // expect(await lenderAave.lastAaveLiquidityIndex()).to.be.equal(ethers.constants.Zero);
+  //     expect(await lenderAave.lastCreatedStake()).to.be.equal(ethers.constants.Zero);
 
-      await setTokenBalanceFor(token, strategy.address, 1);
+  //     await setTokenBalanceFor(token, strategy.address, 1);
 
-      const timestamp = await latestTime();
-      await (await strategy.connect(keeper)['harvest()']()).wait();
-      expect(await lenderAave.kekId()).to.not.eq('');
-      expect(await lenderAave.lastCreatedStake()).to.be.gte(timestamp);
+  //     const timestamp = await latestTime();
+  //     await (await strategy.connect(keeper)['harvest()']()).wait();
+  //     expect(await lenderAave.kekId()).to.not.eq('');
+  //     expect(await lenderAave.lastCreatedStake()).to.be.gte(timestamp);
 
-      const underlyingBalance = await lenderAave.underlyingBalanceStored();
-      const balanceToken = await lenderAave.nav();
-      const balanceTokenStrat = await token.balanceOf(strategy.address);
-      expect(balanceToken).to.be.equal(parseUnits('1', tokenDecimal));
-      expect(underlyingBalance).to.be.closeTo(parseUnits('1', tokenDecimal), parseUnits('10', tokenDecimal));
-      expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
-      expect(await lenderAave.hasAssets()).to.be.equal(false);
-    });
-    it('success - with previous lock', async () => {
-      // going through the poolManager to not have to withdraw funds (because it would think we made a huge profit)
-      await setTokenBalanceFor(token, manager.address, 1000000);
-      await (await strategy.connect(keeper)['harvest()']()).wait();
-      const kekId = await lenderAave.kekId();
-      const stakerCreated = await lenderAave.lastCreatedStake();
-      await setTokenBalanceFor(token, manager.address, 1000000);
-      await (await strategy.connect(keeper)['harvest()']()).wait();
+  //     const underlyingBalance = await lenderAave.underlyingBalanceStored();
+  //     const balanceToken = await lenderAave.nav();
+  //     const balanceTokenStrat = await token.balanceOf(strategy.address);
+  //     expect(balanceToken).to.be.equal(parseUnits('1', tokenDecimal));
+  //     expect(underlyingBalance).to.be.closeTo(parseUnits('1', tokenDecimal), parseUnits('10', tokenDecimal));
+  //     expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
+  //     expect(await lenderAave.hasAssets()).to.be.equal(false);
+  //   });
+  //   it('success - with previous lock', async () => {
+  //     // going through the poolManager to not have to withdraw funds (because it would think we made a huge profit)
+  //     await setTokenBalanceFor(token, manager.address, 1000000);
+  //     await (await strategy.connect(keeper)['harvest()']()).wait();
+  //     const kekId = await lenderAave.kekId();
+  //     const stakerCreated = await lenderAave.lastCreatedStake();
+  //     await setTokenBalanceFor(token, manager.address, 1000000);
+  //     await (await strategy.connect(keeper)['harvest()']()).wait();
 
-      const kekIdAfter = await lenderAave.kekId();
-      const stakerCreatedAfter = await lenderAave.lastCreatedStake();
-      expect(kekIdAfter).to.be.equal(kekId);
-      expect(stakerCreatedAfter).to.be.equal(stakerCreated);
+  //     const kekIdAfter = await lenderAave.kekId();
+  //     const stakerCreatedAfter = await lenderAave.lastCreatedStake();
+  //     expect(kekIdAfter).to.be.equal(kekId);
+  //     expect(stakerCreatedAfter).to.be.equal(stakerCreated);
 
-      const underlyingBalance = await lenderAave.underlyingBalanceStored();
-      const balanceToken = await lenderAave.nav();
-      const balanceTokenStrat = await token.balanceOf(strategy.address);
-      expect(balanceToken).to.be.closeTo(parseUnits('2000000', tokenDecimal), parseUnits('1000', tokenDecimal));
-      expect(underlyingBalance).to.be.closeTo(parseUnits('2000000', tokenDecimal), parseUnits('1000', tokenDecimal));
-      expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
-    });
-    it('success - with previous lock and time elapsed ', async () => {
-      // going through the poolManager to not have to withdraw funds (because it would think we made a huge profit)
-      await setTokenBalanceFor(token, manager.address, 1000000);
-      await (await strategy.connect(keeper)['harvest()']()).wait();
-      await time.increase(DAY / 2);
-      const kekId = await lenderAave.kekId();
-      const stakerCreated = await lenderAave.lastCreatedStake();
-      await setTokenBalanceFor(token, manager.address, 1000000);
-      await (await strategy.connect(keeper)['harvest()']()).wait();
+  //     const underlyingBalance = await lenderAave.underlyingBalanceStored();
+  //     const balanceToken = await lenderAave.nav();
+  //     const balanceTokenStrat = await token.balanceOf(strategy.address);
+  //     expect(balanceToken).to.be.closeTo(parseUnits('2000000', tokenDecimal), parseUnits('1000', tokenDecimal));
+  //     expect(underlyingBalance).to.be.closeTo(parseUnits('2000000', tokenDecimal), parseUnits('1000', tokenDecimal));
+  //     expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
+  //   });
+  //   it('success - with previous lock and time elapsed ', async () => {
+  //     // going through the poolManager to not have to withdraw funds (because it would think we made a huge profit)
+  //     await setTokenBalanceFor(token, manager.address, 1000000);
+  //     await (await strategy.connect(keeper)['harvest()']()).wait();
+  //     await time.increase(DAY / 2);
+  //     const kekId = await lenderAave.kekId();
+  //     const stakerCreated = await lenderAave.lastCreatedStake();
+  //     await setTokenBalanceFor(token, manager.address, 1000000);
+  //     await (await strategy.connect(keeper)['harvest()']()).wait();
 
-      const kekIdAfter = await lenderAave.kekId();
-      const stakerCreatedAfter = await lenderAave.lastCreatedStake();
-      expect(kekIdAfter).to.be.equal(kekId);
-      expect(stakerCreatedAfter).to.be.equal(stakerCreated);
+  //     const kekIdAfter = await lenderAave.kekId();
+  //     const stakerCreatedAfter = await lenderAave.lastCreatedStake();
+  //     expect(kekIdAfter).to.be.equal(kekId);
+  //     expect(stakerCreatedAfter).to.be.equal(stakerCreated);
 
-      const underlyingBalance = await lenderAave.underlyingBalanceStored();
-      const balanceToken = await lenderAave.nav();
-      const balanceTokenStrat = await token.balanceOf(strategy.address);
-      expect(balanceToken).to.be.closeTo(parseUnits('2000000', tokenDecimal), parseUnits('1000', tokenDecimal));
-      expect(underlyingBalance).to.be.closeTo(parseUnits('2000000', tokenDecimal), parseUnits('1000', tokenDecimal));
-      expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
-    });
-  });
+  //     const underlyingBalance = await lenderAave.underlyingBalanceStored();
+  //     const balanceToken = await lenderAave.nav();
+  //     const balanceTokenStrat = await token.balanceOf(strategy.address);
+  //     expect(balanceToken).to.be.closeTo(parseUnits('2000000', tokenDecimal), parseUnits('1000', tokenDecimal));
+  //     expect(underlyingBalance).to.be.closeTo(parseUnits('2000000', tokenDecimal), parseUnits('1000', tokenDecimal));
+  //     expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
+  //   });
+  // });
 
   describe('Strategy withdraws', () => {
-    it('withdraw - reverts - too soon', async () => {
-      await setTokenBalanceFor(token, strategy.address, 1000000);
-      await (await strategy.connect(keeper)['harvest()']()).wait();
-      await setTokenBalanceFor(token, strategy.address, 1000000);
-      await expect(strategy.connect(keeper)['harvest()']()).to.be.reverted;
-    });
-    it('emergencyWithdraw - reverts - nothing to remove', async () => {
-      await expect(lenderAave.connect(guardian).emergencyWithdraw(parseUnits('1000000', 18))).to.be.reverted;
-    });
-    it('emergencyWithdraw - success', async () => {
-      await setTokenBalanceFor(token, strategy.address, 1000000);
-      await (await strategy.connect(keeper)['harvest()']()).wait();
-      await time.increase(DAY);
-      await (await lenderAave.connect(guardian).emergencyWithdraw(parseUnits('1000000', 18))).wait();
-      expect(await token.balanceOf(manager.address)).to.be.equal(parseUnits('1000000', tokenDecimal));
-    });
-    it('withdrawAll - success', async () => {
-      await setTokenBalanceFor(token, strategy.address, 1000000);
-      await (await strategy.connect(keeper)['harvest()']()).wait();
+    // it('withdraw - reverts - too soon', async () => {
+    //   await setTokenBalanceFor(token, strategy.address, 1000000);
+    //   await (await strategy.connect(keeper)['harvest()']()).wait();
+    //   await setTokenBalanceFor(token, strategy.address, 1000000);
+    //   await expect(strategy.connect(keeper)['harvest()']()).to.be.reverted;
+    // });
+    // it('emergencyWithdraw - reverts - nothing to remove', async () => {
+    //   await expect(lenderAave.connect(guardian).emergencyWithdraw(parseUnits('1000000', 18))).to.be.reverted;
+    // });
+    // it('emergencyWithdraw - success', async () => {
+    //   await setTokenBalanceFor(token, strategy.address, 1000000);
+    //   await (await strategy.connect(keeper)['harvest()']()).wait();
+    //   await time.increase(DAY);
+    //   await (await lenderAave.connect(guardian).emergencyWithdraw(parseUnits('1000000', 18))).wait();
+    //   expect(await token.balanceOf(manager.address)).to.be.equal(parseUnits('1000000', tokenDecimal));
+    // });
+    // it('withdrawAll - success', async () => {
+    //   await setTokenBalanceFor(token, strategy.address, 1000000);
+    //   await (await strategy.connect(keeper)['harvest()']()).wait();
 
-      await time.increase(DAY);
-      const { lender: lenderAaveBis } = await initLenderAaveFraxStaker(
-        governor,
-        guardian,
-        keeper,
-        strategy,
-        'genericAave',
-        true,
-        DAY,
-      );
-      await (
-        await strategy.connect(guardian).manualAllocation([
-          { lender: lenderAave.address, share: parseUnits('0', 0) },
-          { lender: lenderAaveBis.address, share: parseUnits('1000', 0) },
-        ])
-      ).wait();
+    //   await time.increase(DAY);
+    //   const { lender: lenderAaveBis } = await initLenderAaveFraxStaker(
+    //     governor,
+    //     guardian,
+    //     keeper,
+    //     strategy,
+    //     'genericAave',
+    //     true,
+    //     DAY,
+    //   );
+    //   await (
+    //     await strategy.connect(guardian).manualAllocation([
+    //       { lender: lenderAave.address, share: parseUnits('0', 0) },
+    //       { lender: lenderAaveBis.address, share: parseUnits('1000', 0) },
+    //     ])
+    //   ).wait();
 
-      const balanceTokenStrat = await token.balanceOf(strategy.address);
-      expect(await lenderAaveBis.underlyingBalanceStored()).to.be.closeTo(
-        parseUnits('1000000', tokenDecimal),
-        parseUnits('1000', tokenDecimal),
-      );
-      expect(await lenderAaveBis.nav()).to.be.closeTo(
-        parseUnits('1000000', tokenDecimal),
-        parseUnits('1000', tokenDecimal),
-      );
-      expect(await lenderAave.underlyingBalanceStored()).to.be.equal(parseUnits('0', tokenDecimal));
-      expect(await lenderAave.nav()).to.be.equal(parseUnits('0', tokenDecimal));
-      expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
-    });
+    //   const balanceTokenStrat = await token.balanceOf(strategy.address);
+    //   expect(await lenderAaveBis.underlyingBalanceStored()).to.be.closeTo(
+    //     parseUnits('1000000', tokenDecimal),
+    //     parseUnits('1000', tokenDecimal),
+    //   );
+    //   expect(await lenderAaveBis.nav()).to.be.closeTo(
+    //     parseUnits('1000000', tokenDecimal),
+    //     parseUnits('1000', tokenDecimal),
+    //   );
+    //   expect(await lenderAave.underlyingBalanceStored()).to.be.equal(parseUnits('0', tokenDecimal));
+    //   expect(await lenderAave.nav()).to.be.equal(parseUnits('0', tokenDecimal));
+    //   expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
+    // });
     it('withdraw - success - restake', async () => {
+      await setTokenBalanceFor(token, manager.address, 1000000);
+      await (await strategy.connect(keeper)['harvest()']()).wait();
+
+      // let days pass to have a non negligible gain
+      await time.increase(DAY * 7);
+
+      const kekIdBefore = await lenderAave.kekId();
+      const stakerCreatedBefore = await lenderAave.lastCreatedStake();
+
+      console.log('after the first harvest');
+      // to let some surplus on the poolManager
+      await manager.connect(guardian).updateStrategyDebtRatio(strategy.address, parseUnits('0.5', 9));
+      const tx = await (await strategy.connect(keeper)['harvest()']()).wait();
+      console.log('tx ', tx.transactionHash);
+      // currently rate is at 1.84% so for 7 days we roughly divide by 52 --> 0.035% over the period
+      const earnings = parseUnits('1000350', tokenDecimal);
+
+      const kekIdAfter = await lenderAave.kekId();
+      const stakerCreatedAfter = await lenderAave.lastCreatedStake();
+
+      expect(kekIdAfter).to.not.equal(kekIdBefore);
+      expect(kekIdAfter).to.not.equal('');
+      expect(stakerCreatedAfter).to.be.gte(stakerCreatedBefore);
+
+      const balanceToken = await lenderAave.nav();
+      const balanceTokenStrat = await token.balanceOf(strategy.address);
+      const balanceTokenManager = await token.balanceOf(manager.address);
+      expect(balanceToken).to.be.closeTo(earnings.div(BigNumber.from('2')), parseUnits('100', tokenDecimal));
+      expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
+      expect(balanceTokenManager).to.be.closeTo(earnings.div(BigNumber.from('2')), parseUnits('100', tokenDecimal));
+    });
+    it('withdraw - success - restake 2', async () => {
       await setTokenBalanceFor(token, manager.address, 1000000);
       await (await strategy.connect(keeper)['harvest()']()).wait();
 
@@ -504,50 +536,82 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
       expect(balanceTokenManager).to.be.closeTo(earnings.div(BigNumber.from('2')), parseUnits('100', tokenDecimal));
     });
-    it('withdraw - success - no new locker', async () => {
-      // change lock period
-      await impersonate(fraxTimelock, async acc => {
-        await network.provider.send('hardhat_setBalance', [fraxTimelock, amountStorage]);
-        await (
-          await aFraxStakingContract
-            .connect(acc)
-            .setMiscVariables([
-              parseUnits('1', 18),
-              ethers.constants.Zero,
-              ethers.constants.Zero,
-              ethers.constants.Zero,
-              parseUnits('100000000', 0),
-              parseUnits('1', 0),
-            ])
-        ).wait();
-      });
-      // await lenderAave.setMinLockTime();
-      await lenderAave.connect(guardian).setLockTime(parseUnits('1', 0));
-
+    it('withdraw - success - restake 3', async () => {
       await setTokenBalanceFor(token, manager.address, 1000000);
       await (await strategy.connect(keeper)['harvest()']()).wait();
 
-      // change debtRatio
-      await manager.connect(guardian).updateStrategyDebtRatio(strategy.address, parseUnits('0', 9));
-      const kekIdBefore = await lenderAave.kekId();
+      // let days pass to have a non negligible gain
+      await time.increase(DAY * 7);
 
-      await time.increase(1);
-      await (await strategy.connect(keeper)['harvest()']()).wait();
+      const kekIdBefore = await lenderAave.kekId();
+      const stakerCreatedBefore = await lenderAave.lastCreatedStake();
+
+      console.log('after the first harvest');
+      // to let some surplus on the poolManager
+      await manager.connect(guardian).updateStrategyDebtRatio(strategy.address, parseUnits('0.5', 9));
+      const tx = await (await strategy.connect(keeper)['harvest()']()).wait();
+      console.log('tx ', tx.transactionHash);
+      // currently rate is at 1.84% so for 7 days we roughly divide by 52 --> 0.035% over the period
+      const earnings = parseUnits('1000350', tokenDecimal);
 
       const kekIdAfter = await lenderAave.kekId();
       const stakerCreatedAfter = await lenderAave.lastCreatedStake();
 
       expect(kekIdAfter).to.not.equal(kekIdBefore);
-      expect(kekIdAfter).to.be.equal(ethers.constants.HashZero);
-      expect(stakerCreatedAfter).to.be.equal(ethers.constants.Zero);
+      expect(kekIdAfter).to.not.equal('');
+      expect(stakerCreatedAfter).to.be.gte(stakerCreatedBefore);
 
       const balanceToken = await lenderAave.nav();
       const balanceTokenStrat = await token.balanceOf(strategy.address);
       const balanceTokenManager = await token.balanceOf(manager.address);
-      expect(balanceToken).to.be.equal(parseUnits('0', tokenDecimal));
+      expect(balanceToken).to.be.closeTo(earnings.div(BigNumber.from('2')), parseUnits('100', tokenDecimal));
       expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
-      expect(balanceTokenManager).to.be.closeTo(parseUnits('1000000', tokenDecimal), parseUnits('1', tokenDecimal));
+      expect(balanceTokenManager).to.be.closeTo(earnings.div(BigNumber.from('2')), parseUnits('100', tokenDecimal));
     });
+    // it('withdraw - success - no new locker', async () => {
+    //   // change lock period
+    //   await impersonate(fraxTimelock, async acc => {
+    //     await network.provider.send('hardhat_setBalance', [fraxTimelock, amountStorage]);
+    //     await (
+    //       await aFraxStakingContract
+    //         .connect(acc)
+    //         .setMiscVariables([
+    //           parseUnits('1', 18),
+    //           ethers.constants.Zero,
+    //           ethers.constants.Zero,
+    //           ethers.constants.Zero,
+    //           parseUnits('100000000', 0),
+    //           parseUnits('1', 0),
+    //         ])
+    //     ).wait();
+    //   });
+    //   // await lenderAave.setMinLockTime();
+    //   await lenderAave.connect(guardian).setLockTime(parseUnits('1', 0));
+
+    //   await setTokenBalanceFor(token, manager.address, 1000000);
+    //   await (await strategy.connect(keeper)['harvest()']()).wait();
+
+    //   // change debtRatio
+    //   await manager.connect(guardian).updateStrategyDebtRatio(strategy.address, parseUnits('0', 9));
+    //   const kekIdBefore = await lenderAave.kekId();
+
+    //   await time.increase(1);
+    //   await (await strategy.connect(keeper)['harvest()']()).wait();
+
+    //   const kekIdAfter = await lenderAave.kekId();
+    //   const stakerCreatedAfter = await lenderAave.lastCreatedStake();
+
+    //   expect(kekIdAfter).to.not.equal(kekIdBefore);
+    //   expect(kekIdAfter).to.be.equal(ethers.constants.HashZero);
+    //   expect(stakerCreatedAfter).to.be.equal(ethers.constants.Zero);
+
+    //   const balanceToken = await lenderAave.nav();
+    //   const balanceTokenStrat = await token.balanceOf(strategy.address);
+    //   const balanceTokenManager = await token.balanceOf(manager.address);
+    //   expect(balanceToken).to.be.equal(parseUnits('0', tokenDecimal));
+    //   expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
+    //   expect(balanceTokenManager).to.be.closeTo(parseUnits('1000000', tokenDecimal), parseUnits('1', tokenDecimal));
+    // });
     it('withdraw - success - no liquidity left', async () => {
       // change lock period
 
