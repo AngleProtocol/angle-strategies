@@ -10,10 +10,10 @@ import "../../../interfaces/external/convex/frax/IStakingProxyERC20.sol";
 
 import "./GenericAaveUpgradeable.sol";
 
-/// @title GenericAaveFraxStaker
+/// @title GenericAaveFraxConvexStaker
 /// @author  Angle Core Team
-/// @notice `GenericAaveUpgradeable` implementation for FRAX where aFRAX obtained from Aave are staked on a FRAX contract
-/// to earn FXS incentives
+/// @notice `GenericAaveUpgradeable` implementation for FRAX where aFRAX obtained from Aave are staked on a Convex
+/// contract to earn FXS incentives with max boost
 contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
     using SafeERC20 for IERC20;
 
@@ -84,7 +84,7 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
 
     // =========================== External Function ===============================
 
-    // @notice Can be called before `claimRewardsExternal` to check the available rewards to be claimed
+    /// @notice Can be called before `claimRewardsExternal` to check the available rewards to be claimed
     function earned() external view returns (address[] memory tokenAddresses, uint256[] memory totalEarned) {
         return vault.earned();
     }
@@ -106,7 +106,7 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
     // ============================ Virtual Functions ==============================
 
     /// @notice Implementation of the `_stake` function to stake aFRAX in the FRAX staking contract
-    /// @dev If there is an existent locker already on Frax staking contract (keckId != null), then this function adds to it
+    /// @dev If there is an existent locker already on Frax/Convex staking contract (keckId != null), then this function adds to it
     /// otherwise (if it's the first time we deposit or if last action was a withdraw) we need to create a new locker
     /// @dev Currently there is no additional reward to stake more than the minimum period as there is no multiplier
     function _stake(uint256 amount) internal override returns (uint256 stakedAmount) {
@@ -114,9 +114,10 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         uint256 newReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
         lastAaveReserveNormalizedIncome = newReserveNormalizedIncome;
 
-        // Rounding errors due to Aave transfer that do not actually transfer the amount specified but an underlying balance
-        // that is corrected by an index (with function rayMul and rayDiv), when withd
-        console.log("amountFRAXControlled ", amount);
+        // There may be rounding errors due to aToken transfers that do not actually transfer the amount specified
+        // but an underlying balance that is corrected by an index (with function rayMul and rayDiv)
+        // As such, we need to take precautions on the amount of aTokens actually staked
+        console.log("amountFRAXToInvest ", amount);
         amount = _roundingATokenAmount(amount, newReserveNormalizedIncome);
         console.log("post processed ", amount);
 
@@ -136,7 +137,7 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
 
     /// @notice Implementation of the `_unstake` function
     /// @dev If the minimum staking period is not finished, the function will revert
-    /// @dev This implementation assumes that there cannot be any loss when staking on FRAX
+    /// @dev This implementation assumes that there cannot be any loss when staking on FRAX/Convex
     function _unstake(uint256 amount) internal override returns (uint256 freedAmount) {
         if (kekId == bytes32(0)) return 0;
 
@@ -150,21 +151,21 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         console.log("we freed ", freedAmount);
 
         if (amount + minStakingAmount < freedAmount) {
-            // If too much has been withdrawn, we must create back a locker
             lastCreatedStake = block.timestamp;
-            uint256 amountFRAXControlled = freedAmount - amount;
+            // If too much has been withdrawn, we must create back a locker: the amount to invest is what we have
+            // minus what's to withdraw
+            uint256 amountFRAXToInvest = freedAmount - amount;
 
-            // Rounding errors due to Aave transfer that do not actually transfer the amount specified but an underlying balance
-            // that is corrected by an index (with function rayMul and rayDiv), when withd
-            console.log("amountFRAXControlled ", amountFRAXControlled);
-            amountFRAXControlled = _roundingATokenAmount(amountFRAXControlled, lastAaveReserveNormalizedIncome_);
-            console.log("post processed ", amountFRAXControlled);
+            // Paying attention to potential rounding errors on FRAX
+            console.log("amountFRAXToInvest", amountFRAXToInvest);
+            amountFRAXToInvest = _roundingATokenAmount(amountFRAXToInvest, lastAaveReserveNormalizedIncome_);
+            console.log("post processed ", amountFRAXToInvest);
 
-            lastLiquidity = amountFRAXControlled;
-            _changeAllowance(IERC20(address(_aToken)), address(vault), amountFRAXControlled);
-            kekId = keccak256(abi.encodePacked(address(vault), block.timestamp, amountFRAXControlled, uint256(0)));
+            lastLiquidity = amountFRAXToInvest;
+            _changeAllowance(IERC20(address(_aToken)), address(vault), amountFRAXToInvest);
+            kekId = keccak256(abi.encodePacked(address(vault), block.timestamp, amountFRAXToInvest, uint256(0)));
 
-            vault.stakeLocked(amountFRAXControlled, stakingPeriod);
+            vault.stakeLocked(amountFRAXToInvest, stakingPeriod);
 
             uint256 postABalance = _aToken.balanceOf(address(this));
             console.log("post aToken balance ", postABalance);
@@ -178,12 +179,13 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         }
     }
 
-    /// @notice Get current staked Frax balance (counting interest receive since last update)
+    /// @notice Get current staked Frax balance (counting interest received since last update)
     function _stakedBalance() internal view override returns (uint256 amount) {
         uint256 reserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
         return (lastLiquidity * reserveNormalizedIncome) / lastAaveReserveNormalizedIncome;
     }
 
+    /// @notice Rounds an amount of aTokens to invest on FRAX/Convex to avoid errors
     function _roundingATokenAmount(uint256 amount, uint256 lastAaveReserveNormalizedIncome_)
         internal
         pure
@@ -192,7 +194,6 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         roundedAmount = (amount * RAY + (lastAaveReserveNormalizedIncome_ / 2)) / lastAaveReserveNormalizedIncome_;
         roundedAmount = ((roundedAmount * lastAaveReserveNormalizedIncome_ - lastAaveReserveNormalizedIncome_ / 2) /
             RAY);
-        // uint256 roundedAmount = amount;
     }
 
     /// @notice Get stakingAPR after staking an additional `amount`

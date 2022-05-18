@@ -106,9 +106,9 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
             lastCreatedStake = block.timestamp;
             kekId = aFraxStakingContract.stakeLocked(amount, stakingPeriod);
         } else {
-            aFraxStakingContract.lockAdditional(kekId, amount);
             // Updating the `lastLiquidity` value
             lastLiquidity = (lastLiquidity * newReserveNormalizedIncome) / pastReserveNormalizedIncome + amount;
+            aFraxStakingContract.lockAdditional(kekId, amount);
         }
         stakedAmount = amount;
     }
@@ -141,7 +141,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         }
     }
 
-    /// @notice Get current staked Frax balance (counting interest receive since last update)
+    /// @notice Get current staked Frax balance (counting interest received since last update)
     function _stakedBalance() internal view override returns (uint256 amount) {
         uint256 reserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
         return (lastLiquidity * reserveNormalizedIncome) / lastAaveReserveNormalizedIncome;
