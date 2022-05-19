@@ -102,7 +102,7 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
         {
           forking: {
             jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
-            blockNumber: 14786812,
+            blockNumber: 14786806,
           },
         },
       ],

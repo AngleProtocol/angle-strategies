@@ -4,16 +4,15 @@ pragma solidity 0.8.12;
 
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
-import "../../../interfaces/external/compound/CErc20I.sol";
-import "../../../interfaces/external/compound/IComptroller.sol";
-import "../../../interfaces/external/compound/InterestRateModel.sol";
+import "../interfaces/external/compound/CErc20I.sol";
+import "../interfaces/external/compound/IComptroller.sol";
+import "../interfaces/external/compound/InterestRateModel.sol";
 
-import "./GenericLenderBaseUpgradeable.sol";
-import "hardhat/console.sol";
+import "../strategies/OptimizerAPR/genericLender/GenericLenderBaseUpgradeable.sol";
 
-/// @title GenericCompoundV3
+/// @title GenericCompoundV2
 /// @author Forked from here: https://github.com/Grandthrax/yearnV2-generic-lender-strat/blob/master/contracts/GenericLender/GenericCompound.sol
-contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
+contract GenericCompoundUpgradeableOld is GenericLenderBaseUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
@@ -26,7 +25,6 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     // ======================== References to contracts ============================
 
     CErc20I public cToken;
-    uint256 private dust;
 
     // =============================== Errors ======================================
 
@@ -130,13 +128,6 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         want.safeTransfer(address(poolManager), want.balanceOf(address(this)));
     }
 
-    /// @notice Allow to modify the dust amount
-    /// @param dust_ Amount under which the contract do not try to redeem from Compouns
-    /// @dev Set in a function because contract was already initalized
-    function setDust(uint256 dust_) external onlyRole(GUARDIAN_ROLE) {
-        dust = dust_;
-    }
-
     // ============================= Internal Functions ============================
 
     /// @notice See `apr`
@@ -166,20 +157,12 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         if (liquidity > 1) {
             uint256 toWithdraw = amount - looseBalance;
 
-            console.log("dust ", dust);
-            console.log("toWithdraw ", toWithdraw);
-            console.log("liquidity ", liquidity);
-
-            // If amount is too low then do not try to withdraw it
-            // Risk being: the tx can revert because the cToken needed to be sent == 0
-            if (toWithdraw >= dust) {
-                if (toWithdraw <= liquidity) {
-                    // We can take all
-                    if (cToken.redeemUnderlying(toWithdraw) != 0) revert FailedToRedeem();
-                } else {
-                    // Take all we can
-                    if (cToken.redeemUnderlying(liquidity) != 0) revert FailedToRedeem();
-                }
+            if (toWithdraw <= liquidity) {
+                // We can take all
+                if (cToken.redeemUnderlying(toWithdraw) != 0) revert FailedToRedeem();
+            } else {
+                // Take all we can
+                if (cToken.redeemUnderlying(liquidity) != 0) revert FailedToRedeem();
             }
         }
         address[] memory holders = new address[](1);
