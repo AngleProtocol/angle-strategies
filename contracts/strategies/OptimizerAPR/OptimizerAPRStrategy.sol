@@ -246,11 +246,11 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
             if (!lendersList[lowest].hasAssets()) {
                 return amountWithdrawn;
             }
-            // not best solution because it would be better to move to the 2nd lowestAPR instead of quiting
             uint256 amountWithdrawnFromStrat = lendersList[lowest].withdraw(_amount - amountWithdrawn);
             // To avoid staying on the same strat if we can't withdraw anythin from it
             amountWithdrawn = amountWithdrawn + amountWithdrawnFromStrat;
             j++;
+            // not best solution because it would be better to move to the 2nd lowestAPR instead of quiting
             if (amountWithdrawnFromStrat == 0) {
                 return amountWithdrawn;
             }

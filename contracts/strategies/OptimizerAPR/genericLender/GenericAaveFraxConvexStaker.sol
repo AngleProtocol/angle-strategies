@@ -114,11 +114,9 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         uint256 newReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));
         lastAaveReserveNormalizedIncome = newReserveNormalizedIncome;
 
-        // Rounding errors due to Aave transfer that do not actually transfer the amount specified but an underlying balance
-        // that is corrected by an index (with function rayMul and rayDiv), when withd
-        console.log("amountFRAXControlled ", amount);
+        // Rounding on Aave transfers do not actually transfer the amount specified but an underlying balance
+        // that is corrected by an index
         amount = _roundingATokenAmount(amount, newReserveNormalizedIncome);
-        console.log("post processed ", amount);
 
         _changeAllowance(IERC20(address(_aToken)), address(vault), amount);
         if (kekId == bytes32(0)) {
@@ -146,9 +144,6 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         vault.withdrawLocked(kekId);
         freedAmount = _aToken.balanceOf(address(this));
 
-        console.log("we want ", amount);
-        console.log("we freed ", freedAmount);
-
         if (amount + minStakingAmount < freedAmount) {
             // If too much has been withdrawn, we must create back a locker
             lastCreatedStake = block.timestamp;
@@ -156,9 +151,7 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
 
             // Rounding errors due to Aave transfer that do not actually transfer the amount specified but an underlying balance
             // that is corrected by an index (with function rayMul and rayDiv), when withd
-            console.log("amountFRAXControlled ", amountFRAXControlled);
             amountFRAXControlled = _roundingATokenAmount(amountFRAXControlled, lastAaveReserveNormalizedIncome_);
-            console.log("post processed ", amountFRAXControlled);
 
             lastLiquidity = amountFRAXControlled;
             _changeAllowance(IERC20(address(_aToken)), address(vault), amountFRAXControlled);
@@ -167,8 +160,6 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
             vault.stakeLocked(amountFRAXControlled, stakingPeriod);
 
             uint256 postABalance = _aToken.balanceOf(address(this));
-            console.log("post aToken balance ", postABalance);
-            console.log("we sent aFRAX: ", freedAmount - postABalance);
             // We are limited on withdraw from Aave by the liquidity available and our aToken balance
             freedAmount = amount > postABalance ? postABalance : amount;
         } else {
@@ -189,10 +180,9 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         pure
         returns (uint256 roundedAmount)
     {
-        roundedAmount = (amount * RAY + (lastAaveReserveNormalizedIncome_ / 2)) / lastAaveReserveNormalizedIncome_;
-        roundedAmount = ((roundedAmount * lastAaveReserveNormalizedIncome_ - lastAaveReserveNormalizedIncome_ / 2) /
-            RAY);
-        // uint256 roundedAmount = amount;
+        uint256 halfIndex = lastAaveReserveNormalizedIncome_ / 2;
+        roundedAmount = (amount * RAY + halfIndex) / lastAaveReserveNormalizedIncome_;
+        roundedAmount = (roundedAmount * lastAaveReserveNormalizedIncome_ - halfIndex) / RAY;
     }
 
     /// @notice Get stakingAPR after staking an additional `amount`
@@ -243,36 +233,5 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         (, int256 fxsPriceUSD, , , ) = oracleFXS.latestRoundData();
         // fxsPriceUSD is in base 8
         return (uint256(fxsPriceUSD) * amount) / 1e8;
-    }
-
-    /**
-     * @dev Multiplies two ray, rounding half up to the nearest ray
-     * @param a Ray
-     * @param b Ray
-     * @return The result of a*b, in ray
-     **/
-    function rayMul(uint256 a, uint256 b) internal pure returns (uint256) {
-        if (a == 0 || b == 0) {
-            return 0;
-        }
-
-        require(a <= (type(uint256).max - halfRAY) / b, "muk");
-
-        return (a * b + halfRAY) / RAY;
-    }
-
-    /**
-     * @dev Divides two ray, rounding half up to the nearest ray
-     * @param a Ray
-     * @param b Ray
-     * @return The result of a/b, in ray
-     **/
-    function rayDiv(uint256 a, uint256 b) internal pure returns (uint256) {
-        require(b != 0, "div 0");
-        uint256 halfB = b / 2;
-
-        require(a <= (type(uint256).max - halfB) / RAY, "div");
-
-        return (a * RAY + halfB) / b;
     }
 }

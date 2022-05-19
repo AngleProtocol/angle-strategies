@@ -10,7 +10,6 @@ import "../../../interfaces/external/aave/IAaveToken.sol";
 import "../../../interfaces/external/aave/IProtocolDataProvider.sol";
 import "../../../interfaces/external/aave/ILendingPool.sol";
 import "./GenericLenderBaseUpgradeable.sol";
-import "hardhat/console.sol";
 
 /// @title GenericAave
 /// @author Forked from https://github.com/Grandthrax/yearnV2-generic-lender-strat/blob/master/contracts/GenericLender/GenericAave.sol
