@@ -31,6 +31,9 @@ interface IFraxUnifiedFarmTemplate {
 
     // ------ LOCK RELATED ------
 
+    /// @notice get the current lock amount (without accruing interest) useful to compute the kekId
+    function lockedLiquidityOf(address account) external view returns (uint256);
+
     // Add additional LPs to an existing locked stake
     // REBASE: If you simply want to accrue interest, call this with addl_liq = 0
     function lockAdditional(bytes32 kek_id, uint256 addl_liq) external;

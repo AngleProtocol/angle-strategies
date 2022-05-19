@@ -231,7 +231,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         amountWithdrawn = 0;
         // In most situations this will only run once. Only big withdrawals will be a gas guzzler
         uint256 j = 0;
-        while (amountWithdrawn < _amount) {
+        while (amountWithdrawn < _amount - withdrawalThreshold) {
             uint256 lowestApr = type(uint256).max;
             uint256 lowest = 0;
             for (uint256 i = 0; i < lendersList.length; i++) {
@@ -246,8 +246,14 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
             if (!lendersList[lowest].hasAssets()) {
                 return amountWithdrawn;
             }
-            amountWithdrawn = amountWithdrawn + lendersList[lowest].withdraw(_amount - amountWithdrawn);
+            uint256 amountWithdrawnFromStrat = lendersList[lowest].withdraw(_amount - amountWithdrawn);
+            // To avoid staying on the same strat if we can't withdraw anythin from it
+            amountWithdrawn = amountWithdrawn + amountWithdrawnFromStrat;
             j++;
+            // not best solution because it would be better to move to the 2nd lowestAPR instead of quiting
+            if (amountWithdrawnFromStrat == 0) {
+                return amountWithdrawn;
+            }
             // To avoid want infinite loop
             if (j >= 6) {
                 return amountWithdrawn;
