@@ -180,12 +180,7 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
     ) external onlyRole(GUARDIAN_ROLE) {
         if (tokens.length != spenders.length || tokens.length != amounts.length) revert IncompatibleLengths();
         for (uint256 i = 0; i < tokens.length; i++) {
-            uint256 currentAllowance = tokens[i].allowance(address(this), address(spenders[i]));
-            if (currentAllowance < amounts[i]) {
-                IERC20(address(tokens[i])).safeIncreaseAllowance(address(spenders[i]), amounts[i] - currentAllowance);
-            } else if (currentAllowance > amounts[i]) {
-                IERC20(address(tokens[i])).safeDecreaseAllowance(address(spenders[i]), currentAllowance - amounts[i]);
-            }
+            _changeAllowance(tokens[i], spenders[i], amounts[i]);
         }
     }
 
@@ -211,5 +206,22 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
             }
         }
         revert ErrorSwap();
+    }
+
+    /// @notice Changes allowance of a set of tokens to addresses
+    /// @param token Address of the token for which approval should be made
+    /// @param spender Address to approve
+    /// @param amount Approval amount
+    function _changeAllowance(
+        IERC20 token,
+        address spender,
+        uint256 amount
+    ) internal {
+        uint256 currentAllowance = token.allowance(address(this), address(spender));
+        if (currentAllowance < amount) {
+            token.safeIncreaseAllowance(address(spender), amount - currentAllowance);
+        } else if (currentAllowance > amount) {
+            token.safeDecreaseAllowance(address(spender), currentAllowance - amount);
+        }
     }
 }
