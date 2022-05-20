@@ -78,15 +78,18 @@ async function main() {
     await network.provider.send('hardhat_setBalance', [governor, '0x10000000000000000000000000000']);
     await network.provider.send('hardhat_setBalance', [guardian, '0x10000000000000000000000000000']);
 
-    // Grant strategy role to the guardian on compound lender
-    await lenderCompound
-      .connect(governorSigner)
-      .grantRole(ethers.utils.solidityKeccak256(['string'], ['STRATEGY_ROLE']), guardian);
+    // // Grant strategy role to the guardian on compound lender
+    // await lenderCompound
+    //   .connect(governorSigner)
+    //   .grantRole(ethers.utils.solidityKeccak256(['string'], ['STRATEGY_ROLE']), guardian);
 
-    console.log('Grant role: success');
+    // console.log('Grant role: success');
+
+    console.log(`cToken: ${await lenderCompound.cToken()}`);
+    console.log(`dust: ${await lenderCompound.dust()}`);
 
     // Then withdraw funds from the lender
-    await lenderCompound.connect(guardianSigner).withdraw(parseUnits('4900644189785575915519', 0));
+    await lenderCompound.connect(guardianSigner).withdrawAll();
     console.log('Withdraw: success');
 
     // Revoke role to the guardian

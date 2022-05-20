@@ -74,5 +74,5 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
   }
 };
 
-func.tags = ['genericCompounV3'];
+func.tags = ['genericCompoundV3'];
 export default func;

@@ -39,6 +39,8 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlU
     /// @notice Base of the asset handled by the lender
     uint256 public wantBase;
 
+    uint256[50] private __gap;
+
     // ================================ Errors =====================================
 
     error ErrorSwap();

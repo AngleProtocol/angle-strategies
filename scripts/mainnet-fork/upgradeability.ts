@@ -34,10 +34,10 @@ async function main() {
     'contracts/strategies/OptimizerAPR/genericLender/GenericCompoundUpgradeable.sol',
   );
   testStorage(
-    'GenericCompoundUpgradeable',
-    'contracts/strategies/OptimizerAPR/genericLender/GenericCompoundUpgradeable.sol',
     'GenericCompoundUpgradeableOld',
     'contracts/deprecated/GenericCompoundUpgradeableOld.sol',
+    'GenericCompoundUpgradeable',
+    'contracts/strategies/OptimizerAPR/genericLender/GenericCompoundUpgradeable.sol',
   );
 }
 
