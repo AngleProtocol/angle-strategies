@@ -25,6 +25,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     // ======================== References to contracts ============================
 
     CErc20I public cToken;
+    /// @notice Minimum amount for which withdrawals can take place on Compound
     uint256 private dust;
 
     // =============================== Errors ======================================
@@ -129,8 +130,8 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         want.safeTransfer(address(poolManager), want.balanceOf(address(this)));
     }
 
-    /// @notice Allow to modify the dust amount
-    /// @param dust_ Amount under which the contract do not try to redeem from Compouns
+    /// @notice Allows to modify the dust amount
+    /// @param dust_ Amount under which the contract does not try to redeem from Compound
     /// @dev Set in a function because contract was already initalized
     function setDust(uint256 dust_) external onlyRole(GUARDIAN_ROLE) {
         dust = dust_;
