@@ -9,7 +9,6 @@ import "../../../interfaces/external/compound/IComptroller.sol";
 import "../../../interfaces/external/compound/InterestRateModel.sol";
 
 import "./GenericLenderBaseUpgradeable.sol";
-import "hardhat/console.sol";
 
 /// @title GenericCompoundV3
 /// @author Forked from here: https://github.com/Grandthrax/yearnV2-generic-lender-strat/blob/master/contracts/GenericLender/GenericCompound.sol
@@ -165,11 +164,6 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
         if (liquidity > 1) {
             uint256 toWithdraw = amount - looseBalance;
-
-            console.log("dust ", dust);
-            console.log("toWithdraw ", toWithdraw);
-            console.log("liquidity ", liquidity);
-
             // If amount is too low then do not try to withdraw it
             // Risk being: the tx can revert because the cToken needed to be sent == 0
             if (toWithdraw >= dust) {
