@@ -46,11 +46,11 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
   ) as OptimizerAPRStrategy;
 
   let lenderImplementation = await deployments.getOrNull(
-    `GenericAave_${stableName}_${collateralName}_Staker_Implementation`,
+    `GenericAave_${stableName}_${collateralName}_Convex_Staker_Implementation`,
   );
   if (!lenderImplementation) {
-    lenderImplementation = await deploy(`GenericAave_${stableName}_${collateralName}_Staker_Implementation`, {
-      contract: 'GenericAaveFraxStaker',
+    lenderImplementation = await deploy(`GenericAave_${stableName}_${collateralName}_Convex_Staker_Implementation`, {
+      contract: 'GenericAaveFraxConvexStaker',
       from: deployer.address,
       args: [],
     });
@@ -69,7 +69,7 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     DAY,
   ]);
 
-  const proxyLender = await deploy(`GenericAave_${stableName}_${collateralName}_Staker`, {
+  const proxyLender = await deploy(`GenericAave_${stableName}_${collateralName}_Convex_Staker`, {
     contract: 'TransparentUpgradeableProxy',
     from: deployer.address,
     args: [lenderImplementation.address, proxyAdmin, initializeData],
