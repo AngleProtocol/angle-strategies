@@ -9,7 +9,7 @@
     "coverage:steth": "FORK=true hardhat coverage --testfiles 'test/strategysteth/strategystethlocal.ts'",
     "coverage:genericStaker": "FORK=true hardhat coverage --testfiles 'test/optimizerApr/*.ts'",
     "coverage:genericCompound": "FORK=true hardhat coverage --testfiles 'test/optimizerApr/lenderCompound.test.ts'",
-    "deploy:lender:fraxStaking": "hardhat deploy --network mainnet --tags lenderFraxStaking",
+    "deploy:lender:fraxStaking": "hardhat deploy --network mainnet --tags lenderConvexAFraxStaking",
     "deploy:folding:aave": "hardhat deploy --network mainnet --tags aave_flashloan_strategy_upgrade",
     "deploy:strategy:eth": "hardhat deploy --network mainnet --tags collat_strategyStETH",
     "etherscan:mainnet": "hardhat --network mainnet etherscan-verify",

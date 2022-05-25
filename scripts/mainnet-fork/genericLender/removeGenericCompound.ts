@@ -86,7 +86,7 @@ async function main() {
     // console.log('Grant role: success');
 
     console.log(`cToken: ${await lenderCompound.cToken()}`);
-    console.log(`dust: ${await lenderCompound.dust()}`);
+    // console.log(`dust: ${await lenderCompound.dust()}`);
 
     // Then withdraw funds from the lender
     await lenderCompound.connect(guardianSigner).withdrawAll();
