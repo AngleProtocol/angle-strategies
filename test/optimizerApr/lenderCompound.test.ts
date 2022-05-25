@@ -53,7 +53,7 @@ async function initLenderCompound(
   const lender = (await deployUpgradeable(
     new GenericCompoundUpgradeable__factory(guardian),
   )) as GenericCompoundUpgradeable;
-  await lender.initialize(strategy.address, name, cToken, [governor.address], [keeper.address], guardian.address);
+  await lender.initialize(strategy.address, name, cToken, [governor.address], guardian.address, [keeper.address]);
   await strategy.connect(governor).addLender(lender.address);
   return { lender };
 }
@@ -153,14 +153,9 @@ describe('OptimizerAPR - lenderCompound', () => {
         new GenericCompoundUpgradeable__factory(guardian),
       )) as GenericCompoundUpgradeable;
       await expect(
-        lender.initialize(
-          strategy.address,
-          'wrong lender',
-          wrongCToken.address,
-          [governor.address],
-          [keeper.address],
-          guardian.address,
-        ),
+        lender.initialize(strategy.address, 'wrong lender', wrongCToken.address, [governor.address], guardian.address, [
+          keeper.address,
+        ]),
       ).to.be.revertedWith('WrongCToken');
     });
     it('Parameters', async () => {
