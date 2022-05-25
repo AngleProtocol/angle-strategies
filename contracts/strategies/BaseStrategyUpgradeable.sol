@@ -25,6 +25,8 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
     // ======================== References to contracts ============================
+    /// @notice See note on `setEmergencyExit()`
+    bool public emergencyExit;
 
     /// @notice Reference to the protocol's collateral `PoolManager`
     IPoolManager public poolManager;
@@ -41,8 +43,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     /// harvest trigger. See `setDebtThreshold()` for more details
     uint256 public debtThreshold;
 
-    /// @notice See note on `setEmergencyExit()`
-    bool public emergencyExit;
+    uint256[46] private __gapBaseStrategy;
 
     // ============================ Errors =========================================
 

@@ -35,14 +35,14 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
 
     // ========================= Constants and Parameters ==========================
+    uint256 internal constant _SECONDS_IN_YEAR = 365 days;
     uint256 public cooldownSeconds;
     uint256 public unstakeWindow;
     bool public cooldownStkAave;
     bool public isIncentivised;
     IAToken internal _aToken;
-    uint256 internal constant _SECONDS_IN_YEAR = 365 days;
 
-    uint256[45] private __gapAaveLender;
+    uint256[47] private __gapAaveLender;
 
     // =================================== Event ===================================
 
