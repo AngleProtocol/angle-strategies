@@ -10,9 +10,11 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
-import "./AaveLibraries.sol";
-import "./AaveInterfaces.sol";
+import { IStakedAave, IReserveInterestRateStrategy } from "../../interfaces/external/aave/IAave.sol";
+import { IAaveIncentivesController } from "../../interfaces/external/aave/IAaveIncentivesController.sol";
+import { IVariableDebtToken } from "../../interfaces/external/aave/IAaveToken.sol";
 import "../BaseStrategyUpgradeable.sol";
+import "./AaveLibraries.sol";
 import "./ComputeProfitability.sol";
 
 /// @title AaveFlashloanStrategy

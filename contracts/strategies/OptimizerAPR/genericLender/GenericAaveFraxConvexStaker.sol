@@ -31,7 +31,6 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
     uint256 private constant FRAX_IDX = 0;
 
     uint256 internal constant RAY = 1e27;
-    uint256 internal constant halfRAY = RAY / 2;
 
     // ================================ Variables ==================================
 

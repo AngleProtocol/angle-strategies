@@ -5,10 +5,11 @@ pragma solidity 0.8.12;
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-import { IStakedAave, IReserveInterestRateStrategy } from "../../../interfaces/external/aave/IAave.sol";
-import "../../../interfaces/external/aave/IAaveToken.sol";
-import "../../../interfaces/external/aave/IProtocolDataProvider.sol";
-import "../../../interfaces/external/aave/ILendingPool.sol";
+import { DataTypes, IStakedAave, IReserveInterestRateStrategy } from "../../../interfaces/external/aave/IAave.sol";
+import { IProtocolDataProvider } from "../../../interfaces/external/aave/IProtocolDataProvider.sol";
+import { ILendingPool } from "../../../interfaces/external/aave/ILendingPool.sol";
+import { IAaveIncentivesController } from "../../../interfaces/external/aave/IAaveIncentivesController.sol";
+import { IAToken, IVariableDebtToken } from "../../../interfaces/external/aave/IAaveToken.sol";
 import "./GenericLenderBaseUpgradeable.sol";
 
 /// @title GenericAave
@@ -34,12 +35,14 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
 
     // ========================= Constants and Parameters ==========================
+    uint256 internal constant _SECONDS_IN_YEAR = 365 days;
     uint256 public cooldownSeconds;
     uint256 public unstakeWindow;
     bool public cooldownStkAave;
     bool public isIncentivised;
     IAToken internal _aToken;
-    uint256 internal constant _SECONDS_IN_YEAR = 365 days;
+
+    uint256[47] private __gapAaveLender;
 
     // =================================== Event ===================================
 

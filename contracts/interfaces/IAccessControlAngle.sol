@@ -5,7 +5,7 @@ pragma solidity ^0.8.12;
 /// @title IAccessControl
 /// @author Forked from OpenZeppelin
 /// @notice Interface for `AccessControl` contracts
-interface IAccessControl {
+interface IAccessControlAngle {
     function hasRole(bytes32 role, address account) external view returns (bool);
 
     function getRoleAdmin(bytes32 role) external view returns (bytes32);

@@ -2,13 +2,13 @@
 
 pragma solidity ^0.8.12;
 
-import "@openzeppelin/contracts-upgradeable/utils/StringsUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts/utils/Context.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
-import "../interfaces/IAccessControl.sol";
+import "../interfaces/IAccessControlAngle.sol";
 
 /**
- * @dev This contract is fully forked from OpenZeppelin `AccessControlUpgradeable`.
+ * @dev This contract is fully forked from OpenZeppelin `AccessControl`.
  * The only difference is the removal of the ERC165 implementation as it's not
  * needed in Angle.
  *
@@ -49,13 +49,7 @@ import "../interfaces/IAccessControl.sol";
  * grant and revoke this role. Extra precautions should be taken to secure
  * accounts that have been granted it.
  */
-abstract contract AccessControlUpgradeable is Initializable, IAccessControl {
-    function __AccessControl_init() internal initializer {
-        __AccessControl_init_unchained();
-    }
-
-    function __AccessControl_init_unchained() internal initializer {}
-
+abstract contract AccessControlAngle is Context, IAccessControlAngle {
     struct RoleData {
         mapping(address => bool) members;
         bytes32 adminRole;
@@ -103,7 +97,7 @@ abstract contract AccessControlUpgradeable is Initializable, IAccessControl {
      * _Available since v4.1._
      */
     modifier onlyRole(bytes32 role) {
-        _checkRole(role, msg.sender);
+        _checkRole(role, _msgSender());
         _;
     }
 
@@ -127,9 +121,9 @@ abstract contract AccessControlUpgradeable is Initializable, IAccessControl {
                 string(
                     abi.encodePacked(
                         "AccessControl: account ",
-                        StringsUpgradeable.toHexString(uint160(account), 20),
+                        Strings.toHexString(uint160(account), 20),
                         " is missing role ",
-                        StringsUpgradeable.toHexString(uint256(role), 32)
+                        Strings.toHexString(uint256(role), 32)
                     )
                 )
             );
@@ -188,7 +182,7 @@ abstract contract AccessControlUpgradeable is Initializable, IAccessControl {
      * - the caller must be `account`.
      */
     function renounceRole(bytes32 role, address account) external override {
-        require(account == msg.sender, "71");
+        require(account == _msgSender(), "71");
 
         _revokeRole(role, account);
     }
@@ -226,16 +220,14 @@ abstract contract AccessControlUpgradeable is Initializable, IAccessControl {
     function _grantRole(bytes32 role, address account) internal {
         if (!hasRole(role, account)) {
             _roles[role].members[account] = true;
-            emit RoleGranted(role, account, msg.sender);
+            emit RoleGranted(role, account, _msgSender());
         }
     }
 
     function _revokeRole(bytes32 role, address account) internal {
         if (hasRole(role, account)) {
             _roles[role].members[account] = false;
-            emit RoleRevoked(role, account, msg.sender);
+            emit RoleRevoked(role, account, _msgSender());
         }
     }
-
-    uint256[49] private __gap;
 }

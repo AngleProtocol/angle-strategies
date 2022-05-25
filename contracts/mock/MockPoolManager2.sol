@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import "../external/AccessControlUpgradeable.sol";
+import "../external/AccessControlAngleUpgradeable.sol";
 
 import "../interfaces/IPoolManager.sol";
 import "../interfaces/IStrategy.sol";
@@ -130,7 +130,7 @@ interface IStableMaster {
 /// to get yield on its collateral
 /// @dev This file contains the functions that are callable by governance or by other contracts of the protocol
 /// @dev References to this contract are called `PoolManager`
-contract PoolManager is IPoolManagerFunctions, AccessControlUpgradeable, FunctionUtils {
+contract PoolManager is IPoolManagerFunctions, AccessControlAngleUpgradeable, FunctionUtils {
     using SafeERC20 for IERC20;
 
     /// @notice Interface for the underlying token accepted by this contract
