@@ -41,7 +41,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     IAToken internal _aToken;
     uint256 internal constant _SECONDS_IN_YEAR = 365 days;
 
-    uint256[50] private __gapAaveLender;
+    uint256[45] private __gapAaveLender;
 
     // =================================== Event ===================================
 
