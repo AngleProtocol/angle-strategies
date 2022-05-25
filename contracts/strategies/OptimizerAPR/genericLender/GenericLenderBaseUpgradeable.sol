@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
-import "../../../external/AccessControlUpgradeable.sol";
+import "../../../external/AccessControlAngleUpgradeable.sol";
 
 import "../../../interfaces/IGenericLender.sol";
 import "../../../interfaces/IPoolManager.sol";
@@ -16,7 +16,7 @@ import "../../../interfaces/IStrategy.sol";
 /// @title GenericLenderBaseUpgradeable
 /// @author Forked from https://github.com/Grandthrax/yearnV2-generic-lender-strat/tree/master/contracts/GenericLender
 /// @notice A base contract to build contracts that lend assets to protocols
-abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlUpgradeable {
+abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlAngleUpgradeable {
     using SafeERC20 for IERC20;
 
     bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");

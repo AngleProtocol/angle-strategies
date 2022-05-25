@@ -11,7 +11,7 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 /// with the `PoolManager` Contract.
 /// @dev This contract should be inherited and the abstract methods implemented to adapt the `Strategy`
 /// to the particular needs it has to create a return.
-abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlUpgradeable {
+abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAngleUpgradeable {
     using SafeERC20 for IERC20;
 
     uint256 public constant BASE = 10**18;

@@ -2,13 +2,13 @@
 
 pragma solidity ^0.8.7;
 
-import "./IAccessControl.sol";
+import "./IAccessControlAngle.sol";
 
 /// @title IGenericLender
 /// @author Yearn with slight modifications from Angle Core Team
 /// @dev Interface for the `GenericLender` contract, the base interface for contracts interacting
 /// with lending and yield farming platforms
-interface IGenericLender is IAccessControl {
+interface IGenericLender is IAccessControlAngle {
     function lenderName() external view returns (string memory);
 
     function nav() external view returns (uint256);
