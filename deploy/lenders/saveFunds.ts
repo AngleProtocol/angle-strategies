@@ -136,6 +136,9 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
       const aTokenBalanceNew = await aToken.balanceOf(newLenderAaveAddress);
       expect(aTokenBalanceNew).to.be.closeTo(aTokenBalanceOld, parseUnits('0.1', 18));
     }
+
+    // also sweep the old genericFrax aave
+    // await(await oldLenderAave.connect(acc).sweep(stkAave.address, newLenderAaveAddress)).wait();
   }
 };
 
