@@ -1,5 +1,3 @@
-import { ProxyAdmin, ProxyAdmin__factory } from '@angleprotocol/sdk/dist/constants/interfaces';
-
 import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
 import { network, ethers } from 'hardhat';
 import { parseUnits } from 'ethers/lib/utils';
@@ -9,8 +7,6 @@ import {
   OptimizerAPRStrategy,
   OptimizerAPRStrategy__factory,
 } from '../../../typechain';
-import yargs from 'yargs';
-const argv = yargs.env('').boolean('ci').parseSync();
 
 async function main() {
   // =============== Simulation parameters ====================
@@ -19,32 +15,24 @@ async function main() {
   const collateralName = 'DAI';
 
   let strategyAddress: string;
-  let poolManagerAddress: string;
   let guardian: string;
   let governor: string;
   let lenderAddress: string;
-  let proxyAdminAddress: string;
 
   if (!network.live) {
     guardian = CONTRACTS_ADDRESSES[ChainId.MAINNET].Guardian as string;
     governor = CONTRACTS_ADDRESSES[ChainId.MAINNET].GovernanceMultiSig as string;
-    poolManagerAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]
-      ?.PoolManager as string;
     strategyAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
       ?.GenericOptimisedLender as string;
     lenderAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]
       ?.GenericCompound as string;
-    proxyAdminAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].ProxyAdmin as string;
   } else {
     guardian = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].Guardian!;
     governor = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].GovernanceMultiSig as string;
-    poolManagerAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
-      ?.PoolManager as string;
     strategyAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
       ?.Strategies?.GenericOptimisedLender as string;
     lenderAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
       ?.GenericCompound as string;
-    proxyAdminAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].ProxyAdmin as string;
   }
 
   const strategy = new ethers.Contract(

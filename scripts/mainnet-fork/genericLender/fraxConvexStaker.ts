@@ -8,11 +8,8 @@ import {
 import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
 import { network, ethers } from 'hardhat';
 import { parseUnits } from 'ethers/lib/utils';
-import { ERC20, ERC20__factory, OptimizerAPRStrategy, OptimizerAPRStrategy__factory } from '../../../typechain';
-import { logBN } from '../../../test/utils-interaction';
-import { time } from '../../../test/test-utils/helpers';
+import { OptimizerAPRStrategy, OptimizerAPRStrategy__factory } from '../../../typechain';
 import { DAY } from '../../../test/contants';
-import { BigNumber, providers } from 'ethers';
 
 async function main() {
   // =============== Simulation parameters ====================
@@ -38,8 +35,8 @@ async function main() {
       ?.Strategies?.GenericOptimisedLender as string;
   }
 
-  const FRAX = '0x853d955aCEf822Db058eb8505911ED77F175b99e';
-  const wantToken = (await ethers.getContractAt(ERC20__factory.abi, FRAX)) as ERC20;
+  // const FRAX = '0x853d955aCEf822Db058eb8505911ED77F175b99e';
+  // const wantToken = (await ethers.getContractAt(ERC20__factory.abi, FRAX)) as ERC20;
 
   const strategy = new ethers.Contract(
     strategyAddress,

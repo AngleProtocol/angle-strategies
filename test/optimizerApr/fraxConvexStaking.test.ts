@@ -10,7 +10,6 @@ import {
   IMockFraxUnifiedFarm,
   IMockFraxUnifiedFarm__factory,
   IPoolRegistryFrax,
-  IPoolRegistryFrax__factory,
   IStakedAave,
   IStakedAave__factory,
   MockToken,
@@ -73,14 +72,12 @@ let governor: SignerWithAddress, guardian: SignerWithAddress, user: SignerWithAd
 let strategy: OptimizerAPRStrategy;
 let token: ERC20;
 let aToken: ERC20;
-let frax: ERC20;
 let nativeRewardToken: MockToken;
 let tokenDecimal: number;
 let manager: PoolManager;
 let lenderAave: GenericAaveFraxConvexStaker;
 let stkAave: IStakedAave;
 let aFraxStakingContract: IMockFraxUnifiedFarm;
-let poolRegistry: IPoolRegistryFrax;
 let oracleNativeReward: AggregatorV3Interface;
 let oracleStkAave: AggregatorV3Interface;
 let oneInch: string;
@@ -112,7 +109,7 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
 
     token = (await ethers.getContractAt(ERC20__factory.abi, '0x853d955aCEf822Db058eb8505911ED77F175b99e')) as ERC20;
     aToken = (await ethers.getContractAt(ERC20__factory.abi, '0xd4937682df3C8aEF4FE912A96A74121C0829E664')) as ERC20;
-    frax = (await ethers.getContractAt(ERC20__factory.abi, '0x853d955aCEf822Db058eb8505911ED77F175b99e')) as ERC20;
+    // frax = (await ethers.getContractAt(ERC20__factory.abi, '0x853d955aCEf822Db058eb8505911ED77F175b99e')) as ERC20;
     nativeRewardToken = (await ethers.getContractAt(
       MockToken__factory.abi,
       '0x3432B6A60D23Ca0dFCa7761B7ab56459D9C964D0',
@@ -140,10 +137,10 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       '0x547a514d5e3769680Ce22B2361c10Ea13619e8a9',
     )) as AggregatorV3Interface;
 
-    poolRegistry = (await ethers.getContractAt(
-      IPoolRegistryFrax__factory.abi,
-      '0x41a5881c17185383e19Df6FA4EC158a6F4851A69',
-    )) as IPoolRegistryFrax;
+    // poolRegistry = (await ethers.getContractAt(
+    //   IPoolRegistryFrax__factory.abi,
+    //   '0x41a5881c17185383e19Df6FA4EC158a6F4851A69',
+    // )) as IPoolRegistryFrax;
 
     guardianError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${guardianRole}`;
     keeperError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${keeperRole}`;

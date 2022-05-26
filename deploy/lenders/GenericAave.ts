@@ -3,6 +3,7 @@ import { DeployFunction } from 'hardhat-deploy/types';
 import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
 import { BigNumber } from 'ethers';
 import { GenericAaveNoStaker__factory, OptimizerAPRStrategy, OptimizerAPRStrategy__factory } from '../../typechain';
+import { impersonate } from '../../test/test-utils';
 
 const func: DeployFunction = async ({ deployments, ethers }) => {
   const { deploy } = deployments;
@@ -67,20 +68,17 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     console.log(`Deploy cost: ${(proxyLender.receipt?.gasUsed as BigNumber)?.toString()} (proxy)`);
 
     if (!network.live) {
-      await network.provider.request({
-        method: 'hardhat_impersonateAccount',
-        params: [governor],
-      });
-      const governorSigner = await ethers.getSigner(governor);
-      await network.provider.send('hardhat_setBalance', [governor, '0x10000000000000000000000000000']);
-
       const strategy = new ethers.Contract(
         strategyAddress,
         OptimizerAPRStrategy__factory.createInterface(),
         deployer,
       ) as OptimizerAPRStrategy;
-      await await strategy.connect(governorSigner).addLender(proxyLender.address);
-      console.log('Add lender: success');
+
+      await impersonate(guardian, async acc => {
+        await network.provider.send('hardhat_setBalance', [guardian, '0x10000000000000000000000000000']);
+        await await strategy.connect(acc).addLender(proxyLender.address);
+        console.log('Add lender: success');
+      });
     }
   }
 };

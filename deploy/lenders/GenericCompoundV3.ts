@@ -11,6 +11,7 @@ import {
   OptimizerAPRStrategy__factory,
 } from '../../typechain';
 import { parseUnits } from 'ethers/lib/utils';
+import { impersonate } from '../../test/test-utils';
 
 const func: DeployFunction = async ({ deployments, ethers }) => {
   const { deploy } = deployments;
@@ -94,16 +95,20 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
         GenericCompoundUpgradeable__factory.createInterface(),
         deployer,
       ) as GenericCompoundUpgradeable;
-      await await lenderCompound.connect(governorSigner).setDust(parseUnits('1', tokenDecimal + 2));
-      console.log('Set dust: success');
 
       const strategy = new ethers.Contract(
         strategyAddress,
         OptimizerAPRStrategy__factory.createInterface(),
         deployer,
       ) as OptimizerAPRStrategy;
-      await await strategy.connect(governorSigner).addLender(lenderCompound.address);
-      console.log('Add lender: success');
+
+      await impersonate(guardian, async acc => {
+        await network.provider.send('hardhat_setBalance', [guardian, '0x10000000000000000000000000000']);
+        await await lenderCompound.connect(acc).setDust(parseUnits('1', tokenDecimal + 2));
+        console.log('Set dust: success');
+        await await strategy.connect(acc).addLender(proxyLender.address);
+        console.log('Add lender: success');
+      });
     }
   }
 };

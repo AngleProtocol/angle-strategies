@@ -13,7 +13,12 @@ import {
   OptimizerAPRStrategy__factory,
 } from '../../typechain';
 import { impersonate } from '../../test/test-utils';
-import { GenericAave, GenericAave__factory } from '@angleprotocol/sdk/dist/constants/types';
+import {
+  GenericAave,
+  GenericAave__factory,
+  GenericCompound,
+  GenericCompound__factory,
+} from '@angleprotocol/sdk/dist/constants/types';
 import { expect } from '../../test/test-utils/chai-setup';
 import { parseUnits } from 'ethers/lib/utils';
 
@@ -23,7 +28,7 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
 
   let guardian: string;
   let governor: string;
-  let strategyAddress, oldLenderAddress: string;
+  let strategyAddress, oldLenderAaveAddress, oldLenderCompoundAddress: string;
 
   for (const collat in collats) {
     const collateralName = collats[collat];
@@ -37,21 +42,15 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
       governor = CONTRACTS_ADDRESSES[ChainId.MAINNET].GovernanceMultiSig as string;
       strategyAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
         ?.GenericOptimisedLender as string;
-      oldLenderAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]
+      oldLenderAaveAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]
         ?.GenericAave as string;
+      oldLenderCompoundAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]
+        ?.GenericCompound as string;
       const stkAaveAddress = json.Aave.stkAave;
       const aaveAddress = json.Aave.aave;
+      const compAddress = json.Compound.COMP;
       const incentiveControllerAddress = '0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5';
       const aTokenAddress = json.Aave.aDAI;
-
-      console.log(guardian);
-      console.log(governor);
-      console.log(strategyAddress);
-      console.log(oldLenderAddress);
-      console.log(stkAaveAddress);
-      console.log(aaveAddress);
-      console.log(incentiveControllerAddress);
-      console.log(aTokenAddress);
 
       await network.provider.request({
         method: 'hardhat_impersonateAccount',
@@ -62,14 +61,20 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
 
       const aToken = (await ethers.getContractAt(ERC20__factory.abi, aTokenAddress)) as ERC20;
       const oldLenderAave = new ethers.Contract(
-        oldLenderAddress,
+        oldLenderAaveAddress,
         GenericAave__factory.createInterface(),
         deployer,
       ) as GenericAave;
+      const oldLenderCompound = new ethers.Contract(
+        oldLenderCompoundAddress,
+        GenericCompound__factory.createInterface(),
+        deployer,
+      ) as GenericCompound;
 
-      const newLenderAddress = (await ethers.getContract(`GenericAaveNoStaker_${collateralName}`)).address;
+      const newLenderCompAddress = (await ethers.getContract(`GenericCompoundV3_${collateralName}`)).address;
+      const newLenderAaveAddress = (await ethers.getContract(`GenericAaveNoStaker_${collateralName}`)).address;
       const newLenderAave = new ethers.Contract(
-        newLenderAddress,
+        newLenderAaveAddress,
         GenericAaveNoStaker__factory.createInterface(),
         deployer,
       ) as GenericAaveNoStaker;
@@ -92,31 +97,34 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
         deployer,
       ) as IAaveIncentivesController;
 
-      const aTokenBalanceOld = await aToken.balanceOf(oldLenderAddress);
+      const aTokenBalanceOld = await aToken.balanceOf(oldLenderAaveAddress);
       console.log('old balnce fetched for lender ');
-      await strategy.connect(governorSigner).forceRemoveLender(oldLenderAddress);
+      await strategy.connect(governorSigner).forceRemoveLender(oldLenderAaveAddress);
       console.log('Remove old lender: success');
 
       // Transfer, harvest and transfer the rewards to the new lender
       // This is done in this order to set the cooldown to 0 on the oldLender such that no Aave will be sold
       // while still being able to claim the new stkAave
-      const claimableRewards = await incentiveController.getRewardsBalance([aToken.address], oldLenderAddress);
-      const oldLenderStkAaveBalance = await stkAave.balanceOf(oldLenderAddress);
-      const oldLenderAaveBalance = await aave.balanceOf(oldLenderAddress);
+      const claimableRewards = await incentiveController.getRewardsBalance([aToken.address], oldLenderAaveAddress);
+      const oldLenderStkAaveBalance = await stkAave.balanceOf(oldLenderAaveAddress);
+      const oldLenderAaveBalance = await aave.balanceOf(oldLenderAaveAddress);
       expect(oldLenderAaveBalance).to.be.equal(parseUnits('0', 18));
       await impersonate(guardian, async acc => {
         await network.provider.send('hardhat_setBalance', [guardian, '0x10000000000000000000000000000']);
         // USDC don't have this problem because there hasn't been any harvest yet
         if (collateralName == 'DAI') {
-          await (await oldLenderAave.connect(acc).sweep(stkAave.address, newLenderAddress)).wait();
+          await (await oldLenderAave.connect(acc).sweep(stkAave.address, newLenderAaveAddress)).wait();
           console.log('first sweep: success');
+        } else if (collateralName == 'USDC') {
+          await (await oldLenderCompound.connect(acc).sweep(compAddress, newLenderCompAddress)).wait();
+          console.log('Comp transfer: success');
         }
         await (await oldLenderAave.connect(acc).harvest()).wait();
         console.log('lender harvest: success');
-        await (await oldLenderAave.connect(acc).sweep(stkAave.address, newLenderAddress)).wait();
+        await (await oldLenderAave.connect(acc).sweep(stkAave.address, newLenderAaveAddress)).wait();
         console.log('second sweep: success');
       });
-      const newLenderStkAaveBalance = await stkAave.balanceOf(newLenderAddress);
+      const newLenderStkAaveBalance = await stkAave.balanceOf(newLenderAaveAddress);
       expect(newLenderStkAaveBalance).to.be.closeTo(
         oldLenderStkAaveBalance.add(claimableRewards),
         parseUnits('0.01', 18),
@@ -125,7 +133,7 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
       // Harvest and verify that all funds have been transferred to the new lender
       await strategy.connect(deployer)['harvest()'];
       console.log('strategy harvest: success');
-      const aTokenBalanceNew = await aToken.balanceOf(newLenderAddress);
+      const aTokenBalanceNew = await aToken.balanceOf(newLenderAaveAddress);
       expect(aTokenBalanceNew).to.be.closeTo(aTokenBalanceOld, parseUnits('0.1', 18));
     }
   }
