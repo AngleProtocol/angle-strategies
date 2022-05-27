@@ -1,8 +1,8 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ethers, network } from 'hardhat';
-import { utils, Contract } from 'ethers';
+import { utils, Contract, providers } from 'ethers';
 import { expect } from '../test-utils/chai-setup';
-import { deploy, impersonate } from '../test-utils';
+import { deploy, impersonate, latestTime } from '../test-utils';
 import {
   AaveFlashloanStrategy,
   FlashMintLib,
@@ -75,7 +75,7 @@ describe('AaveFlashloanStrategy - Coverage', () => {
     poolManager = (await deploy('MockPoolManager', [wantToken.address, 0])) as PoolManager;
 
     incentivesController = (await ethers.getContractAt(
-      IAaveIncentivesController__factory.abi,
+      [...IAaveIncentivesController__factory.abi, 'function setDistributionEnd(uint256 distributionEnd) external'],
       '0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5',
     )) as IAaveIncentivesController;
 
@@ -138,6 +138,17 @@ describe('AaveFlashloanStrategy - Coverage', () => {
     });
 
     describe('adjustPosition', () => {
+      it('adjustPosition - incentive program finished', async () => {
+        const timestamp = await latestTime();
+        console.log('test timestamp: ', timestamp);
+        await impersonate('0xee56e2b3d491590b5b31738cc34d5232f378a8d5', async acc => {
+          await (incentivesController as Contract).connect(acc).setDistributionEnd(timestamp);
+        });
+
+        await strategy.connect(keeper)['harvest(uint256)'](ethers.constants.Zero, { gasLimit: 3e6 });
+        const { borrows } = await strategy.getCurrentPosition();
+        expect(borrows).to.be.equal(ethers.constants.Zero);
+      });
       it('adjustPosition - currentCollatRatio > _targetCollatRatio', async () => {
         await impersonate('0xEE56e2B3D491590B5b31738cC34d5232F378a8D5', async acc => {
           await incentivesController
