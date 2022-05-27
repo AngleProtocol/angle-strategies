@@ -800,6 +800,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
         ComputeProfitability.SCalculateBorrow memory parameters;
 
+        if (block.timestamp > _incentivesController.getDistributionEnd()) return 0;
+
         {
             (
                 uint256 availableLiquidity,
