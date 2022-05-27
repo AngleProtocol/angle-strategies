@@ -1,8 +1,6 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { Contract, utils } from 'ethers';
+import { utils } from 'ethers';
 import {
-  AggregatorV3Interface,
-  AggregatorV3Interface__factory,
   CErc20I,
   CErc20I__factory,
   ERC20,
@@ -11,7 +9,6 @@ import {
   GenericCompoundUpgradeable__factory,
   IComptroller,
   IComptroller__factory,
-  MockToken,
   OptimizerAPRStrategy,
   OptimizerAPRStrategy__factory,
   PoolManager,
@@ -22,9 +19,8 @@ import { ethers, network } from 'hardhat';
 import { expect } from '../test-utils/chai-setup';
 import { BASE_TOKENS } from '../utils';
 import { parseUnits } from 'ethers/lib/utils';
-import { findBalancesSlot, logBN, setTokenBalanceFor } from '../utils-interaction';
+import { findBalancesSlot, setTokenBalanceFor } from '../utils-interaction';
 import { time, ZERO_ADDRESS } from '../test-utils/helpers';
-import { DAY } from '../contants';
 
 async function initStrategy(
   governor: SignerWithAddress,
@@ -53,7 +49,7 @@ async function initLenderCompound(
   const lender = (await deployUpgradeable(
     new GenericCompoundUpgradeable__factory(guardian),
   )) as GenericCompoundUpgradeable;
-  await lender.initialize(strategy.address, name, cToken, [governor.address], [keeper.address], guardian.address);
+  await lender.initialize(strategy.address, name, cToken, [governor.address], guardian.address, [keeper.address]);
   await strategy.connect(governor).addLender(lender.address);
   return { lender };
 }
@@ -68,8 +64,6 @@ let manager: PoolManager;
 let lenderCompound: GenericCompoundUpgradeable;
 let comptroller: IComptroller;
 let cToken: CErc20I;
-let ANGLE: MockToken;
-let oracleReward: AggregatorV3Interface;
 
 const guardianRole = ethers.utils.solidityKeccak256(['string'], ['GUARDIAN_ROLE']);
 const strategyRole = ethers.utils.solidityKeccak256(['string'], ['STRATEGY_ROLE']);
@@ -77,7 +71,6 @@ const keeperRole = ethers.utils.solidityKeccak256(['string'], ['KEEPER_ROLE']);
 let guardianError: string;
 let strategyError: string;
 let keeperError: string;
-let oneInch: string;
 
 // Start test block
 describe('OptimizerAPR - lenderCompound', () => {
@@ -97,17 +90,17 @@ describe('OptimizerAPR - lenderCompound', () => {
       ],
       '0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B',
     )) as IComptroller;
-    ANGLE = (await deploy('MockToken', ['ANGLE', 'ANGLE', 18])) as MockToken;
+    // ANGLE = (await deploy('MockToken', ['ANGLE', 'ANGLE', 18])) as MockToken;
 
-    oracleReward = (await ethers.getContractAt(
-      AggregatorV3Interface__factory.abi,
-      '0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5',
-    )) as AggregatorV3Interface;
+    // oracleReward = (await ethers.getContractAt(
+    //   AggregatorV3Interface__factory.abi,
+    //   '0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5',
+    // )) as AggregatorV3Interface;
 
     guardianError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${guardianRole}`;
     strategyError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${strategyRole}`;
     keeperError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${keeperRole}`;
-    oneInch = '0x1111111254fb6c44bAC0beD2854e76F90643097d';
+    // oneInch = '0x1111111254fb6c44bAC0beD2854e76F90643097d';
   });
 
   beforeEach(async () => {
@@ -153,14 +146,9 @@ describe('OptimizerAPR - lenderCompound', () => {
         new GenericCompoundUpgradeable__factory(guardian),
       )) as GenericCompoundUpgradeable;
       await expect(
-        lender.initialize(
-          strategy.address,
-          'wrong lender',
-          wrongCToken.address,
-          [governor.address],
-          [keeper.address],
-          guardian.address,
-        ),
+        lender.initialize(strategy.address, 'wrong lender', wrongCToken.address, [governor.address], guardian.address, [
+          keeper.address,
+        ]),
       ).to.be.revertedWith('WrongCToken');
     });
     it('Parameters', async () => {

@@ -48,8 +48,8 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         string memory _name,
         address _cToken,
         address[] memory governorList,
-        address[] memory keeperList,
-        address guardian
+        address guardian,
+        address[] memory keeperList
     ) external {
         _initialize(_strategy, _name, governorList, guardian, keeperList);
 
