@@ -129,7 +129,7 @@ export async function setup(startBlocknumber?: number, collat = 'USDC') {
   const realGuardian = await ethers.getSigner('0xdc4e6dfe07efca50a197df15d9200883ef4eb1c8');
   await network.provider.send('hardhat_setBalance', [
     realGuardian.address,
-    utils.parseEther('100').toHexString().replace('0x0', '0x'),
+    ethers.utils.hexStripZeros(utils.parseEther('100').toHexString()),
   ]);
   await network.provider.request({ method: 'hardhat_impersonateAccount', params: [realGuardian.address] });
 

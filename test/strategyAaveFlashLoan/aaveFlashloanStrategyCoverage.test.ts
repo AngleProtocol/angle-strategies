@@ -124,13 +124,13 @@ describe('AaveFlashloanStrategy - Coverage', () => {
       // sending funds to emission controller
       await network.provider.send('hardhat_setBalance', [
         '0xEE56e2B3D491590B5b31738cC34d5232F378a8D5',
-        utils.parseEther('100').toHexString().replace('0x0', '0x'),
+        ethers.utils.hexStripZeros(utils.parseEther('100').toHexString()),
       ]);
 
       // sending funds to strategy
       await network.provider.send('hardhat_setBalance', [
         strategy.address,
-        utils.parseEther('100').toHexString().replace('0x0', '0x'),
+        ethers.utils.hexStripZeros(utils.parseEther('100').toHexString()),
       ]);
 
       await wantToken.connect(user).transfer(poolManager.address, parseUnits(_startAmount.toString(), decimalsToken));
@@ -213,7 +213,7 @@ describe('AaveFlashloanStrategy - Coverage', () => {
         expect(borrows).to.gt(ethers.constants.Zero);
 
         await impersonate(poolManager.address, async acc => {
-          const balanceStorage = utils.parseEther('1').toHexString().replace('0x0', '0x');
+          const balanceStorage = ethers.utils.hexStripZeros(utils.parseEther('1').toHexString());
           await network.provider.send('hardhat_setBalance', [acc.address, balanceStorage]);
           const balanceManager = await wantToken.balanceOf(acc.address);
           await wantToken.connect(acc).transfer(user.address, balanceManager);
@@ -254,7 +254,7 @@ describe('AaveFlashloanStrategy - Coverage', () => {
         expect(borrows).to.gt(ethers.constants.Zero);
 
         await impersonate(poolManager.address, async acc => {
-          const balanceStorage = utils.parseEther('1').toHexString().replace('0x0', '0x');
+          const balanceStorage = ethers.utils.hexStripZeros(utils.parseEther('1').toHexString());
           await network.provider.send('hardhat_setBalance', [acc.address, balanceStorage]);
           const balanceManager = await wantToken.balanceOf(acc.address);
           await wantToken.connect(acc).transfer(user.address, balanceManager);
@@ -285,7 +285,7 @@ describe('AaveFlashloanStrategy - Coverage', () => {
         expect(borrows).to.equal(ethers.constants.Zero);
 
         await impersonate(poolManager.address, async acc => {
-          const balanceStorage = utils.parseEther('1').toHexString().replace('0x0', '0x');
+          const balanceStorage = ethers.utils.hexStripZeros(utils.parseEther('1').toHexString());
           await network.provider.send('hardhat_setBalance', [acc.address, balanceStorage]);
 
           const balanceManager = await wantToken.balanceOf(acc.address);

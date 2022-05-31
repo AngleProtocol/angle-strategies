@@ -301,7 +301,7 @@ describe('AaveFlashloanStrategy - Harvest Hint', () => {
 
       await network.provider.send('hardhat_setBalance', [
         '0x3DdfA8eC3052539b6C9549F12cEA2C295cfF5296',
-        utils.parseEther('100').toHexString().replace('0x0', '0x'),
+        ethers.utils.hexStripZeros(utils.parseEther('100').toHexString()),
       ]);
 
       await impersonate('0x3DdfA8eC3052539b6C9549F12cEA2C295cfF5296', async acc => {
@@ -386,7 +386,7 @@ describe('AaveFlashloanStrategy - Harvest Hint', () => {
         const balanceManager = await wantToken.balanceOf(acc.address);
         await network.provider.send('hardhat_setBalance', [
           acc.address,
-          utils.parseEther('100').toHexString().replace('0x0', '0x'),
+          ethers.utils.hexStripZeros(utils.parseEther('100').toHexString()),
         ]);
         await wantToken.connect(acc).transfer(user.address, balanceManager);
         await (await poolManager.updateStrategyDebtRatio(strategy.address, utils.parseUnits('0.95', 9))).wait();
@@ -437,7 +437,7 @@ describe('AaveFlashloanStrategy - Harvest Hint', () => {
 
       await network.provider.send('hardhat_setBalance', [
         '0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7',
-        utils.parseEther('100').toHexString().replace('0x0', '0x'),
+        ethers.utils.hexStripZeros(utils.parseEther('100').toHexString()),
       ]);
       // Curve pool
       await impersonate('0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7', async acc => {
@@ -555,7 +555,7 @@ describe('AaveFlashloanStrategy - Harvest Hint', () => {
 
       await network.provider.send('hardhat_setBalance', [
         '0xa13C0c8eB109F5A13c6c90FC26AFb23bEB3Fb04a',
-        utils.parseEther('100').toHexString().replace('0x0', '0x'),
+        ethers.utils.hexStripZeros(utils.parseEther('100').toHexString()),
       ]);
 
       await impersonate('0xa13C0c8eB109F5A13c6c90FC26AFb23bEB3Fb04a', async acc => {
@@ -633,7 +633,7 @@ describe('AaveFlashloanStrategy - Harvest Hint', () => {
 
       await network.provider.send('hardhat_setBalance', [
         '0xa13C0c8eB109F5A13c6c90FC26AFb23bEB3Fb04a',
-        utils.parseEther('100').toHexString().replace('0x0', '0x'),
+        ethers.utils.hexStripZeros(utils.parseEther('100').toHexString()),
       ]);
 
       await impersonate(poolManagerDAI.address, async acc => {
@@ -643,7 +643,7 @@ describe('AaveFlashloanStrategy - Harvest Hint', () => {
         const balanceManager = await dai.balanceOf(acc.address);
         await network.provider.send('hardhat_setBalance', [
           acc.address,
-          utils.parseEther('100').toHexString().replace('0x0', '0x'),
+          ethers.utils.hexStripZeros(utils.parseEther('100').toHexString()),
         ]);
         await dai.connect(acc).transfer(user.address, balanceManager);
         await (await poolManagerDAI.updateStrategyDebtRatio(strategy.address, utils.parseUnits('0.95', 9))).wait();

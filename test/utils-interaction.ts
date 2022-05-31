@@ -372,7 +372,9 @@ export async function setTokenBalanceFor(token: ERC20, account: string, amount: 
   // for FRAX we know it's 0
   // const balanceSlot = await findBalancesSlot(token.address);
   // console.log('the balance slot is ', balanceSlot);
-  const balanceStorage = utils.solidityKeccak256(['uint256', 'uint256'], [account, balanceSlot]).replace('0x0', '0x');
+  const balanceStorage = ethers.utils.hexStripZeros(
+    utils.solidityKeccak256(['uint256', 'uint256'], [account, balanceSlot]),
+  );
   const amountStorage = utils.hexZeroPad(utils.parseUnits(amount.toString(), await token.decimals()).toHexString(), 32);
 
   await network.provider.send('hardhat_setStorageAt', [token.address, balanceStorage, amountStorage]);
