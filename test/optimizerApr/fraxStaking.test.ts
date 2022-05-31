@@ -153,7 +153,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
       DAY,
     ));
     oneInch = '0x1111111254fb6c44bAC0beD2854e76F90643097d';
-    amountStorage = utils.parseEther('1').toHexString().replace('0x0', '0x');
+    amountStorage = ethers.utils.hexStripZeros(utils.parseEther('1').toHexString());
   });
 
   describe('Contructor', () => {

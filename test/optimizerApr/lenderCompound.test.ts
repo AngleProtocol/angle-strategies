@@ -276,7 +276,7 @@ describe('OptimizerAPR - lenderCompound', () => {
       await impersonate(cToken.address, async acc => {
         await network.provider.send('hardhat_setBalance', [
           acc.address,
-          utils.parseEther('1').toHexString().replace('0x0', '0x'),
+          ethers.utils.hexStripZeros(utils.parseEther('1').toHexString()),
         ]);
         const liquidityAave = await token.balanceOf(cToken.address);
         await (await token.connect(acc).transfer(user.address, liquidityAave)).wait();
@@ -299,7 +299,7 @@ describe('OptimizerAPR - lenderCompound', () => {
       await impersonate(cToken.address, async acc => {
         await network.provider.send('hardhat_setBalance', [
           acc.address,
-          utils.parseEther('1').toHexString().replace('0x0', '0x'),
+          ethers.utils.hexStripZeros(utils.parseEther('1').toHexString()),
         ]);
         const liquidityAave = await token.balanceOf(cToken.address);
         await (await token.connect(acc).transfer(user.address, liquidityAave.sub(parseUnits('2', 1)))).wait();

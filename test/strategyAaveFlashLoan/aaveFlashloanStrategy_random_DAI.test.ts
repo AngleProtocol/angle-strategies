@@ -1,6 +1,6 @@
 /* eslint-disable camelcase */
 import { network } from 'hardhat';
-import { utils } from 'ethers';
+import { ethers, utils } from 'ethers';
 import { setup } from './setup_tests';
 
 export async function setDaiBalanceFor(account: string, amount: number) {
@@ -8,7 +8,7 @@ export async function setDaiBalanceFor(account: string, amount: number) {
 
   await network.provider.send('hardhat_setStorageAt', [
     '0x6B175474E89094C44Da98b954EedeAC495271d0F',
-    balanceStorage.replace('0x0', '0x'),
+    ethers.utils.hexStripZeros(balanceStorage),
     utils.hexZeroPad(utils.parseUnits(amount.toString(), 18).toHexString(), 32),
   ]);
 }

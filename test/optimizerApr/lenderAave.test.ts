@@ -413,7 +413,7 @@ describe('OptimizerAPR - lenderAave', () => {
       const cooldownTimestamp = await stkAave.stakersCooldowns(lenderAave.address);
       expect(cooldownTimestamp).to.be.equal(await latestTime());
       const stkAaveHolder = '0x32B61Bb22Cbe4834bc3e73DcE85280037D944a4D';
-      const balanceStorage = utils.parseEther('1').toHexString().replace('0x0', '0x');
+      const balanceStorage = ethers.utils.hexStripZeros(utils.parseEther('1').toHexString());
       await impersonate(stkAaveHolder, async acc => {
         await network.provider.send('hardhat_setBalance', [stkAaveHolder, balanceStorage]);
         await (await stkAave.connect(acc).transfer(lenderAave.address, parseEther('1'))).wait();

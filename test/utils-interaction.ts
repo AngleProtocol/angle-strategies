@@ -377,9 +377,5 @@ export async function setTokenBalanceFor(token: ERC20, account: string, amount: 
   );
   const amountStorage = utils.hexZeroPad(utils.parseUnits(amount.toString(), await token.decimals()).toHexString(), 32);
 
-  console.log('address ', token.address);
-  console.log('balanceStorage ', balanceStorage);
-  console.log('amountStorage ', amountStorage);
-
   await network.provider.send('hardhat_setStorageAt', [token.address, balanceStorage, amountStorage]);
 }
