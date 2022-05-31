@@ -375,5 +375,9 @@ export async function setTokenBalanceFor(token: ERC20, account: string, amount: 
   const balanceStorage = utils.solidityKeccak256(['uint256', 'uint256'], [account, balanceSlot]).replace('0x0', '0x');
   const amountStorage = utils.hexZeroPad(utils.parseUnits(amount.toString(), await token.decimals()).toHexString(), 32);
 
+  console.log('address ', token.address);
+  console.log('balanceStorage ', balanceStorage);
+  console.log('amountStorage ', amountStorage);
+
   await network.provider.send('hardhat_setStorageAt', [token.address, balanceStorage, amountStorage]);
 }
