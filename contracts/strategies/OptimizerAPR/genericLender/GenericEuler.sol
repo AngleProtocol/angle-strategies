@@ -28,7 +28,6 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     IEulerDToken private dToken;
     uint32 public reserveFee;
     IBaseIRM private irm;
-    uint256 private dust;
 
     // =============================== Errors ======================================
 
@@ -36,7 +35,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
 
     // ============================= Constructor ===================================
 
-    /// @notice Initializer of the `GenericCompound`
+    /// @notice Initializer of the `GenericEuler`
     /// @param _strategy Reference to the strategy using this lender
     /// @param governorList List of addresses with governor privilege
     /// @param keeperList List of addresses with keeper privilege
@@ -61,8 +60,8 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
 
     // ===================== External Strategy Functions ===========================
 
-    /// @notice Retrieves lending pool variables like the `COOLDOWN_SECONDS` or the `UNSTAKE_WINDOW` on Aave
-    /// @dev No access control is needed here because values are fetched from Aave directly
+    /// @notice Retrieves Euler variables `reserveFee` and the `irm` - rates curve -  used for the underlying token
+    /// @dev No access control is needed here because values are fetched from Euler directly
     /// @dev We expect the values concerned not to be often modified
     function setEulerPoolVariables() external {
         _setEulerPoolVariables();
@@ -116,13 +115,6 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         want.safeTransfer(address(poolManager), want.balanceOf(address(this)));
     }
 
-    /// @notice Allow to modify the dust amount
-    /// @param dust_ Amount under which the contract do not try to redeem from Compouns
-    /// @dev Set in a function because contract was already initalized
-    function setDust(uint256 dust_) external onlyRole(GUARDIAN_ROLE) {
-        dust = dust_;
-    }
-
     // ============================= Internal Functions ============================
 
     /// @notice See `apr`
@@ -133,22 +125,28 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     /// @notice Internal version of the function `aprAfterDeposit`
     function _aprAfterDeposit(uint256 amount) internal view returns (uint256) {
         uint256 totalBorrows = dToken.totalSupply();
-        uint256 totalSupply = eToken.totalSupplyUnderlying();
-        uint32 futureUtilisationRate;
+        // current supply + the added liquidity
+        uint256 totalSupply = eToken.totalSupplyUnderlying() + amount;
 
-        if (amount + totalSupply > 0)
-            futureUtilisationRate = uint32(
-                (totalBorrows * (uint256(type(uint32).max) * 1e18)) / (totalSupply + amount) / 1e18
+        uint256 supplyAPY;
+        if (totalSupply > 0) {
+            uint32 futureUtilisationRate = uint32(
+                (totalBorrows * (uint256(type(uint32).max) * 1e18)) / totalSupply / 1e18
             );
-
-        uint256 interestRate = uint256(uint96(irm.computeInterestRate(address(want), futureUtilisationRate)));
-        uint256 supplyAPY = _computeAPYs(interestRate, totalBorrows, totalSupply, reserveFee);
+            uint256 interestRate = uint256(uint96(irm.computeInterestRate(address(want), futureUtilisationRate)));
+            supplyAPY = _computeAPYs(interestRate, totalBorrows, totalSupply, reserveFee);
+        }
 
         // Adding the yield from EUL
         return supplyAPY + _incentivesRate(amount);
     }
 
     /// @notice Compute APYs based on th interest rate, reserve fee, borrow
+    /// @param borrowSPY Interest rate paid per second by borrowers
+    /// @param totalBorrows Total amount borrowed on Euler of the underlying token
+    /// @param totalBalancesUnderlying Total amount supplied on Euler of the underlying token
+    /// @param _reserveFee Reserve fee set by governance for the underlying token
+    /// @return supplyAPY The annual percentage yield received as a supplier with current settings
     function _computeAPYs(
         uint256 borrowSPY,
         uint256 totalBorrows,
@@ -156,11 +154,12 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         uint32 _reserveFee
     ) internal pure returns (uint256 supplyAPY) {
         // not useful for the moment
-        // uint256 borrowAPY = RPow.rpow(borrowSPY + 1e27, SECONDS_PER_YEAR, 10**27) - 1e27;
+        // uint256 borrowAPY = (RPow.rpow(borrowSPY + 1e27, SECONDS_PER_YEAR, 10**27) - 1e27)/ 1e9;
 
-        uint256 supplySPY = totalBalancesUnderlying == 0 ? 0 : (borrowSPY * totalBorrows) / totalBalancesUnderlying;
+        uint256 supplySPY = (borrowSPY * totalBorrows) / totalBalancesUnderlying;
         supplySPY = (supplySPY * (RESERVE_FEE_SCALE - _reserveFee)) / RESERVE_FEE_SCALE;
-        supplyAPY = RPow.rpow(supplySPY + 1e27, SECONDS_PER_YEAR, 10**27) - 1e27;
+        // all rates are in base 18 on Angle strategies
+        supplyAPY = (RPow.rpow(supplySPY + 1e27, SECONDS_PER_YEAR, 10**27) - 1e27) / 1e9;
     }
 
     /// @notice See `withdraw`
@@ -200,25 +199,26 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
 
     /// @notice Calculates APR from Liquidity Mining Program
     /// @dev amountToAdd Amount to add to the currently supplied (for the `aprAfterDeposit` function)
-    /// @dev For the moment no on chain tracking of rewards (only for borrowers for now)
+    /// @dev For the moment no on chain tracking of rewards (+ only for borrowers for now)
     function _incentivesRate(uint256) internal view returns (uint256) {
         return 0;
     }
 
-    /// @notice Estimates the value of `_amount` COMP tokens
-    /// @param _amount Amount of comp to compute the `want` price of
-    /// @dev This function uses a ChainLink oracle to easily compute the price
-    function _eultoWant(uint256 _amount) internal view returns (uint256) {
-        if (_amount == 0) {
-            return 0;
-        }
-        (uint80 roundId, int256 ratio, , , uint80 answeredInRound) = oracle.latestRoundData();
-        if (ratio == 0 || roundId > answeredInRound) revert InvalidOracleValue();
-        uint256 castedRatio = uint256(ratio);
+    // TODO to be added if EUL distribution goes live for supplier
+    // /// @notice Estimates the value of `_amount` EUL tokens
+    // /// @param _amount Amount of comp to compute the `want` price of
+    // /// @dev This function uses a ChainLink oracle to easily compute the price
+    // function _nativeRewardToWant(uint256 _amount) internal view returns (uint256) {
+    //     if (_amount == 0) {
+    //         return 0;
+    //     }
+    //     (uint80 roundId, int256 ratio, , , uint80 answeredInRound) = oracle.latestRoundData();
+    //     if (ratio == 0 || roundId > answeredInRound) revert InvalidOracleValue();
+    //     uint256 castedRatio = uint256(ratio);
 
-        // Checking whether we should multiply or divide by the ratio computed
-        return (_amount * castedRatio * wantBase) / 1e26;
-    }
+    //     // Checking whether we should multiply or divide by the ratio computed
+    //     return (_amount * castedRatio * wantBase) / 1e26;
+    // }
 
     /// @notice Internal version of the `setEulerPoolVariables`
     function _setEulerPoolVariables() internal {

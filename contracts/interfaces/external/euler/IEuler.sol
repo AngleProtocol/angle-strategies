@@ -359,3 +359,15 @@ interface IEulerDToken is IEulerConstants {
 interface IBaseIRM {
     function computeInterestRate(address underlying, uint32 utilisation) external view returns (int96);
 }
+
+interface IGovernance {
+    function setIRM(
+        address underlying,
+        uint256 interestRateModel,
+        bytes calldata resetParams
+    ) external;
+
+    function setReserveFee(address underlying, uint32 newReserveFee) external;
+
+    function getGovernorAdmin() external view returns (address);
+}
