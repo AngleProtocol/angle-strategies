@@ -12,6 +12,7 @@ import "../../../external/AccessControlAngleUpgradeable.sol";
 import "../../../interfaces/IGenericLender.sol";
 import "../../../interfaces/IPoolManager.sol";
 import "../../../interfaces/IStrategy.sol";
+import "hardhat/console.sol";
 
 /// @title GenericLenderBaseUpgradeable
 /// @author Forked from https://github.com/Grandthrax/yearnV2-generic-lender-strat/tree/master/contracts/GenericLender
@@ -165,6 +166,9 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
     /// should be protected from sweeping in addition to `want`.
     function sweep(address _token, address to) external override onlyRole(GUARDIAN_ROLE) {
         address[] memory __protectedTokens = _protectedTokens();
+        console.log("__protectedTokens 0: ", __protectedTokens[0]);
+        console.log("__protectedTokens 1: ", __protectedTokens[1]);
+
         for (uint256 i = 0; i < __protectedTokens.length; i++)
             if (_token == __protectedTokens[i]) revert ProtectedToken();
 

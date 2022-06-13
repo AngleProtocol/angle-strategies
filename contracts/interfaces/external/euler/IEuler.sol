@@ -355,3 +355,7 @@ interface IEulerDToken is IEulerConstants {
     /// @param spender Trusted address
     function debtAllowance(address holder, address spender) external view returns (uint256);
 }
+
+interface IBaseIRM {
+    function computeInterestRate(address underlying, uint32 utilisation) external view returns (int96);
+}
