@@ -146,19 +146,13 @@ describe('OptimizerAPR - lenderEuler', () => {
     });
   });
   describe('Access Control', () => {
-    it('deposit - reverts nonStrategy', async () => {
+    it('reverts - strategy functions when called by non strategy', async () => {
       await expect(lenderEuler.connect(user).deposit()).to.be.revertedWith(strategyError);
-    });
-    it('withdraw - reverts nonStrategy', async () => {
       await expect(lenderEuler.connect(user).withdraw(parseUnits('1', 0))).to.be.revertedWith(strategyError);
-    });
-    it('withdrawAll - reverts nonStrategy', async () => {
       await expect(lenderEuler.connect(user).withdrawAll()).to.be.revertedWith(strategyError);
     });
-    it('emergencyWithdraw - reverts nonGuardian', async () => {
+    it('reverts - guardian functions when called by non guardian nonGuardian', async () => {
       await expect(lenderEuler.connect(user).emergencyWithdraw(parseUnits('1', 0))).to.be.revertedWith(guardianError);
-    });
-    it('sweep - reverts nonGuardian', async () => {
       await expect(lenderEuler.connect(user).sweep(token.address, user.address)).to.be.revertedWith(guardianError);
     });
     it('success - guardian role - strategy', async () => {

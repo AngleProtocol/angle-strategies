@@ -62,21 +62,18 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
     // ===================== External Strategy Functions ===========================
 
-    /// @notice Deposits the current balance of the contract to the lending platform
+    /// @inheritdoc IGenericLender
     function deposit() external override onlyRole(STRATEGY_ROLE) {
         uint256 balance = want.balanceOf(address(this));
         if (cToken.mint(balance) != 0) revert FailedToMint();
     }
 
-    /// @notice Withdraws a given amount from lender
-    /// @param amount The amount the caller wants to withdraw
-    /// @return Amount actually withdrawn
+    /// @inheritdoc IGenericLender
     function withdraw(uint256 amount) external override onlyRole(STRATEGY_ROLE) returns (uint256) {
         return _withdraw(amount);
     }
 
-    /// @notice Withdraws as much as possible from the lending platform
-    /// @return Whether everything was withdrawn or not
+    /// @inheritdoc IGenericLender
     function withdrawAll() external override onlyRole(STRATEGY_ROLE) returns (bool) {
         uint256 invested = _nav();
         uint256 returned = _withdraw(invested);
@@ -85,7 +82,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
     // ========================== External View Functions ==========================
 
-    /// @notice Helper function the current balance of cTokens
+    /// @inheritdoc GenericLenderBaseUpgradeable
     function underlyingBalanceStored() public view override returns (uint256 balance) {
         uint256 currentCr = cToken.balanceOf(address(this));
         if (currentCr == 0) {
@@ -96,10 +93,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         }
     }
 
-    /// @notice Returns an estimation of the current Annual Percentage Rate after a new deposit
-    /// of `amount`
-    /// @param amount Amount to add to the lending platform, and that we want to take into account
-    /// in the apr computation
+    /// @inheritdoc IGenericLender
     function aprAfterDeposit(uint256 amount) external view override returns (uint256) {
         uint256 cashPrior = want.balanceOf(address(cToken));
 
@@ -119,9 +113,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
     // ================================= Governance ================================
 
-    /// @notice Withdraws as much as possible in case of emergency and sends it to the `PoolManager`
-    /// @param amount Amount to withdraw
-    /// @dev Does not check if any error occurs or if the amount withdrawn is correct
+    /// @inheritdoc IGenericLender
     function emergencyWithdraw(uint256 amount) external override onlyRole(GUARDIAN_ROLE) {
         // Do not care about errors here, what is important is to withdraw what is possible
         cToken.redeemUnderlying(amount);
@@ -220,7 +212,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         return (_amount * castedRatio * wantBase) / 1e26;
     }
 
-    /// @notice Specifies the token managed by this contract during normal operation
+    /// @inheritdoc GenericLenderBaseUpgradeable
     function _protectedTokens() internal view override returns (address[] memory) {
         address[] memory protected = new address[](2);
         protected[0] = address(want);
