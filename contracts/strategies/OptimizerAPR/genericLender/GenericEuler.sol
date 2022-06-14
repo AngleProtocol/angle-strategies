@@ -34,8 +34,6 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     /// @notice Reserve fee on the token on Euler
     uint32 public reserveFee;
 
-    uint256[49] private __gapEulerLender;
-
     // ============================= Constructor ===================================
 
     /// @notice Initializer of the `GenericEuler`
