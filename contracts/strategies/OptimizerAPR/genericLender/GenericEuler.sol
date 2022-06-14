@@ -3,7 +3,7 @@
 pragma solidity 0.8.12;
 
 import { IEuler, IEulerMarkets, IEulerEToken, IEulerDToken, IBaseIRM } from "../../../interfaces/external/euler/IEuler.sol";
-
+import "../../../external/ComputePower.sol";
 import "./GenericLenderBaseUpgradeable.sol";
 
 /// @title GenericEuler
@@ -13,16 +13,15 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
+    /// @notice Base used for interest rate / power computation
+    uint256 private constant BASE_INTEREST = 10**27;
+
     /// @notice Euler address holding assets
     IEuler private constant _euler = IEuler(0x27182842E098f60e3D576794A5bFFb0777E025d3);
     /// @notice Euler address with data on all eTokens, debt tokens and interest rates
     IEulerMarkets private constant _eulerMarkets = IEulerMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
     uint256 private constant SECONDS_PER_YEAR = 365.2425 * 86400;
     uint256 private constant RESERVE_FEE_SCALE = 4_000_000_000;
-    /// @notice Base used for interest rate / power computation
-    uint256 private constant BASE_INTEREST = 10**27;
-    /// @notice Used for interest rate / power computation
-    uint256 private constant HALF_BASE_INTEREST = 10**27 / 2;
 
     // ======================== References to contracts ============================
 
@@ -149,30 +148,11 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         uint32 _reserveFee
     ) internal pure returns (uint256 supplyAPY) {
         // Not useful for the moment
-        // uint256 borrowAPY = (_calculatePower(borrowSPY, SECONDS_PER_YEAR) - BASE_INTEREST) / 1e9;
+        // uint256 borrowAPY = (ComputePower.computePower(borrowSPY, SECONDS_PER_YEAR) - ComputePower.BASE_INTEREST) / 1e9;
         uint256 supplySPY = (borrowSPY * totalBorrows) / totalBalancesUnderlying;
         supplySPY = (supplySPY * (RESERVE_FEE_SCALE - _reserveFee)) / RESERVE_FEE_SCALE;
         // All rates are in base 18 on Angle strategies
-        supplyAPY = (_calculatePower(supplySPY, SECONDS_PER_YEAR) - BASE_INTEREST) / 1e9;
-    }
-
-    /// @notice Calculates (1+x)**n where x is a small number in base 27
-    /// @param ratePerSecond x value
-    /// @param exp n value
-    /// @dev This function avoids expensive exponentiation and the calculation is performed using a binomial approximation
-    /// (1+x)^n = 1+n*x+[n/2*(n-1)]*x^2+[n/6*(n-1)*(n-2)*x^3...
-    /// @dev We use this function to convert SPYs to an APYs (hence the variable names)
-    /// @dev This function was mostly inspired from Aave implementation and comes with the advantage of a great gas cost
-    /// reduction with respect to the base power implementation
-    function _calculatePower(uint256 ratePerSecond, uint256 exp) internal pure returns (uint256) {
-        if (exp == 0 || ratePerSecond == 0) return BASE_INTEREST;
-        uint256 expMinusOne = exp - 1;
-        uint256 expMinusTwo = exp > 2 ? exp - 2 : 0;
-        uint256 basePowerTwo = (ratePerSecond * ratePerSecond + HALF_BASE_INTEREST) / BASE_INTEREST;
-        uint256 basePowerThree = (basePowerTwo * ratePerSecond + HALF_BASE_INTEREST) / BASE_INTEREST;
-        uint256 secondTerm = (exp * expMinusOne * basePowerTwo) / 2;
-        uint256 thirdTerm = (exp * expMinusOne * expMinusTwo * basePowerThree) / 6;
-        return BASE_INTEREST + ratePerSecond * exp + secondTerm + thirdTerm;
+        supplyAPY = (ComputePower.computePower(supplySPY, SECONDS_PER_YEAR, BASE_INTEREST) - BASE_INTEREST) / 1e9;
     }
 
     /// @notice See `withdraw`
