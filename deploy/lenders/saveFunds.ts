@@ -21,6 +21,7 @@ import {
 } from '@angleprotocol/sdk/dist/constants/types';
 import { expect } from '../../test/test-utils/chai-setup';
 import { parseUnits } from 'ethers/lib/utils';
+import { Contract } from 'ethers';
 
 const func: DeployFunction = async ({ deployments, ethers }) => {
   const { deployer } = await ethers.getNamedSigners();
@@ -41,11 +42,11 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
       guardian = CONTRACTS_ADDRESSES[ChainId.MAINNET].Guardian as string;
       governor = CONTRACTS_ADDRESSES[ChainId.MAINNET].GovernanceMultiSig as string;
       strategyAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
-        ?.GenericOptimisedLender as string;
-      oldLenderAaveAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]
-        ?.GenericAave as string;
-      oldLenderCompoundAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]
-        ?.GenericCompound as string;
+        ?.GenericOptimisedLender.Contract as string;
+      oldLenderAaveAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
+        ?.GenericOptimisedLender.GenericAave as string;
+      oldLenderCompoundAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
+        ?.GenericOptimisedLender.GenericCompound as string;
       const stkAaveAddress = json.Aave.stkAave;
       const aaveAddress = json.Aave.aave;
       const compAddress = json.Compound.COMP;
@@ -62,14 +63,14 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
       const aToken = (await ethers.getContractAt(ERC20__factory.abi, aTokenAddress)) as ERC20;
       const oldLenderAave = new ethers.Contract(
         oldLenderAaveAddress,
-        GenericAave__factory.createInterface(),
+        [...GenericAave__factory.abi, 'function harvest() external'],
         deployer,
-      ) as GenericAave;
+      ) as unknown as GenericAave;
       const oldLenderCompound = new ethers.Contract(
         oldLenderCompoundAddress,
         GenericCompound__factory.createInterface(),
         deployer,
-      ) as GenericCompound;
+      ) as unknown as GenericCompound;
 
       const newLenderCompAddress = (await ethers.getContract(`GenericCompoundV3_${collateralName}`)).address;
       const newLenderAaveAddress = (await ethers.getContract(`GenericAaveNoStaker_${collateralName}`)).address;
@@ -119,7 +120,7 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
           await (await oldLenderCompound.connect(acc).sweep(compAddress, newLenderCompAddress)).wait();
           console.log('Comp transfer: success');
         }
-        await (await oldLenderAave.connect(acc).harvest()).wait();
+        await (await (oldLenderAave as unknown as Contract).connect(acc).harvest()).wait();
         console.log('lender harvest: success');
         await (await oldLenderAave.connect(acc).sweep(stkAave.address, newLenderAaveAddress)).wait();
         console.log('second sweep: success');

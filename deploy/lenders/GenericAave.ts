@@ -40,10 +40,10 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     console.log('Handling collat: ', collateralName);
     if (!network.live) {
       strategyAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
-        ?.GenericOptimisedLender as string;
+        ?.GenericOptimisedLender.Contract as string;
     } else {
       strategyAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
-        ?.Strategies?.GenericOptimisedLender as string;
+        ?.Strategies?.GenericOptimisedLender.Contract as string;
     }
 
     const initializeData = GenericAaveNoStaker__factory.createInterface().encodeFunctionData('initialize', [

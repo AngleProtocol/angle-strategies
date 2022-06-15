@@ -108,7 +108,7 @@ describe('OptimizerAPR - lenderEuler', () => {
           forking: {
             jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
             // Changing mainnet fork block breaks some tests
-            blockNumber: 14939291,
+            blockNumber: 14967667,
           },
         },
       ],
@@ -215,7 +215,7 @@ describe('OptimizerAPR - lenderEuler', () => {
 
   describe('deposit', () => {
     it('revert', async () => {
-      const amount = 1000000;
+      const amount = 100000000;
       await setTokenBalanceFor(token, lenderEuler.address, amount, balanceSlot);
       await lenderEuler.connect(governor).changeAllowance([token.address], [euler.address], [ethers.constants.Zero]);
       await expect(lenderEuler.connect(keeper).deposit()).to.be.revertedWith(
@@ -223,7 +223,7 @@ describe('OptimizerAPR - lenderEuler', () => {
       );
     });
     it('success', async () => {
-      const amount = 1000000;
+      const amount = 100000000;
       await setTokenBalanceFor(token, lenderEuler.address, amount, balanceSlot);
       await lenderEuler.connect(keeper).deposit();
       expect(await token.balanceOf(lenderEuler.address)).to.be.equal(ethers.constants.Zero);
@@ -260,7 +260,7 @@ describe('OptimizerAPR - lenderEuler', () => {
     });
 
     it('success - without interaction with Euler', async () => {
-      const amount = 1000000;
+      const amount = 100000000;
       await setTokenBalanceFor(token, lenderEuler.address, amount, balanceSlot);
       await lenderEuler.connect(keeper).withdraw(parseUnits(amount.toString(), tokenDecimal));
       expect(await token.balanceOf(strategy.address)).to.be.equal(parseUnits(amount.toString(), tokenDecimal));
@@ -406,7 +406,7 @@ describe('OptimizerAPR - lenderEuler', () => {
   describe('View functions', () => {
     it('apr', async () => {
       const apr = await lenderEuler.connect(keeper).apr();
-      expect(apr).to.be.closeTo(parseUnits('0.0209', 18), parseUnits('0.001', 18));
+      expect(apr).to.be.closeTo(parseUnits('0.0172', 18), parseUnits('0.001', 18));
       const weightedAPR = await lenderEuler.weightedApr();
       const nav = await lenderEuler.nav();
       expect(nav).to.be.equal(0);
@@ -436,6 +436,7 @@ describe('OptimizerAPR - lenderEuler', () => {
       const aprAfterDepositSupposed = await lenderEuler
         .connect(keeper)
         .aprAfterDeposit(parseUnits(amount.toString(), tokenDecimal));
+      console.log('aprAfterDepositSupposed: ', logBN(aprAfterDepositSupposed));
       // Do the deposit and see if the values are indeed equals
       await setTokenBalanceFor(token, lenderEuler.address, amount, balanceSlot);
       await lenderEuler.connect(keeper).deposit();
