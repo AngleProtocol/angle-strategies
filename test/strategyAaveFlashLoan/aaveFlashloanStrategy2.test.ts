@@ -112,7 +112,7 @@ rewardBorrow=${(await incentivesController.assets(debtToken.address)).emissionPe
     await lendingPool
       .connect(richUSDCUser)
       .deposit(_wantToken, utils.parseUnits('75000000', 6), richUSDCUser.address, 0);
-    // logState();
+    logState();
     await harvest();
     expect(parseFloat(utils.formatEther(await strategy.targetCollatRatio()))).to.be.closeTo(0.785, 0.01);
 

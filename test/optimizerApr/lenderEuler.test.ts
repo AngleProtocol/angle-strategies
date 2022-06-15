@@ -1,5 +1,5 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { BigNumber, Contract, utils } from 'ethers';
+import { BigNumber, utils } from 'ethers';
 import {
   ERC20,
   ERC20__factory,
@@ -64,7 +64,7 @@ let manager: PoolManager;
 let lenderEuler: GenericEuler;
 let eToken: IEulerEToken;
 let euler: IEuler;
-let eulerMarkets: IEulerMarkets;
+// let eulerMarkets: IEulerMarkets;
 let governance: IGovernance;
 
 const guardianRole = ethers.utils.solidityKeccak256(['string'], ['GUARDIAN_ROLE']);
@@ -86,10 +86,10 @@ describe('OptimizerAPR - lenderEuler', () => {
     )) as IEulerEToken;
 
     euler = (await ethers.getContractAt(IEuler__factory.abi, '0x27182842E098f60e3D576794A5bFFb0777E025d3')) as IEuler;
-    eulerMarkets = (await ethers.getContractAt(
-      IEulerMarkets__factory.abi,
-      '0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3',
-    )) as IEulerMarkets;
+    // eulerMarkets = (await ethers.getContractAt(
+    //   IEulerMarkets__factory.abi,
+    //   '0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3',
+    // )) as IEulerMarkets;
     governance = (await ethers.getContractAt(
       IGovernance__factory.abi,
       '0xAF68CFba29D0e15490236A5631cA9497e035CD39',

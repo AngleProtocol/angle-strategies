@@ -15,7 +15,6 @@ import {
   PoolManager,
   PoolManager__factory,
 } from '../../../typechain';
-import { DAY } from '../../../test/contants';
 import { logBN } from '../../../test/utils-interaction';
 
 async function main() {
@@ -28,11 +27,9 @@ async function main() {
 
   let strategyAddress: string;
   let poolManagerAddress: string;
-  let guardian: string;
   let lenderAaveAddress, lenderCompoundAddress: string;
 
   if (!network.live) {
-    guardian = CONTRACTS_ADDRESSES[ChainId.MAINNET].Guardian!;
     poolManagerAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]
       ?.PoolManager as string;
     strategyAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
@@ -42,7 +39,6 @@ async function main() {
     lenderCompoundAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
       ?.GenericOptimisedLender.GenericCompound as string;
   } else {
-    guardian = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].Guardian!;
     poolManagerAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
       ?.PoolManager as string;
     strategyAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
@@ -53,7 +49,7 @@ async function main() {
       ?.Strategies?.GenericOptimisedLender.GenericCompound as string;
   }
 
-  let lenderEulerDeployment = await deployments.get(`GenericEuler_${stableName}_${collateralName}`);
+  const lenderEulerDeployment = await deployments.get(`GenericEuler_${stableName}_${collateralName}`);
 
   // const FRAX = '0x853d955aCEf822Db058eb8505911ED77F175b99e';
   // const wantToken = (await ethers.getContractAt(ERC20__factory.abi, FRAX)) as ERC20;
