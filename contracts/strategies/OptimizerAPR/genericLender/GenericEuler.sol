@@ -136,18 +136,18 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     /// @notice Computes APYs based on the interest rate, reserve fee, borrow
     /// @param borrowSPY Interest rate paid per second by borrowers
     /// @param totalBorrows Total amount borrowed on Euler of the underlying token
-    /// @param totalBalancesUnderlying Total amount supplied on Euler of the underlying token
+    /// @param totalSupplyUnderlying Total amount supplied on Euler of the underlying token
     /// @param _reserveFee Reserve fee set by governance for the underlying token
     /// @return supplyAPY The annual percentage yield received as a supplier with current settings
     function _computeAPYs(
         uint256 borrowSPY,
         uint256 totalBorrows,
-        uint256 totalBalancesUnderlying,
+        uint256 totalSupplyUnderlying,
         uint32 _reserveFee
     ) internal pure returns (uint256 supplyAPY) {
         // Not useful for the moment
         // uint256 borrowAPY = (ComputePower.computePower(borrowSPY, SECONDS_PER_YEAR) - ComputePower.BASE_INTEREST) / 1e9;
-        uint256 supplySPY = (borrowSPY * totalBorrows) / totalBalancesUnderlying;
+        uint256 supplySPY = (borrowSPY * totalBorrows) / totalSupplyUnderlying;
         supplySPY = (supplySPY * (RESERVE_FEE_SCALE - _reserveFee)) / RESERVE_FEE_SCALE;
         // All rates are in base 18 on Angle strategies
         supplyAPY = (ComputePower.computePower(supplySPY, SECONDS_PER_YEAR, BASE_INTEREST) - BASE_INTEREST) / 1e9;
