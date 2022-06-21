@@ -41,11 +41,11 @@ export const logGeneralInfo = async (
   perpetualManager: PerpetualManagerFront,
 ) => {
   const agTokenAddress = await stableMaster.agToken();
-  const agToken = (await ethers.getContractAt(AgToken__factory.abi, agTokenAddress)) as AgToken;
+  const agToken = ((await ethers.getContractAt(AgToken__factory.abi, agTokenAddress)) as unknown) as AgToken;
   const agTokenName = await agToken.name();
 
   const collatData = await stableMaster.collateralMap(poolManager.address);
-  const oracle = (await ethers.getContractAt(OracleMulti__factory.abi, collatData.oracle)) as OracleMulti;
+  const oracle = ((await ethers.getContractAt(OracleMulti__factory.abi, collatData.oracle)) as unknown) as OracleMulti;
   const oracleValues = await oracle.readAll();
 
   console.log(`
@@ -140,14 +140,14 @@ export const randomMint = async (
   const max = 500;
 
   const collatData = await stableMaster.collateralMap(poolManager.address);
-  const oracle = (await ethers.getContractAt(OracleMulti__factory.abi, collatData.oracle)) as OracleMulti;
+  const oracle = ((await ethers.getContractAt(OracleMulti__factory.abi, collatData.oracle)) as unknown) as OracleMulti;
   const oracleValues = await oracle.readAll();
 
   const collatAddress = (await stableMaster.collateralMap(poolManager.address)).token;
   const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;
   const collatDecimal = await collat.decimals();
   const agTokenAddress = await stableMaster.agToken();
-  const agToken = (await ethers.getContractAt(AgToken__factory.abi, agTokenAddress)) as AgToken;
+  const agToken = ((await ethers.getContractAt(AgToken__factory.abi, agTokenAddress)) as unknown) as AgToken;
   let amount = parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), collatDecimal);
 
   const maxMintable = collatData.feeData.capOnStableMinted
@@ -182,7 +182,7 @@ export const randomBurn = async (
   const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;
   const collatDecimal = await collat.decimals();
   const agTokenAddress = await stableMaster.agToken();
-  const agToken = (await ethers.getContractAt(AgToken__factory.abi, agTokenAddress)) as AgToken;
+  const agToken = ((await ethers.getContractAt(AgToken__factory.abi, agTokenAddress)) as unknown) as AgToken;
 
   let amount = parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), 18);
   const maxAmount = (await agToken.balanceOf(user.address)).div(parseUnits('2', 0));
@@ -213,7 +213,7 @@ export const randomDeposit = async (
   const collatAddress = (await stableMaster.collateralMap(poolManager.address)).token;
   const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;
   const sanTokenAddress = (await stableMaster.collateralMap(poolManager.address)).sanToken;
-  const sanToken = (await ethers.getContractAt(SanToken__factory.abi, sanTokenAddress)) as SanToken;
+  const sanToken = ((await ethers.getContractAt(SanToken__factory.abi, sanTokenAddress)) as unknown) as SanToken;
   const collatDecimal = await collat.decimals();
 
   const amount = parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), collatDecimal);
@@ -241,7 +241,7 @@ export const randomWithdraw = async (
   const collatAddress = (await stableMaster.collateralMap(poolManager.address)).token;
   const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;
   const sanTokenAddress = (await stableMaster.collateralMap(poolManager.address)).sanToken;
-  const sanToken = (await ethers.getContractAt(SanToken__factory.abi, sanTokenAddress)) as SanToken;
+  const sanToken = ((await ethers.getContractAt(SanToken__factory.abi, sanTokenAddress)) as unknown) as SanToken;
   const collatDecimal = await collat.decimals();
 
   let amount = parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), collatDecimal);
@@ -372,13 +372,7 @@ export async function setTokenBalanceFor(token: ERC20, account: string, amount: 
   // for FRAX we know it's 0
   // const balanceSlot = await findBalancesSlot(token.address);
   // console.log('the balance slot is ', balanceSlot);
-<<<<<<< HEAD
-  const balanceStorage = utils.solidityKeccak256(['uint256', 'uint256'], [account, balanceSlot]).replace('0x0', '0x');
-  const amountStorage = utils.hexZeroPad(utils.parseUnits(amount.toString(), await token.decimals()).toHexString(), 32);
 
-  await network.provider.send('hardhat_setStorageAt', [token.address, balanceStorage, amountStorage]);
-=======
-  const balanceSlot = 0;
   const balanceStorage = utils.solidityKeccak256(['uint256', 'uint256'], [account, balanceSlot]).replace('0x0', '0x');
 
   await network.provider.send('hardhat_setStorageAt', [
@@ -386,5 +380,4 @@ export async function setTokenBalanceFor(token: ERC20, account: string, amount: 
     balanceStorage,
     utils.hexZeroPad(utils.parseUnits(amount.toString(), await token.decimals()).toHexString(), 32),
   ]);
->>>>>>> 210fe20 (testing replacing storage)
 }

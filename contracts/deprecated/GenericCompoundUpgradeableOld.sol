@@ -4,15 +4,15 @@ pragma solidity 0.8.12;
 
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
-import "../../../interfaces/external/compound/CErc20I.sol";
-import "../../../interfaces/external/compound/IComptroller.sol";
-import "../../../interfaces/external/compound/InterestRateModel.sol";
+import "../interfaces/external/compound/CErc20I.sol";
+import "../interfaces/external/compound/IComptroller.sol";
+import "../interfaces/external/compound/InterestRateModel.sol";
 
-import "./GenericLenderBaseUpgradeable.sol";
+import "../strategies/OptimizerAPR/genericLender/GenericLenderBaseUpgradeable.sol";
 
-/// @title GenericCompoundV3
+/// @title GenericCompoundV2
 /// @author Forked from here: https://github.com/Grandthrax/yearnV2-generic-lender-strat/blob/master/contracts/GenericLender/GenericCompound.sol
-contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
+contract GenericCompoundUpgradeableOld is GenericLenderBaseUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
@@ -25,7 +25,6 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     // ======================== References to contracts ============================
 
     CErc20I public cToken;
-    uint256 private dust;
 
     // =============================== Errors ======================================
 
@@ -48,8 +47,8 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         string memory _name,
         address _cToken,
         address[] memory governorList,
-        address guardian,
-        address[] memory keeperList
+        address[] memory keeperList,
+        address guardian
     ) external {
         _initialize(_strategy, _name, governorList, guardian, keeperList);
 
@@ -62,18 +61,21 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
     // ===================== External Strategy Functions ===========================
 
-    /// @inheritdoc IGenericLender
+    /// @notice Deposits the current balance of the contract to the lending platform
     function deposit() external override onlyRole(STRATEGY_ROLE) {
         uint256 balance = want.balanceOf(address(this));
         if (cToken.mint(balance) != 0) revert FailedToMint();
     }
 
-    /// @inheritdoc IGenericLender
+    /// @notice Withdraws a given amount from lender
+    /// @param amount The amount the caller wants to withdraw
+    /// @return Amount actually withdrawn
     function withdraw(uint256 amount) external override onlyRole(STRATEGY_ROLE) returns (uint256) {
         return _withdraw(amount);
     }
 
-    /// @inheritdoc IGenericLender
+    /// @notice Withdraws as much as possible from the lending platform
+    /// @return Whether everything was withdrawn or not
     function withdrawAll() external override onlyRole(STRATEGY_ROLE) returns (bool) {
         uint256 invested = _nav();
         uint256 returned = _withdraw(invested);
@@ -82,7 +84,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
     // ========================== External View Functions ==========================
 
-    /// @inheritdoc GenericLenderBaseUpgradeable
+    /// @notice Helper function the current balance of cTokens
     function underlyingBalanceStored() public view override returns (uint256 balance) {
         uint256 currentCr = cToken.balanceOf(address(this));
         if (currentCr == 0) {
@@ -93,7 +95,10 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         }
     }
 
-    /// @inheritdoc IGenericLender
+    /// @notice Returns an estimation of the current Annual Percentage Rate after a new deposit
+    /// of `amount`
+    /// @param amount Amount to add to the lending platform, and that we want to take into account
+    /// in the apr computation
     function aprAfterDeposit(uint256 amount) external view override returns (uint256) {
         uint256 cashPrior = want.balanceOf(address(cToken));
 
@@ -113,19 +118,14 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
     // ================================= Governance ================================
 
-    /// @inheritdoc IGenericLender
+    /// @notice Withdraws as much as possible in case of emergency and sends it to the `PoolManager`
+    /// @param amount Amount to withdraw
+    /// @dev Does not check if any error occurs or if the amount withdrawn is correct
     function emergencyWithdraw(uint256 amount) external override onlyRole(GUARDIAN_ROLE) {
         // Do not care about errors here, what is important is to withdraw what is possible
         cToken.redeemUnderlying(amount);
 
         want.safeTransfer(address(poolManager), want.balanceOf(address(this)));
-    }
-
-    /// @notice Allow to modify the dust amount
-    /// @param dust_ Amount under which the contract do not try to redeem from Compouns
-    /// @dev Set in a function because contract was already initalized
-    function setDust(uint256 dust_) external onlyRole(GUARDIAN_ROLE) {
-        dust = dust_;
     }
 
     // ============================= Internal Functions ============================
@@ -156,16 +156,13 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
         if (liquidity > 1) {
             uint256 toWithdraw = amount - looseBalance;
-            // If amount is too low then do not try to withdraw it
-            // Risk being: the tx can revert because the cToken needed to be sent == 0
-            if (toWithdraw >= dust) {
-                if (toWithdraw <= liquidity) {
-                    // We can take all
-                    if (cToken.redeemUnderlying(toWithdraw) != 0) revert FailedToRedeem();
-                } else {
-                    // Take all we can
-                    if (cToken.redeemUnderlying(liquidity) != 0) revert FailedToRedeem();
-                }
+
+            if (toWithdraw <= liquidity) {
+                // We can take all
+                if (cToken.redeemUnderlying(toWithdraw) != 0) revert FailedToRedeem();
+            } else {
+                // Take all we can
+                if (cToken.redeemUnderlying(liquidity) != 0) revert FailedToRedeem();
             }
         }
         address[] memory holders = new address[](1);
@@ -212,7 +209,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         return (_amount * castedRatio * wantBase) / 1e26;
     }
 
-    /// @inheritdoc GenericLenderBaseUpgradeable
+    /// @notice Specifies the token managed by this contract during normal operation
     function _protectedTokens() internal view override returns (address[] memory) {
         address[] memory protected = new address[](2);
         protected[0] = address(want);

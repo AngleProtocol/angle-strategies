@@ -41,7 +41,7 @@ async function main() {
     poolManagerAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]
       ?.PoolManager as string;
     strategyAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
-      ?.GenericOptimisedLender as string;
+      ?.GenericOptimisedLender.Contract as string;
   } else {
     stableMasterAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.StableMaster as string;
     perpetualManagerAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[
@@ -50,7 +50,7 @@ async function main() {
     poolManagerAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
       ?.PoolManager as string;
     strategyAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
-      ?.Strategies?.GenericOptimisedLender as string;
+      ?.Strategies?.GenericOptimisedLender.Contract as string;
   }
 
   // const newLenderAddress = (await deployments.get(`GenericAave_${stableName}_${collateralName}_Staker`)).address;

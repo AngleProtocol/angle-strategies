@@ -2,12 +2,12 @@
 
 pragma solidity ^0.8.12;
 
-import "./IAccessControl.sol";
+import "./IAccessControlAngle.sol";
 
 /// @title IStrategy
 /// @author Inspired by Yearn with slight changes from Angle Core Team
 /// @notice Interface for yield farming strategies
-interface IStrategy is IAccessControl {
+interface IStrategy is IAccessControlAngle {
     function estimatedAPR() external view returns (uint256);
 
     function poolManager() external view returns (address);

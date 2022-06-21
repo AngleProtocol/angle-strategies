@@ -410,7 +410,7 @@ describe('AaveFlashloanStrategy - Main test file', () => {
         await impersonate(poolManager.address, async acc => {
           await network.provider.send('hardhat_setBalance', [
             poolManager.address,
-            utils.parseEther('1').toHexString().replace('0x0', '0x'),
+            ethers.utils.hexStripZeros(utils.parseEther('1').toHexString()),
           ]);
           await strategy.connect(acc).addGuardian(user.address);
         });
@@ -424,7 +424,7 @@ describe('AaveFlashloanStrategy - Main test file', () => {
         await impersonate(poolManager.address, async acc => {
           await network.provider.send('hardhat_setBalance', [
             poolManager.address,
-            utils.parseEther('1').toHexString().replace('0x0', '0x'),
+            ethers.utils.hexStripZeros(utils.parseEther('1').toHexString()),
           ]);
           await strategy.connect(acc).addGuardian(user.address);
           await strategy.connect(acc).revokeGuardian(guardian.address);
@@ -483,7 +483,7 @@ describe('AaveFlashloanStrategy - Main test file', () => {
         await impersonate(strategy.address, async acc => {
           await network.provider.send('hardhat_setBalance', [
             strategy.address,
-            utils.parseEther('1').toHexString().replace('0x0', '0x'),
+            ethers.utils.hexStripZeros(utils.parseEther('1').toHexString()),
           ]);
 
           const balance = await wantToken.balanceOf(acc.address);
@@ -499,7 +499,7 @@ describe('AaveFlashloanStrategy - Main test file', () => {
         await expect(strategy.connect(keeper).cooldown()).to.be.revertedWith('INVALID_BALANCE_ON_COOLDOWN');
       });
       it('success - cooldown activated', async () => {
-        const amountStorage = utils.parseEther('1').toHexString().replace('0x0', '0x');
+        const amountStorage = ethers.utils.hexStripZeros(utils.parseEther('1').toHexString());
         await impersonate(stkAaveHolder, async acc => {
           await network.provider.send('hardhat_setBalance', [stkAaveHolder, amountStorage]);
           await (await stkAave.connect(acc).transfer(strategy.address, parseEther('1'))).wait();
@@ -862,9 +862,9 @@ describe('AaveFlashloanStrategy - Main test file', () => {
         expect(await wantToken.balanceOf(strategy.address)).to.equal(0);
       });
       it('success - flashloan more than maxLiquidity', async () => {
-        const balanceStorage = utils
-          .solidityKeccak256(['uint256', 'uint256'], [strategy.address, 9])
-          .replace('0x0', '0x');
+        const balanceStorage = ethers.utils.hexStripZeros(
+          utils.solidityKeccak256(['uint256', 'uint256'], [strategy.address, 9]),
+        );
         const amountTx = utils.hexZeroPad(utils.parseUnits('900000000', 6).toHexString(), 32);
 
         await network.provider.send('hardhat_setStorageAt', [
@@ -934,7 +934,7 @@ describe('AaveFlashloanStrategy - Main test file', () => {
         await impersonate(poolManager.address, async acc => {
           await network.provider.send('hardhat_setBalance', [
             poolManager.address,
-            utils.parseEther('1').toHexString().replace('0x0', '0x'),
+            ethers.utils.hexStripZeros(utils.parseEther('1').toHexString()),
           ]);
           await strategy.connect(acc).setEmergencyExit();
         });

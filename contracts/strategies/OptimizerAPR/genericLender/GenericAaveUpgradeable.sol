@@ -5,10 +5,11 @@ pragma solidity 0.8.12;
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-import { IStakedAave, IReserveInterestRateStrategy } from "../../../interfaces/external/aave/IAave.sol";
-import "../../../interfaces/external/aave/IAaveToken.sol";
-import "../../../interfaces/external/aave/IProtocolDataProvider.sol";
-import "../../../interfaces/external/aave/ILendingPool.sol";
+import { DataTypes, IStakedAave, IReserveInterestRateStrategy } from "../../../interfaces/external/aave/IAave.sol";
+import { IProtocolDataProvider } from "../../../interfaces/external/aave/IProtocolDataProvider.sol";
+import { ILendingPool } from "../../../interfaces/external/aave/ILendingPool.sol";
+import { IAaveIncentivesController } from "../../../interfaces/external/aave/IAaveIncentivesController.sol";
+import { IAToken, IVariableDebtToken } from "../../../interfaces/external/aave/IAaveToken.sol";
 import "./GenericLenderBaseUpgradeable.sol";
 
 /// @title GenericAave
@@ -34,12 +35,14 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
 
     // ========================= Constants and Parameters ==========================
+    uint256 internal constant _SECONDS_IN_YEAR = 365 days;
     uint256 public cooldownSeconds;
     uint256 public unstakeWindow;
     bool public cooldownStkAave;
     bool public isIncentivised;
     IAToken internal _aToken;
-    uint256 internal constant _SECONDS_IN_YEAR = 365 days;
+
+    uint256[47] private __gapAaveLender;
 
     // =================================== Event ===================================
 
@@ -80,7 +83,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
     // ============================= External Functions ============================
 
-    /// @notice Deposits the current balance to the lending platform
+    /// @inheritdoc IGenericLender
     function deposit() external override onlyRole(STRATEGY_ROLE) {
         uint256 balance = want.balanceOf(address(this));
         // Aave doesn't allow null deposits
@@ -91,23 +94,19 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         _stake(_balanceAtoken());
     }
 
-    /// @notice Withdraws a given amount from lender
-    /// @param amount Amount to withdraw
-    /// @return Amount actually withdrawn
+    /// @inheritdoc IGenericLender
     function withdraw(uint256 amount) external override onlyRole(STRATEGY_ROLE) returns (uint256) {
         return _withdraw(amount);
     }
 
-    /// @notice Withdraws as much as possible in case of emergency and sends it to the `PoolManager`
-    /// @param amount Amount to withdraw
-    /// @dev Does not check if any error occurs or if the amount withdrawn is correct
+    /// @inheritdoc IGenericLender
     function emergencyWithdraw(uint256 amount) external override onlyRole(GUARDIAN_ROLE) {
         _unstake(amount);
         _lendingPool.withdraw(address(want), amount, address(this));
         want.safeTransfer(address(poolManager), want.balanceOf(address(this)));
     }
 
-    /// @notice Withdraws as much as possible
+    /// @inheritdoc IGenericLender
     function withdrawAll() external override onlyRole(STRATEGY_ROLE) returns (bool) {
         uint256 invested = _nav();
         uint256 returned = _withdraw(invested);
@@ -146,13 +145,12 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
     // =========================== External View Functions =========================
 
-    /// @notice Returns the current balance of aTokens
+    /// @inheritdoc GenericLenderBaseUpgradeable
     function underlyingBalanceStored() public view override returns (uint256 balance) {
         balance = _balanceAtoken() + _stakedBalance();
     }
 
-    /// @notice Returns an estimation of the current Annual Percentage Rate after a new deposit
-    /// @param extraAmount The amount to add to the lending platform
+    /// @inheritdoc IGenericLender
     function aprAfterDeposit(uint256 extraAmount) external view override returns (uint256) {
         // i need to calculate new supplyRate after Deposit (when deposit has not been done yet)
         DataTypes.ReserveData memory reserveData = _lendingPool.getReserveData(address(want));
@@ -349,7 +347,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         }
     }
 
-    /// @notice Specifies the token managed by this contract during normal operation
+    /// @inheritdoc GenericLenderBaseUpgradeable
     function _protectedTokens() internal view override returns (address[] memory) {
         address[] memory protected = new address[](2);
         protected[0] = address(want);

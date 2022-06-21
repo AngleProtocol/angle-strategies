@@ -5,8 +5,8 @@ pragma solidity ^0.8.12;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import "../external/AccessControl.sol";
-import "../external/AccessControlUpgradeable.sol";
+import "../external/AccessControlAngle.sol";
+import "../external/AccessControlAngleUpgradeable.sol";
 
 import "../interfaces/IStrategy.sol";
 import "../interfaces/IPoolManager.sol";

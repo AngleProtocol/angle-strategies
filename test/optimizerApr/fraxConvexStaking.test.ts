@@ -10,7 +10,6 @@ import {
   IMockFraxUnifiedFarm,
   IMockFraxUnifiedFarm__factory,
   IPoolRegistryFrax,
-  IPoolRegistryFrax__factory,
   IStakedAave,
   IStakedAave__factory,
   MockToken,
@@ -73,14 +72,12 @@ let governor: SignerWithAddress, guardian: SignerWithAddress, user: SignerWithAd
 let strategy: OptimizerAPRStrategy;
 let token: ERC20;
 let aToken: ERC20;
-let frax: ERC20;
 let nativeRewardToken: MockToken;
 let tokenDecimal: number;
 let manager: PoolManager;
 let lenderAave: GenericAaveFraxConvexStaker;
 let stkAave: IStakedAave;
 let aFraxStakingContract: IMockFraxUnifiedFarm;
-let poolRegistry: IPoolRegistryFrax;
 let oracleNativeReward: AggregatorV3Interface;
 let oracleStkAave: AggregatorV3Interface;
 let oneInch: string;
@@ -102,7 +99,7 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
         {
           forking: {
             jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
-            blockNumber: 14786812,
+            blockNumber: 14786806,
           },
         },
       ],
@@ -112,7 +109,7 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
 
     token = (await ethers.getContractAt(ERC20__factory.abi, '0x853d955aCEf822Db058eb8505911ED77F175b99e')) as ERC20;
     aToken = (await ethers.getContractAt(ERC20__factory.abi, '0xd4937682df3C8aEF4FE912A96A74121C0829E664')) as ERC20;
-    frax = (await ethers.getContractAt(ERC20__factory.abi, '0x853d955aCEf822Db058eb8505911ED77F175b99e')) as ERC20;
+    // frax = (await ethers.getContractAt(ERC20__factory.abi, '0x853d955aCEf822Db058eb8505911ED77F175b99e')) as ERC20;
     nativeRewardToken = (await ethers.getContractAt(
       MockToken__factory.abi,
       '0x3432B6A60D23Ca0dFCa7761B7ab56459D9C964D0',
@@ -140,10 +137,10 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       '0x547a514d5e3769680Ce22B2361c10Ea13619e8a9',
     )) as AggregatorV3Interface;
 
-    poolRegistry = (await ethers.getContractAt(
-      IPoolRegistryFrax__factory.abi,
-      '0x41a5881c17185383e19Df6FA4EC158a6F4851A69',
-    )) as IPoolRegistryFrax;
+    // poolRegistry = (await ethers.getContractAt(
+    //   IPoolRegistryFrax__factory.abi,
+    //   '0x41a5881c17185383e19Df6FA4EC158a6F4851A69',
+    // )) as IPoolRegistryFrax;
 
     guardianError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${guardianRole}`;
     keeperError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${keeperRole}`;
@@ -162,7 +159,7 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       DAY,
     ));
     oneInch = '0x1111111254fb6c44bAC0beD2854e76F90643097d';
-    amountStorage = utils.parseEther('1').toHexString().replace('0x0', '0x');
+    amountStorage = ethers.utils.hexStripZeros(utils.parseEther('1').toHexString());
   });
 
   describe('Contructor', () => {
@@ -184,6 +181,156 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
           0,
         ),
       ).to.be.revertedWith('Initializable: contract is already initialized');
+    });
+  });
+
+  describe('Parameters', () => {
+    it('success - well set', async () => {
+      expect(await lenderAave.stakingPeriod()).to.be.equal(BigNumber.from(DAY.toString()));
+      expect(await lenderAave.cooldownSeconds()).to.be.equal(await stkAave.COOLDOWN_SECONDS());
+      expect(await lenderAave.unstakeWindow()).to.be.equal(await stkAave.UNSTAKE_WINDOW());
+      expect(await lenderAave.isIncentivised()).to.be.equal(true);
+      expect(await lenderAave.cooldownStkAave()).to.be.equal(true);
+      expect(await lenderAave.poolManager()).to.be.equal(manager.address);
+      expect(await lenderAave.want()).to.be.equal(token.address);
+      expect(await lenderAave.wantBase()).to.be.equal(parseUnits('1', await token.decimals()));
+      expect(await stkAave.allowance(lenderAave.address, oneInch)).to.be.equal(ethers.constants.MaxUint256);
+    });
+  });
+
+  describe('AccessControl', () => {
+    it('reverts - guardian only functions', async () => {
+      await expect(lenderAave.connect(user).setLockTime(ethers.constants.Zero)).to.be.revertedWith(guardianError);
+      await expect(
+        lenderAave
+          .connect(user)
+          .changeAllowance([aToken.address], [aFraxStakingContract.address], [ethers.constants.Zero]),
+      ).to.be.revertedWith(guardianError);
+      await expect(lenderAave.connect(user).sweep(ZERO_ADDRESS, governor.address)).to.be.revertedWith(guardianError);
+    });
+  });
+
+  describe('Keeper functions', () => {
+    describe('setAavePoolVariables', () => {
+      it('success - values well set', async () => {
+        await lenderAave.setAavePoolVariables();
+        expect(await lenderAave.cooldownSeconds()).to.be.equal(await stkAave.COOLDOWN_SECONDS());
+        expect(await lenderAave.unstakeWindow()).to.be.equal(await stkAave.UNSTAKE_WINDOW());
+      });
+    });
+    describe('cooldown', () => {
+      it('reverts - when not keeper', async () => {
+        await expect(lenderAave.connect(user).cooldown()).to.be.revertedWith(keeperError);
+        await expect(lenderAave.connect(keeper).cooldown()).to.be.revertedWith('INVALID_BALANCE_ON_COOLDOWN');
+      });
+      it('success - cooldown activated', async () => {
+        await impersonate(stkAaveHolder, async acc => {
+          await network.provider.send('hardhat_setBalance', [stkAaveHolder, amountStorage]);
+          await (await stkAave.connect(acc).transfer(lenderAave.address, parseEther('1'))).wait();
+        });
+        await lenderAave.connect(keeper).cooldown();
+        expect(await stkAave.stakersCooldowns(lenderAave.address)).to.be.equal(await latestTime());
+      });
+    });
+  });
+
+  describe('Governance functions', () => {
+    describe('setLockTime', () => {
+      it('reverts - too small staking period', async () => {
+        await expect(lenderAave.connect(guardian).setLockTime(ethers.constants.Zero)).to.be.revertedWith(
+          'TooSmallStakingPeriod',
+        );
+      });
+      it('success - staking period updated', async () => {
+        await lenderAave.connect(guardian).setLockTime(parseUnits((2 * DAY).toString(), 0));
+        expect(await lenderAave.stakingPeriod()).to.be.equal(parseUnits((2 * DAY).toString(), 0));
+      });
+    });
+    describe('setProxyBoost', () => {
+      it('success - proxy boost set', async () => {
+        const veFXSMultiplierConvex = await aFraxStakingContract.veFXSMultiplier(await lenderAave.vault());
+        expect(veFXSMultiplierConvex).to.be.equal(parseUnits('2', 18));
+      });
+    });
+    describe('sweep', () => {
+      it('reverts - protected token', async () => {
+        await expect(lenderAave.connect(guardian).sweep(token.address, guardian.address)).to.be.revertedWith(
+          'ProtectedToken',
+        );
+      });
+      it('success - balance correctly swept', async () => {
+        await setTokenBalanceFor(token, strategy.address, 1000000);
+        await (await strategy.connect(keeper)['harvest()']()).wait();
+
+        // let days pass to have a non negligible gain
+        await time.increase(DAY * 7);
+        // Accumulating stkAave and FXS
+        await (await lenderAave.connect(user).claimRewardsExternal()).wait();
+        const balanceBefore = await nativeRewardToken.balanceOf(lenderAave.address);
+        expect(balanceBefore).to.be.gte(parseUnits('0', tokenDecimal));
+        expect(await stkAave.balanceOf(lenderAave.address)).to.be.gte(parseUnits('0', tokenDecimal));
+        expect(await nativeRewardToken.balanceOf(guardian.address)).to.be.equal(0);
+        expect(await stkAave.balanceOf(guardian.address)).to.be.equal(0);
+        await lenderAave.connect(guardian).sweep(nativeRewardToken.address, guardian.address);
+        await lenderAave.connect(guardian).sweep(stkAave.address, guardian.address);
+        expect(await nativeRewardToken.balanceOf(guardian.address)).to.be.gte(parseUnits('0', tokenDecimal));
+        expect(await stkAave.balanceOf(guardian.address)).to.be.gte(parseUnits('0', tokenDecimal));
+      });
+    });
+  });
+
+  describe('View functions', () => {
+    it('apr - no funds', async () => {
+      await (await strategy.connect(keeper)['harvest()']()).wait();
+      const apr = await lenderAave.connect(keeper).apr();
+      // at mainnet fork time there is 1.84% coming from liquidity rate, 0.02% coming from incentives
+      // and 0% as no funds deposited yet on the strat
+      expect(apr).to.be.closeTo(parseUnits('0.0186', 18), parseUnits('0.001', 18));
+      const weightedAPR = await lenderAave.weightedApr();
+      const nav = await lenderAave.nav();
+      expect(nav).to.be.equal(0);
+      expect(weightedAPR).to.be.equal(0);
+    });
+    it('earned', async () => {
+      await setTokenBalanceFor(token, strategy.address, 1000000);
+      await (await strategy.connect(keeper)['harvest()']()).wait();
+
+      await time.increase(DAY);
+
+      const returnEarned = await lenderAave.earned();
+      const tokenAddress = returnEarned[0];
+      const totalEarned = returnEarned[1];
+
+      expect(tokenAddress.length).to.be.equal(2);
+      expect(totalEarned.length).to.be.equal(2);
+
+      expect(tokenAddress[0]).to.be.equal(nativeRewardToken.address);
+      expect(tokenAddress[1]).to.be.equal(stkAave.address);
+
+      expect(totalEarned[0]).to.be.gt(parseUnits('0', 18));
+      expect(totalEarned[1]).to.be.gt(parseUnits('0', 18));
+    });
+    it('apr - convex boost', async () => {
+      await setTokenBalanceFor(token, strategy.address, 1000000);
+      await (await strategy.connect(keeper)['harvest()']()).wait();
+      const apr = await lenderAave.connect(keeper).apr();
+      // at mainnet fork time there is 1.84% coming from liquidity rate, 0.02% coming from incentives
+      // and 15.6% (computed by hand because apr displyed on Frax front is wrong)
+      expect(apr).to.be.closeTo(parseUnits('0.173', 18), parseUnits('0.005', 18));
+      const weightedAPR = await lenderAave.weightedApr();
+      const nav = await lenderAave.nav();
+      expect(weightedAPR).to.be.equal(nav.mul(apr));
+    });
+    it('aprAfterDeposit', async () => {
+      const aprAfterDepositSupposed = await lenderAave
+        .connect(keeper)
+        .aprAfterDeposit(parseUnits('10000000', tokenDecimal));
+
+      // Do the deposit and see if the values are indeed equals
+      await setTokenBalanceFor(token, strategy.address, 10000000);
+      await (await strategy.connect(keeper)['harvest()']()).wait();
+      const aprReal = await lenderAave.connect(keeper).apr();
+      expect(aprAfterDepositSupposed).to.be.closeTo(aprReal, parseUnits('0.001', 18));
     });
   });
 

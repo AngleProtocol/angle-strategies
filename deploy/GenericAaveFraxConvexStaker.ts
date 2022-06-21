@@ -25,17 +25,18 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     governor = CONTRACTS_ADDRESSES[ChainId.MAINNET].GovernanceMultiSig! as string;
     proxyAdmin = CONTRACTS_ADDRESSES[ChainId.MAINNET].ProxyAdmin! as string;
     strategyAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
-      ?.GenericOptimisedLender as string;
-    oldLenderAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.GenericAave as string;
+      ?.GenericOptimisedLender.Contract as string;
+    oldLenderAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
+      ?.GenericOptimisedLender.GenericAave as string;
     keeper = '0xcC617C6f9725eACC993ac626C7efC6B96476916E';
   } else {
     guardian = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].Guardian!;
     governor = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].GovernanceMultiSig! as string;
     proxyAdmin = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].ProxyAdmin! as string;
     strategyAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
-      ?.Strategies?.GenericOptimisedLender as string;
+      ?.Strategies?.GenericOptimisedLender.Contract as string;
     oldLenderAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
-      ?.GenericAave as string;
+      ?.Strategies?.GenericOptimisedLender.GenericAave as string;
     keeper = fakeKeeper.address;
   }
 
@@ -46,11 +47,11 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
   ) as OptimizerAPRStrategy;
 
   let lenderImplementation = await deployments.getOrNull(
-    `GenericAave_${stableName}_${collateralName}_Staker_Implementation`,
+    `GenericAave_${stableName}_${collateralName}_Convex_Staker_Implementation`,
   );
   if (!lenderImplementation) {
-    lenderImplementation = await deploy(`GenericAave_${stableName}_${collateralName}_Staker_Implementation`, {
-      contract: 'GenericAaveFraxStaker',
+    lenderImplementation = await deploy(`GenericAave_${stableName}_${collateralName}_Convex_Staker_Implementation`, {
+      contract: 'GenericAaveFraxConvexStaker',
       from: deployer.address,
       args: [],
     });
@@ -69,7 +70,7 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     DAY,
   ]);
 
-  const proxyLender = await deploy(`GenericAave_${stableName}_${collateralName}_Staker`, {
+  const proxyLender = await deploy(`GenericAave_${stableName}_${collateralName}_Convex_Staker`, {
     contract: 'TransparentUpgradeableProxy',
     from: deployer.address,
     args: [lenderImplementation.address, proxyAdmin, initializeData],

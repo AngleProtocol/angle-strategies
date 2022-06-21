@@ -7,7 +7,13 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
 
-import "../strategies/AaveFlashloanStrategy/AaveInterfaces.sol";
+import { IPriceOracle, IOptionalERC20, DataTypes, IStakedAave, IReserveInterestRateStrategy } from "../interfaces/external/aave/IAave.sol";
+import { IAToken } from "../interfaces/external/aave/IAaveToken.sol";
+import { IAToken } from "../interfaces/external/aave/IAaveToken.sol";
+import { IProtocolDataProvider } from "../interfaces/external/aave/IProtocolDataProvider.sol";
+import { ILendingPool, ILendingPoolAddressesProvider } from "../interfaces/external/aave/ILendingPool.sol";
+import { IAaveIncentivesController } from "../interfaces/external/aave/IAaveIncentivesController.sol";
+import { IVariableDebtToken } from "../interfaces/external/aave/IAaveToken.sol";
 
 abstract contract MockAave is
     IAaveIncentivesController,

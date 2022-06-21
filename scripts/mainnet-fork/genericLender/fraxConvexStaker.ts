@@ -8,11 +8,8 @@ import {
 import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
 import { network, ethers } from 'hardhat';
 import { parseUnits } from 'ethers/lib/utils';
-import { ERC20, ERC20__factory, OptimizerAPRStrategy, OptimizerAPRStrategy__factory } from '../../../typechain';
-import { logBN } from '../../../test/utils-interaction';
-import { time } from '../../../test/test-utils/helpers';
+import { OptimizerAPRStrategy, OptimizerAPRStrategy__factory } from '../../../typechain';
 import { DAY } from '../../../test/contants';
-import { BigNumber, providers } from 'ethers';
 
 async function main() {
   // =============== Simulation parameters ====================
@@ -29,24 +26,28 @@ async function main() {
     poolManagerAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]
       ?.PoolManager as string;
     strategyAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
-      ?.GenericOptimisedLender as string;
+      ?.GenericOptimisedLender.Contract as string;
   } else {
     guardian = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].Guardian!;
     poolManagerAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
       ?.PoolManager as string;
     strategyAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
-      ?.Strategies?.GenericOptimisedLender as string;
+      ?.Strategies?.GenericOptimisedLender.Contract as string;
   }
 
-  const FRAX = '0x853d955aCEf822Db058eb8505911ED77F175b99e';
-  const wantToken = (await ethers.getContractAt(ERC20__factory.abi, FRAX)) as ERC20;
+  // const FRAX = '0x853d955aCEf822Db058eb8505911ED77F175b99e';
+  // const wantToken = (await ethers.getContractAt(ERC20__factory.abi, FRAX)) as ERC20;
 
   const strategy = new ethers.Contract(
     strategyAddress,
     OptimizerAPRStrategy__factory.createInterface(),
     deployer,
   ) as OptimizerAPRStrategy;
-  const poolManager = new ethers.Contract(poolManagerAddress, PoolManager_Interface, deployer) as PoolManager;
+  const poolManager = new ethers.Contract(
+    poolManagerAddress,
+    PoolManager_Interface,
+    deployer,
+  ) as unknown as PoolManager;
 
   await network.provider.send('hardhat_setBalance', [deployer.address, parseUnits('1000000', 18).toHexString()]);
 
