@@ -24,12 +24,12 @@ async function main() {
     poolManagerAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]
       ?.PoolManager as string;
     strategyAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
-      ?.GenericOptimisedLender as string;
+      ?.GenericOptimisedLender.Contract as string;
   } else {
     poolManagerAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
       ?.PoolManager as string;
     strategyAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
-      ?.Strategies?.GenericOptimisedLender as string;
+      ?.Strategies?.GenericOptimisedLender.Contract as string;
   }
 
   const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
@@ -40,7 +40,11 @@ async function main() {
     OptimizerAPRStrategy__factory.createInterface(),
     deployer,
   ) as OptimizerAPRStrategy;
-  const poolManager = new ethers.Contract(poolManagerAddress, PoolManager_Interface, deployer) as PoolManager;
+  const poolManager = new ethers.Contract(
+    poolManagerAddress,
+    PoolManager_Interface,
+    deployer,
+  ) as unknown as PoolManager;
 
   await network.provider.send('hardhat_setBalance', [deployer.address, parseUnits('1000000', 18).toHexString()]);
 

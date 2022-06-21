@@ -23,16 +23,16 @@ async function main() {
     guardian = CONTRACTS_ADDRESSES[ChainId.MAINNET].Guardian as string;
     governor = CONTRACTS_ADDRESSES[ChainId.MAINNET].GovernanceMultiSig as string;
     strategyAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
-      ?.GenericOptimisedLender as string;
-    lenderAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]
-      ?.GenericCompound as string;
+      ?.GenericOptimisedLender.Contract as string;
+    lenderAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
+      ?.GenericOptimisedLender.GenericCompound as string;
   } else {
     guardian = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].Guardian!;
     governor = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].GovernanceMultiSig as string;
     strategyAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
-      ?.Strategies?.GenericOptimisedLender as string;
+      ?.Strategies?.GenericOptimisedLender.Contract as string;
     lenderAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
-      ?.GenericCompound as string;
+      ?.Strategies?.GenericOptimisedLender.GenericCompound as string;
   }
 
   const strategy = new ethers.Contract(

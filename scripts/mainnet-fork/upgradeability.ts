@@ -1,7 +1,7 @@
 import { UpgradeableContract } from '@openzeppelin/upgrades-core';
 import { artifacts } from 'hardhat';
 
-const testUpgradeability = async (name: string, file: string) => {
+const testUpgradeability = async (name: string, file: string): Promise<void> => {
   const buildInfo = await artifacts.getBuildInfo(`${file}:${name}`);
   const baseContract = new UpgradeableContract(name, buildInfo?.input as any, buildInfo?.output as any);
   console.log(name);
@@ -9,7 +9,7 @@ const testUpgradeability = async (name: string, file: string) => {
   console.log('');
 };
 
-const testStorage = async (name: string, file: string, nameUpgrade: string, fileUpgrade: string) => {
+const testStorage = async (name: string, file: string, nameUpgrade: string, fileUpgrade: string): Promise<void> => {
   const buildInfo = await artifacts.getBuildInfo(`${file}:${name}`);
   const baseContract = new UpgradeableContract(name, buildInfo?.input as any, buildInfo?.output as any);
 
