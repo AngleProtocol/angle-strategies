@@ -35,6 +35,7 @@
     "prettier": "yarn prettier:js && yarn prettier:sol",
     "prettier:sol": "prettier --write 'contracts/**/*.sol'",
     "prettier:js": "prettier --write 'scripts/**/*.ts' 'test/**/*.{js,ts}' 'deploy/*.{js,ts}' '*.{js,ts}'",
+    "publish-to-public-repo": "sh ./publish-to-public-repo.sh",
     "size": "hardhat size-contracts",
     "test": "hardhat test",
     "test:fork:stethStrat": "hardhat run --network localhost ./scripts/mainnet-fork/stETHStrategy/testDeploy.ts",
