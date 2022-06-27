@@ -9,7 +9,7 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
   const { deploy } = deployments;
   const { deployer, keeper: fakeKeeper } = await ethers.getNamedSigners();
   const stableName = 'agEUR';
-  const collats = ['USDC'];
+  const collats = ['DAI'];
 
   let guardian: string;
   let governor: string;
@@ -91,5 +91,5 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
 };
 
 func.tags = ['genericEuler'];
-func.dependencies = ['genericEulerImplementation'];
+// func.dependencies = ['genericEulerImplementation'];
 export default func;
