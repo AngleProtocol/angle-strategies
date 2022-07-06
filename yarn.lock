@@ -1087,10 +1087,10 @@
     find-up "^4.1.0"
     fs-extra "^8.1.0"
 
-"@openzeppelin/contracts-upgradeable@4.5.1":
-  version "4.5.1"
-  resolved "https://registry.yarnpkg.com/@openzeppelin/contracts-upgradeable/-/contracts-upgradeable-4.5.1.tgz#dc354082460eb34f5833afdecfab46538b208c4f"
-  integrity sha512-xcKycsSyFauIGMhSeeTJW/Jzz9jZUJdiFNP9Wo/9VhMhw8t5X0M92RY6x176VfcIWsxURMHFWOJVTlFA78HI/w==
+"@openzeppelin/contracts-upgradeable@4.7.0-rc.0":
+  version "4.7.0-rc.0"
+  resolved "https://registry.yarnpkg.com/@openzeppelin/contracts-upgradeable/-/contracts-upgradeable-4.7.0-rc.0.tgz#f98531801be41c0ca7ce693929f5aa26ab3bda1c"
+  integrity sha512-Ei5fYk/xy3cyzWBgRShN/rIk2TtlFZ8Oqx4P7YiavqMlvBrK8vki2qxlwflwdliJ1rt+cDT1pzx/KloAXnGrOA==
 
 "@openzeppelin/contracts@4.5.0":
   version "4.5.0"
