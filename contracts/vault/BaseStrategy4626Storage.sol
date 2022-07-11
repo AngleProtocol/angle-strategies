@@ -10,7 +10,7 @@ import "./Vault.sol";
 contract BaseStrategy4626Storage is ERC20TokenizedVaultUpgradeable {
     uint256 internal constant BASE_PARAMS = 10**9;
 
-    Vault public vault;
+    Vault[] public vaults;
 
     /// @notice CoreBorrow used to get governance addresses
     ICoreBorrow public coreBorrow;

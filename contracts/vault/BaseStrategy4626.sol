@@ -9,8 +9,8 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     using SafeERC20 for IERC20;
 
     /// @notice Constructor of the `BaseStrategyERC4626`
-    function _initialize(Vault _vault, address[] memory keepers) internal initializer {
-        vault = _vault;
+    function _initialize(Vault[] memory _vaults, address[] memory keepers) internal initializer {
+        vaults = _vaults;
     }
 
     /// @notice Checks whether the `msg.sender` has the governor role or not
@@ -27,33 +27,98 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
 
     /// @notice Checks whether the `msg.sender` has the governor role or not
     modifier onlyVault() {
-        if (address(vault) != msg.sender) revert NotVault();
+        // List should be small (less than 5) so looping is not an issue
+        Vault[] memory vaultMem = vaults;
+        bool inList;
+        for (uint256 i = 0; i < vaultMem.length; i++) {
+            if (address(vaultMem[i]) != msg.sender) {
+                inList = true;
+                continue;
+            }
+        }
+        if (!inList) revert NotVault();
         _;
     }
 
-    // /// @notice Withdraws `_amountNeeded` to `poolManager`.
-    // /// @param _amountNeeded How much `want` to withdraw.
-    // /// @return _loss Any realized losses
-    // /// @dev This may only be called by the `PoolManager`
-    // function withdraw(uint256 _amountNeeded) external override onlyVault returns (uint256 _loss) {
-    //     uint256 amountFreed;
-    //     // Liquidate as much as possible `want` (up to `_amountNeeded`)
-    //     (amountFreed, _loss) = _liquidatePosition(_amountNeeded);
-    //     // Send it directly back (NOTE: Using `msg.sender` saves some gas here)
-    //     IERC20(asset()).safeTransfer(msg.sender, amountFreed);
-    //     // NOTE: Reinvest anything leftover on next `harvest`
-    // }
+    // ============================ View functions =================================
+
+    /// @notice Provides an indication of whether this strategy is currently "active"
+    /// in that it is managing an active position, or will manage a position in
+    /// the future. This should correlate to `harvest()` activity, so that Harvest
+    /// events can be tracked externally by indexing agents.
+    /// @return True if the strategy is actively managing a position.
+    function isActive() public view returns (bool) {
+        return estimatedTotalAssets() > 0;
+    }
+
+    /// @notice Calculates the total amount of underlying tokens the Vault holds.
+    /// @return totalUnderlyingHeld The total amount of underlying tokens the Vault holds.
+    /// @dev Important to not take into account lockedProfit otherwise there could be attacks on
+    /// the vault. Someone could artificially make a strategy have large profit, to deposit and withdraw
+    /// and earn free money.
+    /// @dev Need to be cautious on when to use `totalAssets()` and totalDebt. As when investing the money
+    /// it is better to use the full balance. But need to make sure that there isn't any flaws by using 2 dufferent balances
+    function totalAssets() public view override returns (uint256 totalUnderlyingHeld) {
+        totalUnderlyingHeld = totalStrategyHoldings - lockedProfit();
+    }
+
+    /// @notice Calculates the current amount of locked profit.
+    /// @return The current amount of locked profit.
+    function lockedProfit() public view returns (uint256) {
+        // Get the last harvest and harvest delay.
+        uint256 previousHarvest = lastHarvest;
+        uint256 harvestInterval = harvestDelay;
+
+        unchecked {
+            // If the harvest delay has passed, there is no locked profit.
+            // Cannot overflow on human timescales since harvestInterval is capped.
+            if (block.timestamp >= previousHarvest + harvestInterval) return 0;
+
+            // Get the maximum amount we could return.
+            uint256 maximumLockedProfit = maxLockedProfit;
+
+            // Compute how much profit remains locked based on the last harvest and harvest delay.
+            // It's impossible for the previous harvest to be in the future, so this will never underflow.
+            return maximumLockedProfit - (maximumLockedProfit * (block.timestamp - previousHarvest)) / harvestInterval;
+        }
+    }
+
+    // ============================ View virtual functions =================================
+
+    /// @notice Provides an accurate estimate for the total amount of assets
+    /// (principle + return) that this Strategy is currently managing,
+    /// denominated in terms of `want` tokens.
+    /// This total should be "realizable" e.g. the total value that could
+    /// *actually* be obtained from this Strategy if it were to divest its
+    /// entire position based on current on-chain conditions.
+    /// @return The estimated total assets in this Strategy.
+    /// @dev Care must be taken in using this function, since it relies on external
+    /// systems, which could be manipulated by the attacker to give an inflated
+    /// (or reduced) value produced by this function, based on current on-chain
+    /// conditions (e.g. this function is possible to influence through
+    /// flashloan attacks, oracle manipulations, or other DeFi attack
+    /// mechanisms).
+    function estimatedTotalAssets() public view virtual returns (uint256);
+
+    function estimatedAPR() external view virtual returns (uint256);
+
+    // ============================ External functions =================================
 
     /** @dev See {IERC4262-withdraw} */
+    /// @return _loss Any realized losses
     function withdraw(
         uint256 assets,
         address receiver,
         address owner
-    ) public override onlyVault returns (uint256 _loss) {
-        require(assets <= maxWithdraw(owner), "ERC20TokenizedVault: withdraw more than max");
+    ) public override returns (uint256 _loss) {
+        uint256 amountFreed;
+        // Liquidate as much as possible `want` (up to `assets`)
+        (amountFreed, _loss) = _liquidatePosition(assets);
 
-        uint256 shares = previewWithdraw(assets);
-        _withdraw(_msgSender(), receiver, owner, assets, shares);
+        require(assets + _loss <= maxWithdraw(owner), "ERC20TokenizedVault: withdraw more than max");
+
+        uint256 shares = previewWithdraw(assets + _loss);
+        _withdraw(_msgSender(), receiver, owner, assets, _loss, shares);
 
         return shares;
     }
@@ -62,6 +127,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /// the Strategy's position.
     /// @dev Let the process of `report` and `adjustPosition`, because coupling both in a generic manner
     /// is not obvious
+    /// TODO not sure limiting harvest is needed with linear vesting
     function harvest() external {
         // If this is the first harvest after the last window:
         if (block.timestamp >= lastHarvest + harvestDelay) {
@@ -100,82 +166,6 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
             nextHarvestDelay = 0;
 
             emit HarvestDelayUpdated(msg.sender, newHarvestDelay);
-        }
-    }
-
-    /// @notice PrepareReturn the Strategy, recognizing any profits or losses
-    /// @dev In the rare case the Strategy is in emergency shutdown, this will exit
-    /// the Strategy's position.
-    /// @dev  When `_report()` is called, the Strategy reports to the Manager (via
-    /// `poolManager.report()`), so in some cases `harvest()` must be called in order
-    /// to take in profits, to borrow newly available funds from the Manager, or
-    /// otherwise adjust its position. In other cases `harvest()` must be
-    /// called to report to the Manager on the Strategy's position, especially if
-    /// any losses have occurred.
-    /// @dev As keepers may directly profit from this function, there may be front-running problems with miners bots,
-    /// we may have to put an access control logic for this function to only allow white-listed addresses to act
-    /// as keepers for the protocol
-    function _report()
-        internal
-        returns (
-            uint256 profit,
-            uint256 loss,
-            uint256 debtPayment
-        )
-    {
-        uint256 debtOutstanding = vault.debtOutstanding(address(this));
-        if (emergencyExit) {
-            // Free up as much capital as possible
-            uint256 amountFreed = _liquidateAllPositions();
-            if (amountFreed < debtOutstanding) {
-                loss = debtOutstanding - amountFreed;
-            } else if (amountFreed > debtOutstanding) {
-                profit = amountFreed - debtOutstanding;
-            }
-            debtPayment = debtOutstanding - loss;
-        } else {
-            // Free up returns for vault to pull
-            (profit, loss, debtPayment) = _prepareReturn(debtOutstanding);
-        }
-        emit Harvested(profit, loss, debtPayment, debtOutstanding);
-
-        totalStrategyHoldings += profit - loss - debtPayment;
-
-        // Allows vault to take up to the "harvested" balance of this contract,
-        // which is the amount it has earned since the last time it reported to
-        // the Manager.
-        vault.report(profit, loss, debtPayment);
-    }
-
-    /// @notice Calculates the total amount of underlying tokens the Vault holds.
-    /// @return totalUnderlyingHeld The total amount of underlying tokens the Vault holds.
-    /// @dev Important to not take into account lockedProfit otherwise there could be attacks on
-    /// the vault. Someone could artificially make a strategy have large profit, to deposit and withdraw
-    /// and earn free money.
-    /// @dev Need to be cautious on when to use `totalAssets()` and totalDebt. As when investing the money
-    /// it is better to use the full balance. But need to make sure that there isn't any flaws by using 2 dufferent balances
-    function totalAssets() public view override returns (uint256 totalUnderlyingHeld) {
-        totalUnderlyingHeld = totalStrategyHoldings - lockedProfit();
-    }
-
-    /// @notice Calculates the current amount of locked profit.
-    /// @return The current amount of locked profit.
-    function lockedProfit() public view returns (uint256) {
-        // Get the last harvest and harvest delay.
-        uint256 previousHarvest = lastHarvest;
-        uint256 harvestInterval = harvestDelay;
-
-        unchecked {
-            // If the harvest delay has passed, there is no locked profit.
-            // Cannot overflow on human timescales since harvestInterval is capped.
-            if (block.timestamp >= previousHarvest + harvestInterval) return 0;
-
-            // Get the maximum amount we could return.
-            uint256 maximumLockedProfit = maxLockedProfit;
-
-            // Compute how much profit remains locked based on the last harvest and harvest delay.
-            // It's impossible for the previous harvest to be in the future, so this will never underflow.
-            return maximumLockedProfit - (maximumLockedProfit * (block.timestamp - previousHarvest)) / harvestInterval;
         }
     }
 
@@ -234,6 +224,64 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
 
     // ============================ Internal Functions =============================
 
+    /// @notice PrepareReturn the Strategy, recognizing any profits or losses
+    /// @dev In the rare case the Strategy is in emergency shutdown, this will exit
+    /// the Strategy's position.
+    /// @dev  When `_report()` is called, the Strategy reports to the Manager (via
+    /// `poolManager.report()`), so in some cases `harvest()` must be called in order
+    /// to take in profits, to borrow newly available funds from the Manager, or
+    /// otherwise adjust its position. In other cases `harvest()` must be
+    /// called to report to the Manager on the Strategy's position, especially if
+    /// any losses have occurred.
+    /// @dev As keepers may directly profit from this function, there may be front-running problems with miners bots,
+    /// we may have to put an access control logic for this function to only allow white-listed addresses to act
+    /// as keepers for the protocol
+    /// TODO can be done better(?), like right now they report to all vaults but this seems too much
+    function _report()
+        internal
+        returns (
+            uint256 profit,
+            uint256 loss,
+            uint256 debtPayment
+        )
+    {
+        Vault[] memory vaultMem = vaults;
+
+        uint256 debtOutstanding;
+        for (uint256 i = 0; i < vaultMem.length; i++) {
+            debtOutstanding += vaultMem[i].debtOutstanding(address(this));
+        }
+
+        if (emergencyExit) {
+            // Free up as much capital as possible
+            uint256 amountFreed = _liquidateAllPositions();
+            if (amountFreed < debtOutstanding) {
+                loss = debtOutstanding - amountFreed;
+            } else if (amountFreed > debtOutstanding) {
+                profit = amountFreed - debtOutstanding;
+            }
+            debtPayment = debtOutstanding - loss;
+        } else {
+            // Free up returns for vault to pull
+            (profit, loss, debtPayment) = _prepareReturn(debtOutstanding);
+        }
+        emit Harvested(profit, loss, debtPayment, debtOutstanding);
+        totalStrategyHoldings += profit - loss - debtPayment;
+
+        uint256 totalSupply_ = totalSupply();
+        for (uint256 i = 0; i < vaultMem.length; i++) {
+            uint256 vaultPercentage = (balanceOf(address(vaultMem[i])) * BASE_PARAMS) / totalSupply_;
+            // Allows vault to take up to the "harvested" balance of this contract,
+            // which is the amount it has earned since the last time it reported to
+            // the Manager.
+            vaultMem[i].report(
+                (profit * vaultPercentage) / BASE_PARAMS,
+                (loss * vaultPercentage) / BASE_PARAMS,
+                debtPayment
+            );
+        }
+    }
+
     /// @dev can't use the _afterTokenDeposit because we don't have access to 'assets' but only 'shares'
     /// We can if we are using a less gas friendly implementation by making inverse computation to get back 'assets'
     /// TODO test both way
@@ -261,8 +309,6 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         emit Deposit(caller, receiver, assets, shares);
     }
 
-    // TODO withdraw function will not be exactly at ERC4626 format. We will make the withdraw output the loss made at harvest time
-
     /**
      * @dev Withdraw/redeem common workflow
      */
@@ -271,8 +317,9 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         address receiver,
         address owner,
         uint256 assets,
+        uint256 loss,
         uint256 shares
-    ) private override {
+    ) private onlyVault {
         if (caller != owner) {
             _spendAllowance(owner, caller, shares);
         }
@@ -285,10 +332,12 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         // shares are burned and after the assets are transfered, which is a valid state.
         _burn(owner, shares);
         SafeERC20Upgradeable.safeTransfer(IERC20Upgradeable(asset()), receiver, assets);
-        totalStrategyHoldings -= assets;
+        totalStrategyHoldings -= assets + loss;
 
         emit Withdraw(caller, receiver, owner, assets, shares);
     }
+
+    // ============================ Internal virtual Functions =============================
 
     /// @notice Performs any Strategy unwinding or other calls necessary to capture the
     /// "free return" this Strategy has generated since the last time its core
@@ -363,8 +412,4 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     ///    }
     /// ```
     function _protectedTokens() internal view virtual returns (address[] memory);
-
-    // ============================ Virtual Functions =============================
-
-    function estimatedAPR() external view virtual returns (uint256);
 }

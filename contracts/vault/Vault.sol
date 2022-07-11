@@ -97,6 +97,7 @@ contract Vault is VaultStorage {
     /// whether to take some back or give it more. Note that the most it can
     /// take is `gain + _debtPayment`, and the most it can give is all of the
     /// remaining reserves. Anything outside of those bounds is abnormal behavior.
+    /// TODO should remove gain and loss variable as loss is useless?
     function report(
         uint256 gain,
         uint256 loss,
