@@ -42,6 +42,22 @@ contract Vault is VaultStorage {
 
     // ============================== external ===================================
 
+    /** @dev See {IERC4262-withdraw} */
+    function withdraw(
+        uint256 assets,
+        address receiver,
+        address owner
+    ) public virtual override returns (uint256) {
+        uint256 loss;
+        (assets, loss) = _beforeBurn(owner, assets);
+        require(assets + loss <= maxWithdraw(owner), "ERC20TokenizedVault: withdraw more than max");
+
+        uint256 shares = previewWithdraw(assets + loss);
+        _withdraw(_msgSender(), receiver, owner, assets, shares);
+
+        return shares;
+    }
+
     /// @notice Claims earned rewards and update working balances
     /// @return amountClaimed Earned amount
     function checkpoint() external returns (uint256 amountClaimed) {
@@ -275,13 +291,9 @@ contract Vault is VaultStorage {
             _updateAccumulator(from);
             _claim(from);
         }
-        // if it is not a burn
         if (to != address(0)) {
             _updateAccumulator(to);
             _claim(to);
-        } else {
-            // we may need to free some funds before burning
-            _beforeBurn(from, amount);
         }
     }
 
@@ -295,18 +307,15 @@ contract Vault is VaultStorage {
         if (to != address(0)) _updateLiquidityLimit(to, balanceOf(to), totalSupply_);
     }
 
-    function _beforeBurn(address from, uint256 amount) internal {
-        // TODO do we had slippage on this (this would break the interface) or we can have a gov slippage
+    function _beforeBurn(address from, uint256 value) internal returns (uint256, uint256 totalLoss) {
+        // TODO do we add slippage on this (this would break the interface) or we can have a gov slippage
         // but less modular
         uint256 maxLoss;
-        uint256 maxShares;
-        // Check that the revert operation is indeed correct: from previewWithdraw to previewRedeem
-        uint256 value = previewRedeem(amount);
+
         if (value > getBalance()) {
             IStrategy4626[] memory withdrawalStackMemory = withdrawalStack;
 
             uint256 newTotalDebt = totalDebt;
-            uint256 totalLoss = 0;
             uint256 vaultBalance;
             // We need to go get some from our strategies in the withdrawal queue
             // NOTE: This performs forced withdrawals from each Strategy. During
@@ -360,29 +369,15 @@ contract Vault is VaultStorage {
             // NOTE: We have withdrawn everything possible out of the withdrawal queue
             //      but we still don't have enough to fully pay them back, so adjust
             //      to the total amount we've freed up through forced withdrawals
-            // vaultBalance = getBalance();
-            // if (value > vaultBalance) {
-            //     value = vaultBalance;
-            //     // NOTE: Burn # of shares that corresponds to what Vault has on-hand,
-            //     //      including the losses that were incurred above during withdrawals
-            //     amount = previewWithdraw(value + totalLoss);
-            //     // NOTE: Check current shares must be lower than maxShare.
-            //     //      This implies that large withdrawals within certain parameter ranges might fail.
-            //     assert(amount <= maxShares);
+            vaultBalance = getBalance();
+            if (value > vaultBalance) {
+                value = vaultBalance;
+            }
 
-            //     // NOTE: This loss protection is put in place to revert if losses from
-            //     //       withdrawing are more than what is considered acceptable.
-            //     assert(totalLoss <= (maxLoss * (value + totalLoss)) / BASE_PARAMS);
-            // }
+            // NOTE: This loss protection is put in place to revert if losses from
+            //       withdrawing are more than what is considered acceptable.
+            assert(totalLoss <= (maxLoss * value) / BASE_PARAMS);
         }
-
-        // Burn shares (full value of what is being withdrawn)
-        // totalSupply -= amount;
-        // balanceOf[msg.sender] -= amount;
-        // emit Transfer(msg.sender, address(0), amount);
-
-        // Withdraw remaining balance to _recipient (may be different to msg.sender) (minus fee)
-        // IERC20(asset()).transferFrom(from, value);
     }
 
     /// @notice Calculate limits which depend on the amount of ANGLE token per-user.
@@ -410,6 +405,32 @@ contract Vault is VaultStorage {
         workingBalances[addr] = lim;
         uint256 _workingSupply = workingSupply + lim - oldBal;
         workingSupply = _workingSupply;
+    }
+
+    /**
+     * @dev Withdraw/redeem common workflow
+     */
+    function _withdraw(
+        address caller,
+        address receiver,
+        address owner,
+        uint256 assets,
+        uint256 shares
+    ) private override {
+        if (caller != owner) {
+            _spendAllowance(owner, caller, shares);
+        }
+
+        // If _asset is ERC777, `transfer` can trigger trigger a reentrancy AFTER the transfer happens through the
+        // `tokensReceived` hook. On the other hand, the `tokensToSend` hook, that is triggered before the transfer,
+        // calls the vault, which is assumed not malicious.
+        //
+        // Conclusion: we need to do the transfer after the burn so that any reentrancy would happen after the
+        // shares are burned and after the assets are transfered, which is a valid state.
+        _burn(owner, shares);
+        SafeERC20Upgradeable.safeTransfer(IERC20Upgradeable(asset()), receiver, assets);
+
+        emit Withdraw(caller, receiver, owner, assets, shares);
     }
 
     // ===================== Strategy related functions ==========================
