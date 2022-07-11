@@ -125,16 +125,19 @@ contract Vault is VaultStorage {
             // If the strategy has some credit left, tokens can be transferred to this strategy
             uint256 available = Math.min(target - params.totalStrategyDebt, getBalance());
             params.totalStrategyDebt = params.totalStrategyDebt + available;
-            totalDebt = totalDebt + available;
+            totalDebt += available;
             if (available > 0) {
                 strategy.deposit(available, address(this));
             }
         } else {
             uint256 available = Math.min(params.totalStrategyDebt - target, debtPayment + gain);
             params.totalStrategyDebt = params.totalStrategyDebt - available;
-            totalDebt = totalDebt - available;
+            totalDebt -= available;
             if (available > 0) {
-                strategy.withdraw(available, address(this), address(this));
+                uint256 withdrawLoss = strategy.withdraw(available, address(this), address(this));
+                // There will be no loss here because the funds should be already free
+                // useless to let in prod, but useful for testing purpose
+                assert(withdrawLoss == 0);
             }
         }
     }
@@ -169,16 +172,17 @@ contract Vault is VaultStorage {
         internal
         returns (int256)
     {
+        StrategyParams storage params = strategies[strategy];
         // Get the strategy's previous and current balance.
-        uint256 debtLastHarvest = strategies[strategy].totalStrategyDebt;
-        strategies[strategy].lastReport = block.timestamp;
+        uint256 debtLastHarvest = params.totalStrategyDebt;
+        params.lastReport = block.timestamp;
         // strategy should be carefully design and not take into account unrealized profit/loss
         // it should be designed like this contract: previousDebt + unlocked profit/loss after an harvest in the sub contract
         // If we would consider the expected value, this function could be manipulated by artificially creating false profit/loss.
         uint256 balanceThisHarvest = strategy.maxWithdraw(address(this));
 
         // Update the strategy's stored balance. Cast overflow is unrealistic.
-        strategies[strategy].totalStrategyDebt = balanceThisHarvest;
+        params.totalStrategyDebt = balanceThisHarvest;
 
         // Update the total profit/loss accrued since last harvest.
         // To overflow this would asks enormous debt amounts which are in base of asset
@@ -264,15 +268,19 @@ contract Vault is VaultStorage {
     function _beforeTokenTransfer(
         address from,
         address to,
-        uint256
+        uint256 amount
     ) internal override {
         if (from != address(0)) {
             _updateAccumulator(from);
             _claim(from);
         }
+        // if it is not a burn
         if (to != address(0)) {
             _updateAccumulator(to);
             _claim(to);
+        } else {
+            // we may need to free some funds before burning
+            _beforeBurn(from, amount);
         }
     }
 
@@ -284,6 +292,96 @@ contract Vault is VaultStorage {
         uint256 totalSupply_ = totalSupply();
         if (from != address(0)) _updateLiquidityLimit(from, balanceOf(from), totalSupply_);
         if (to != address(0)) _updateLiquidityLimit(to, balanceOf(to), totalSupply_);
+    }
+
+    function _beforeBurn(address from, uint256 amount) internal {
+        // TODO do we had slippage on this (this would break the interface) or we can have a gov slippage
+        // but less modular
+        uint256 maxLoss;
+        uint256 maxShares;
+        // Check that the revert operation is indeed correct: from previewWithdraw to previewRedeem
+        uint256 value = previewRedeem(amount);
+        if (value > getBalance()) {
+            IStrategy4626[] memory withdrawalStackMemory = withdrawalStack;
+
+            uint256 newTotalDebt = totalDebt;
+            uint256 totalLoss = 0;
+            uint256 vaultBalance;
+            // We need to go get some from our strategies in the withdrawal queue
+            // NOTE: This performs forced withdrawals from each Strategy. During
+            //      forced withdrawal, a Strategy may realize a loss. That loss
+            //      is reported back to the Vault, and will affect the amount
+            //      of tokens that the withdrawer receives for their shares. They
+            //      can optionally specify the maximum acceptable loss (in BPS)
+            //      to prevent excessive losses on their withdrawals (which may
+            //      happen in certain edge cases where Strategies realize a loss)
+            for (uint256 i = 0; i < withdrawalStackMemory.length; i++) {
+                IStrategy4626 strategy = withdrawalStackMemory[i];
+                // We've exhausted the queue
+                if (address(strategy) == address(0)) break;
+
+                vaultBalance = getBalance();
+                // We're done withdrawing
+                if (value <= vaultBalance) break;
+                uint256 amountNeeded = value - vaultBalance;
+
+                StrategyParams storage params = strategies[strategy];
+                // NOTE: Don't withdraw more than the debt so that Strategy can still
+                //      continue to work based on the profits it has
+                // NOTE: This means that user will lose out on any profits that each
+                //      Strategy in the queue would return on next harvest, benefiting others
+                amountNeeded = Math.min(amountNeeded, params.totalStrategyDebt);
+                // Nothing to withdraw from this Strategy, try the next one
+                if (amountNeeded == 0) continue;
+
+                // Force withdraw amount from each Strategy in the order set by governance
+                uint256 loss = strategy.withdraw(amountNeeded, address(this), address(this));
+                uint256 withdrawn = getBalance() - vaultBalance;
+
+                // NOTE: Withdrawer incurs any losses from liquidation
+                if (loss > 0) {
+                    // TODO this can be negative!
+                    value -= loss;
+                    totalLoss += loss;
+                }
+
+                // Reduce the Strategy's debt by the amount withdrawn ("realized returns")
+                // NOTE: This doesn't add to returns as it's not earned by "normal means"
+                params.totalStrategyDebt -= withdrawn + loss;
+                newTotalDebt -= withdrawn + loss;
+            }
+
+            totalDebt = newTotalDebt;
+
+            // TODO can't implement that without breaking the ERC4626 interfaces
+            // We can live it with though, because an external caller can anticipate it (hard though if
+            // there are losses)
+            // NOTE: We have withdrawn everything possible out of the withdrawal queue
+            //      but we still don't have enough to fully pay them back, so adjust
+            //      to the total amount we've freed up through forced withdrawals
+            // vaultBalance = getBalance();
+            // if (value > vaultBalance) {
+            //     value = vaultBalance;
+            //     // NOTE: Burn # of shares that corresponds to what Vault has on-hand,
+            //     //      including the losses that were incurred above during withdrawals
+            //     amount = previewWithdraw(value + totalLoss);
+            //     // NOTE: Check current shares must be lower than maxShare.
+            //     //      This implies that large withdrawals within certain parameter ranges might fail.
+            //     assert(amount <= maxShares);
+
+            //     // NOTE: This loss protection is put in place to revert if losses from
+            //     //       withdrawing are more than what is considered acceptable.
+            //     assert(totalLoss <= (maxLoss * (value + totalLoss)) / BASE_PARAMS);
+            // }
+        }
+
+        // Burn shares (full value of what is being withdrawn)
+        // totalSupply -= amount;
+        // balanceOf[msg.sender] -= amount;
+        // emit Transfer(msg.sender, address(0), amount);
+
+        // Withdraw remaining balance to _recipient (may be different to msg.sender) (minus fee)
+        // IERC20(asset()).transferFrom(from, value);
     }
 
     /// @notice Calculate limits which depend on the amount of ANGLE token per-user.

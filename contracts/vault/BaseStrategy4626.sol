@@ -6,6 +6,8 @@ import "./BaseStrategy4626Storage.sol";
 /// @title Angle Base Strategy ERC4626
 /// @author Angle Protocol
 abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
+    using SafeERC20 for IERC20;
+
     /// @notice Constructor of the `BaseStrategyERC4626`
     function _initialize(Vault _vault, address[] memory keepers) internal initializer {
         vault = _vault;
@@ -27,6 +29,33 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     modifier onlyVault() {
         if (address(vault) != msg.sender) revert NotVault();
         _;
+    }
+
+    // /// @notice Withdraws `_amountNeeded` to `poolManager`.
+    // /// @param _amountNeeded How much `want` to withdraw.
+    // /// @return _loss Any realized losses
+    // /// @dev This may only be called by the `PoolManager`
+    // function withdraw(uint256 _amountNeeded) external override onlyVault returns (uint256 _loss) {
+    //     uint256 amountFreed;
+    //     // Liquidate as much as possible `want` (up to `_amountNeeded`)
+    //     (amountFreed, _loss) = _liquidatePosition(_amountNeeded);
+    //     // Send it directly back (NOTE: Using `msg.sender` saves some gas here)
+    //     IERC20(asset()).safeTransfer(msg.sender, amountFreed);
+    //     // NOTE: Reinvest anything leftover on next `harvest`
+    // }
+
+    /** @dev See {IERC4262-withdraw} */
+    function withdraw(
+        uint256 assets,
+        address receiver,
+        address owner
+    ) public override onlyVault returns (uint256 _loss) {
+        require(assets <= maxWithdraw(owner), "ERC20TokenizedVault: withdraw more than max");
+
+        uint256 shares = previewWithdraw(assets);
+        _withdraw(_msgSender(), receiver, owner, assets, shares);
+
+        return shares;
     }
 
     /// @notice Harvests the Strategy, recognizing any profits or losses and adjusting
@@ -205,6 +234,9 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
 
     // ============================ Internal Functions =============================
 
+    /// @dev can't use the _afterTokenDeposit because we don't have access to 'assets' but only 'shares'
+    /// We can if we are using a less gas friendly implementation by making inverse computation to get back 'assets'
+    /// TODO test both way
     /**
      * @dev Deposit/mint common workflow
      */
@@ -214,7 +246,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         address receiver,
         uint256 assets,
         uint256 shares
-    ) private override {
+    ) private override onlyVault {
         // If _asset is ERC777, `transferFrom` can trigger a reenterancy BEFORE the transfer happens through the
         // `tokensToSend` hook. On the other hand, the `tokenReceived` hook, that is triggered after the transfer,
         // calls the vault, which is assumed not malicious.
@@ -229,10 +261,11 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         emit Deposit(caller, receiver, assets, shares);
     }
 
+    // TODO withdraw function will not be exactly at ERC4626 format. We will make the withdraw output the loss made at harvest time
+
     /**
      * @dev Withdraw/redeem common workflow
      */
-    /// @dev can't use the _afterTokenDeposit because we don't have access to 'assets' but only 'shares'
     function _withdraw(
         address caller,
         address receiver,

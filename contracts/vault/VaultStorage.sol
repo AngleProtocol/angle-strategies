@@ -24,6 +24,7 @@ struct StrategyParams {
     uint256 totalStrategyDebt;
     // The share of the total assets in the `PoolManager` contract that the `strategy` can access to.
     uint256 debtRatio;
+    /// TODO add `minDebtPerHarvest` and `maxDebtPerHarvest`? need to check as yarn
 }
 
 /// @title VaultStorage
