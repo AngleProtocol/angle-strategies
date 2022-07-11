@@ -2,6 +2,7 @@
 pragma solidity 0.8.12;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20TokenizedVaultUpgradeable.sol";
+import "../interfaces/ICoreBorrow.sol";
 import "./Vault.sol";
 
 /// @title Angle Base Strategy ERC4626 Storage
@@ -10,6 +11,12 @@ contract BaseStrategy4626Storage is ERC20TokenizedVaultUpgradeable {
     uint256 internal constant BASE_PARAMS = 10**9;
 
     Vault public vault;
+
+    /// @notice CoreBorrow used to get governance addresses
+    ICoreBorrow public coreBorrow;
+
+    /// @notice See note on `setEmergencyExit()`
+    bool public emergencyExit;
 
     /// @notice The period in seconds during which multiple harvests can occur
     /// regardless if they are taking place before the harvest delay has elapsed.
@@ -35,8 +42,18 @@ contract BaseStrategy4626Storage is ERC20TokenizedVaultUpgradeable {
     /// @notice The amount of locked profit at the end of the last harvest.
     uint256 public maxLockedProfit;
 
-    event Harvest(address indexed user, address indexed strategy);
+    /// @notice The strategy holdings
+    uint256 public totalStrategyHoldings;
+
+    event Harvested(uint256 profit, uint256 loss, uint256 debtPayment, uint256 debtOutstanding);
+    event HarvestWindowUpdated(address indexed user, uint128 newHarvestWindow);
     event HarvestDelayUpdated(address indexed user, uint64 newHarvestDelay);
+    event HarvestDelayUpdateScheduled(address indexed user, uint64 newHarvestDelay);
+    event EmergencyExitActivated();
+
+    error NotGovernor();
+    error NotGovernorOrGuardian();
+    error NotVault();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}

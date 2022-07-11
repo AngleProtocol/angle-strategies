@@ -11,8 +11,28 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         vault = _vault;
     }
 
+    /// @notice Checks whether the `msg.sender` has the governor role or not
+    modifier onlyGovernor() {
+        if (!coreBorrow.isGovernor(msg.sender)) revert NotGovernor();
+        _;
+    }
+
+    /// @notice Checks whether the `msg.sender` has the governor role or not
+    modifier onlyGovernorOrGuardian() {
+        if (!coreBorrow.isGovernorOrGuardian(msg.sender)) revert NotGovernorOrGuardian();
+        _;
+    }
+
+    /// @notice Checks whether the `msg.sender` has the governor role or not
+    modifier onlyVault() {
+        if (address(vault) != msg.sender) revert NotVault();
+        _;
+    }
+
     /// @notice Harvests the Strategy, recognizing any profits or losses and adjusting
     /// the Strategy's position.
+    /// @dev Let the process of `report` and `adjustPosition`, because coupling both in a generic manner
+    /// is not obvious
     function harvest() external {
         // If this is the first harvest after the last window:
         if (block.timestamp >= lastHarvest + harvestDelay) {
@@ -24,19 +44,13 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
             require(block.timestamp <= lastHarvestWindowStart + harvestWindow, "BAD_HARVEST_TIME");
         }
 
-        (uint256 profit, uint256 loss, uint256 debtPayment) = _report();
+        (uint256 gain, uint256 loss, uint256 debtPayment) = _report();
 
-        // if it is a profit we only have to add it to the maxLockedProfit
-        // if it is a loss we have to impact the debtBalance (reduce it)
-        if (profit > loss) {
-            profit -= loss;
-            loss = 0;
-            // Update max unlocked profit based on any remaining locked profit plus new profit.
-            maxLockedProfit = (lockedProfit() + profit);
-        } else {
-            profit = 0;
-            loss -= profit;
-        }
+        // TODO to put in the report (and so make it virtual) because it should impact the
+        // globalAssets -> remove loss add gain
+        // loss was directly removed from the totalHoldings
+        // Update max unlocked profit based on any remaining locked profit plus new profit.
+        maxLockedProfit = (lockedProfit() + gain);
 
         // Check if free returns are left, and re-invest them
         _adjustPosition();
@@ -44,8 +58,6 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         // Update the last harvest timestamp.
         // Cannot overflow on human timescales.
         lastHarvest = uint64(block.timestamp);
-
-        emit Harvest(msg.sender, address(this));
 
         // Get the next harvest delay.
         uint64 newHarvestDelay = nextHarvestDelay;
@@ -62,6 +74,50 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         }
     }
 
+    /// @notice PrepareReturn the Strategy, recognizing any profits or losses
+    /// @dev In the rare case the Strategy is in emergency shutdown, this will exit
+    /// the Strategy's position.
+    /// @dev  When `_report()` is called, the Strategy reports to the Manager (via
+    /// `poolManager.report()`), so in some cases `harvest()` must be called in order
+    /// to take in profits, to borrow newly available funds from the Manager, or
+    /// otherwise adjust its position. In other cases `harvest()` must be
+    /// called to report to the Manager on the Strategy's position, especially if
+    /// any losses have occurred.
+    /// @dev As keepers may directly profit from this function, there may be front-running problems with miners bots,
+    /// we may have to put an access control logic for this function to only allow white-listed addresses to act
+    /// as keepers for the protocol
+    function _report()
+        internal
+        returns (
+            uint256 profit,
+            uint256 loss,
+            uint256 debtPayment
+        )
+    {
+        uint256 debtOutstanding = vault.debtOutstanding(address(this));
+        if (emergencyExit) {
+            // Free up as much capital as possible
+            uint256 amountFreed = _liquidateAllPositions();
+            if (amountFreed < debtOutstanding) {
+                loss = debtOutstanding - amountFreed;
+            } else if (amountFreed > debtOutstanding) {
+                profit = amountFreed - debtOutstanding;
+            }
+            debtPayment = debtOutstanding - loss;
+        } else {
+            // Free up returns for vault to pull
+            (profit, loss, debtPayment) = _prepareReturn(debtOutstanding);
+        }
+        emit Harvested(profit, loss, debtPayment, debtOutstanding);
+
+        totalStrategyHoldings += profit - loss - debtPayment;
+
+        // Allows vault to take up to the "harvested" balance of this contract,
+        // which is the amount it has earned since the last time it reported to
+        // the Manager.
+        vault.report(profit, loss, debtPayment);
+    }
+
     /// @notice Calculates the total amount of underlying tokens the Vault holds.
     /// @return totalUnderlyingHeld The total amount of underlying tokens the Vault holds.
     /// @dev Important to not take into account lockedProfit otherwise there could be attacks on
@@ -70,16 +126,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /// @dev Need to be cautious on when to use `totalAssets()` and totalDebt. As when investing the money
     /// it is better to use the full balance. But need to make sure that there isn't any flaws by using 2 dufferent balances
     function totalAssets() public view override returns (uint256 totalUnderlyingHeld) {
-        // TODO if depending on `totalStrategyDebt`, we need to make sure we are not double counting profits + update the
-        // variable when needed
-        (, uint256 totalStrategyDebt, ) = vault.strategies(IStrategy4626(address(this)));
-        totalUnderlyingHeld = totalStrategyDebt + lockedProfit();
-    }
-
-    /// @notice Returns the amount of underlying tokens that idly sit in the Vault.
-    /// @return The amount of underlying tokens that sit idly in the Vault.
-    function availableBalance() public view returns (uint256) {
-        return IERC20(asset()).balanceOf(address(this));
+        totalUnderlyingHeld = totalStrategyHoldings - lockedProfit();
     }
 
     /// @notice Calculates the current amount of locked profit.
@@ -90,29 +137,125 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         uint256 harvestInterval = harvestDelay;
 
         unchecked {
+            // If the harvest delay has passed, there is no locked profit.
+            // Cannot overflow on human timescales since harvestInterval is capped.
+            if (block.timestamp >= previousHarvest + harvestInterval) return 0;
+
             // Get the maximum amount we could return.
             uint256 maximumLockedProfit = maxLockedProfit;
 
-            // If the harvest delay has passed, there is no locked profit.
-            // Cannot overflow on human timescales since harvestInterval is capped.
-            if (block.timestamp >= previousHarvest + harvestInterval) return maximumLockedProfit;
-
             // Compute how much profit remains locked based on the last harvest and harvest delay.
             // It's impossible for the previous harvest to be in the future, so this will never underflow.
-            return (maximumLockedProfit * (block.timestamp - previousHarvest)) / harvestInterval;
+            return maximumLockedProfit - (maximumLockedProfit * (block.timestamp - previousHarvest)) / harvestInterval;
         }
+    }
+
+    // ============================ Setters =============================
+
+    /// @notice Sets a new harvest window.
+    /// @param newHarvestWindow The new harvest window.
+    /// @dev The Vault's harvestDelay must already be set before calling.
+    function setHarvestWindow(uint128 newHarvestWindow) external onlyGovernor {
+        // A harvest window longer than the harvest delay doesn't make sense.
+        require(newHarvestWindow <= harvestDelay, "WINDOW_TOO_LONG");
+
+        // Update the harvest window.
+        harvestWindow = newHarvestWindow;
+
+        emit HarvestWindowUpdated(msg.sender, newHarvestWindow);
+    }
+
+    /// @notice Sets a new harvest delay.
+    /// @param newHarvestDelay The new harvest delay to set.
+    /// @dev If the current harvest delay is 0, meaning it has not
+    /// been set before, it will be updated immediately, otherwise
+    /// it will be scheduled to take effect after the next harvest.
+    function setHarvestDelay(uint64 newHarvestDelay) external onlyGovernor {
+        // A harvest delay of 0 makes harvests vulnerable to sandwich attacks.
+        require(newHarvestDelay != 0, "DELAY_CANNOT_BE_ZERO");
+
+        // A harvest delay longer than 1 year doesn't make sense.
+        require(newHarvestDelay <= 365 days, "DELAY_TOO_LONG");
+
+        // If the harvest delay is 0, meaning it has not been set before:
+        if (harvestDelay == 0) {
+            // We'll apply the update immediately.
+            harvestDelay = newHarvestDelay;
+
+            emit HarvestDelayUpdated(msg.sender, newHarvestDelay);
+        } else {
+            // We'll apply the update next harvest.
+            nextHarvestDelay = newHarvestDelay;
+
+            emit HarvestDelayUpdateScheduled(msg.sender, newHarvestDelay);
+        }
+    }
+
+    /// @notice Activates emergency exit. Once activated, the Strategy will exit its
+    /// position upon the next harvest, depositing all funds into the Manager as
+    /// quickly as is reasonable given on-chain conditions.
+    /// @dev This may only be called by the `PoolManager`, because when calling this the `PoolManager` should at the same
+    /// time update the debt ratio
+    /// @dev This function can only be called once by the `PoolManager` contract
+    /// @dev See `poolManager.setEmergencyExit()` and `harvest()` for further details.
+    function setEmergencyExit() external onlyVault {
+        emergencyExit = true;
+        emit EmergencyExitActivated();
     }
 
     // ============================ Internal Functions =============================
 
-    function _report()
-        internal
-        virtual
-        returns (
-            uint256 profit,
-            uint256 loss,
-            uint256 debtPayment
-        );
+    /**
+     * @dev Deposit/mint common workflow
+     */
+    /// @dev can't use the _afterTokenDeposit because we don't have access to 'assets' but only 'shares'
+    function _deposit(
+        address caller,
+        address receiver,
+        uint256 assets,
+        uint256 shares
+    ) private override {
+        // If _asset is ERC777, `transferFrom` can trigger a reenterancy BEFORE the transfer happens through the
+        // `tokensToSend` hook. On the other hand, the `tokenReceived` hook, that is triggered after the transfer,
+        // calls the vault, which is assumed not malicious.
+        //
+        // Conclusion: we need to do the transfer before we mint so that any reentrancy would happen before the
+        // assets are transfered and before the shares are minted, which is a valid state.
+        // slither-disable-next-line reentrancy-no-eth
+        SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(asset()), caller, address(this), assets);
+        _mint(receiver, shares);
+        totalStrategyHoldings += assets;
+
+        emit Deposit(caller, receiver, assets, shares);
+    }
+
+    /**
+     * @dev Withdraw/redeem common workflow
+     */
+    /// @dev can't use the _afterTokenDeposit because we don't have access to 'assets' but only 'shares'
+    function _withdraw(
+        address caller,
+        address receiver,
+        address owner,
+        uint256 assets,
+        uint256 shares
+    ) private override {
+        if (caller != owner) {
+            _spendAllowance(owner, caller, shares);
+        }
+
+        // If _asset is ERC777, `transfer` can trigger trigger a reentrancy AFTER the transfer happens through the
+        // `tokensReceived` hook. On the other hand, the `tokensToSend` hook, that is triggered before the transfer,
+        // calls the vault, which is assumed not malicious.
+        //
+        // Conclusion: we need to do the transfer after the burn so that any reentrancy would happen after the
+        // shares are burned and after the assets are transfered, which is a valid state.
+        _burn(owner, shares);
+        SafeERC20Upgradeable.safeTransfer(IERC20Upgradeable(asset()), receiver, assets);
+        totalStrategyHoldings -= assets;
+
+        emit Withdraw(caller, receiver, owner, assets, shares);
+    }
 
     /// @notice Performs any Strategy unwinding or other calls necessary to capture the
     /// "free return" this Strategy has generated since the last time its core

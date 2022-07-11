@@ -4,6 +4,7 @@ pragma solidity 0.8.12;
 import "../interfaces/ICoreBorrow.sol";
 import "../interfaces/IStrategy4626.sol";
 import "../interfaces/IVotingEscrowBoost.sol";
+import "../interfaces/IVotingEscrow.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts-upgradeable/interfaces/IERC20MetadataUpgradeable.sol";
 // TODO changed to ERC4626 when the package is updated
@@ -41,7 +42,7 @@ contract VaultStorage is ERC20TokenizedVaultUpgradeable {
     ICoreBorrow public coreBorrow;
 
     /// @notice Reference to the veANGLE
-    IERC20 internal votingEscrow;
+    IVotingEscrow internal votingEscrow;
 
     /// @notice Reference to the veANGLE
     IVotingEscrowBoost internal veBoostProxy;
@@ -53,42 +54,16 @@ contract VaultStorage is ERC20TokenizedVaultUpgradeable {
     /// @dev A fixed point number where 1e18 represents 100% and 0 represents 0%.
     uint256 public feePercent;
 
-    /// @notice The period in seconds during which multiple harvests can occur
-    /// regardless if they are taking place before the harvest delay has elapsed.
-    /// @dev Long harvest windows open the Vault up to profit distribution slowdown attacks.
-    uint128 public harvestWindow;
-
-    /// @notice The period in seconds over which locked profit is unlocked.
-    /// @dev Cannot be 0 as it opens harvests up to sandwich attacks.
-    uint64 public harvestDelay;
-
-    /// @notice The value that will replace harvestDelay next harvest.
-    /// @dev In the case that the next delay is 0, no update will be applied.
-    uint64 public nextHarvestDelay;
-
     uint256 public tokenlessProduction;
 
     // =============================== Variables ===================================
 
-    uint256 public baseUnit;
-
-    /// @notice The total amount of underlying tokens held in strategies at the time of the last harvest.
-    /// @dev Includes maxLockedProfit, must be correctly subtracted to compute available/free holdings.
+    /// @notice The total amount of underlying tokens held in strategies at the time of the last harvest/deposit/withdraw.
     uint256 public totalDebt;
 
     /// @notice Proportion of the funds managed dedicated to strategies
     /// Has to be between 0 and `BASE_PARAMS`
     uint256 public debtRatio;
-
-    /// @notice A timestamp representing when the first harvest in the most recent harvest window occurred.
-    /// @dev May be equal to lastHarvest if there was/has only been one harvest in the most last/current window.
-    uint64 public lastHarvestWindowStart;
-
-    /// @notice A timestamp representing when the most recent harvest occurred.
-    uint64 public lastHarvest;
-
-    /// @notice The amount of locked profit at the end of the last harvest.
-    uint256 public maxLockedProfit;
 
     /// @notice An ordered array of strategies representing the withdrawal stack.
     /// @dev The stack is processed in descending order, meaning the last index will be withdrawn from first.
@@ -101,9 +76,6 @@ contract VaultStorage is ERC20TokenizedVaultUpgradeable {
 
     /// @notice Unpaid loss from the protocol
     uint256 public protocolLoss;
-
-    /// @notice Unpaid loss from users
-    uint256 public usersLoss;
 
     /// @notice Boosting params
     uint256 public workingSupply;
@@ -133,45 +105,26 @@ contract VaultStorage is ERC20TokenizedVaultUpgradeable {
     // =============================== Events ======================================
 
     event FeePercentUpdated(address indexed user, uint256 newFeePercent);
-    event HarvestWindowUpdated(address indexed user, uint128 newHarvestWindow);
-    event HarvestDelayUpdated(address indexed user, uint64 newHarvestDelay);
-    event HarvestDelayUpdateScheduled(address indexed user, uint64 newHarvestDelay);
-    event TargetFloatPercentUpdated(address indexed user, uint256 newTargetFloatPercent);
     event Harvest(address indexed user, IStrategy4626[] strategies);
     event StrategyDeposit(address indexed user, IStrategy4626 indexed strategy, uint256 underlyingAmount);
     event StrategyWithdrawal(address indexed user, IStrategy4626 indexed strategy, uint256 underlyingAmount);
     event StrategyTrusted(address indexed user, IStrategy4626 indexed strategy);
     event StrategyDistrusted(address indexed user, IStrategy4626 indexed strategy);
 
-    event WithdrawalStackPushed(address indexed user, IStrategy4626 indexed pushedStrategy);
-    event WithdrawalStackPopped(address indexed user, IStrategy4626 indexed poppedStrategy);
     event WithdrawalStackSet(address indexed user, IStrategy4626[] replacedWithdrawalStack);
-    event WithdrawalStackIndexReplaced(
-        address indexed user,
-        uint256 index,
-        IStrategy4626 indexed replacedStrategy,
-        IStrategy4626 indexed replacementStrategy
-    );
-    event WithdrawalStackIndexReplacedWithTip(
-        address indexed user,
-        uint256 index,
-        IStrategy4626 indexed replacedStrategy,
-        IStrategy4626 indexed previousTipStrategy
-    );
-    event WithdrawalStackIndexesSwapped(
-        address indexed user,
-        uint256 index1,
-        uint256 index2,
-        IStrategy4626 indexed newStrategy1,
-        IStrategy4626 indexed newStrategy2
-    );
 
     event FeesClaimed(address indexed user, uint256 rvTokenAmount);
-    event Initialized(address indexed user);
 
     event StrategyAdded(address indexed strategy, uint256 debtRatio);
     event StrategyRevoked(address indexed strategy);
     event UpdatedDebtRatio(address indexed strategy, uint256 debtRatio);
+    event StrategyReported(
+        address indexed strategy,
+        uint256 gain,
+        uint256 loss,
+        uint256 debtPayment,
+        uint256 totalDebt
+    );
 
     // =============================== Errors ======================================
 
@@ -186,6 +139,9 @@ contract VaultStorage is ERC20TokenizedVaultUpgradeable {
     error StrategyInUse();
     error StrategyDebtUnpaid();
     error revokeStrategyImpossible();
+    error KickNotAllowed();
+    error KickNotNeeded();
+    error StratgyLowOnCash();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}

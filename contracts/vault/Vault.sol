@@ -20,7 +20,6 @@ contract Vault is VaultStorage {
         );
         __ERC20TokenizedVault_init(_token);
         coreBorrow = _coreBorrow;
-        baseUnit = 10**_token.decimals();
     }
 
     /// @notice Checks whether the `msg.sender` has the governor role or not
@@ -43,75 +42,12 @@ contract Vault is VaultStorage {
 
     // ============================== external ===================================
 
-    /// @notice Harvest a set of trusted strategies.
-    /// @dev Will always revert if called outside of an active
-    /// harvest window or before the harvest delay has passed.
-    /// @dev Do not allow partial accumulation (on a sub set of strategies)
-    /// to limit risks on only acknowledging profit
-    /// TODO doesn't looks like it is suited for general strategies
-    /// There is no real harvest, it is just querying balanceOfUnderlying(),
-    /// which in general can be maipulated. Curve example you can move the price
-    /// to fake a profit. You won't have access directly to it, but you need to wait for
-    /// mutliple blocks for the lockedProfit to go to 0. (if nobody calls the harvest between then )
-    /// what if there is a loss, it decrease the strategies balance but not the lockedProfit.
-    /// if an attacker make the profit goes to 10, calling harvest --> totalAssets = oldTotalAssets
-    /// but lockedProfit = 10. Then another harvest takes place and there is a loss of 10. totalAssets = oldTotalAssets
-    // and lockedProfit is still 10 --> 10 has been created out of thin air
-    function accumulate() external {
-        // Used to store the total profit/loss accrued by the strategies.
-        /// TODO actually loss shouldn't happen here, but at harvest time by decreasing the debt
-        /// and decreasing the total assets available (which will be taken into account in maxWithdraw() and totalStrategyDebt)
-        int256 totalProfitLossAccrued;
-
-        // Used to store the new total strategy holdings after harvesting.
-        uint256 newTotalDebt = totalDebt;
-
-        IStrategy4626[] memory activeStrategies = strategyList;
-
-        // Will revert if any of the specified strategies are untrusted.
-        for (uint256 i = 0; i < activeStrategies.length; i++) {
-            // Get the strategy at the current index.
-            IStrategy4626 strategy = activeStrategies[i];
-
-            // Get the strategy's previous and current balance.
-            uint256 debtLastHarvest = strategies[strategy].totalStrategyDebt;
-            strategies[strategy].lastReport = block.timestamp;
-            // strategy should be carefully design and not take into account unrealized profit/loss
-            // it should be designed like this contract: previousDebt + unlocked profit/loss after an harvest in the sub contract
-            // If we would consider the expected value, this function could be manipulated by artificially creating false profit/loss.
-            uint256 balanceThisHarvest = strategy.maxWithdraw(address(this));
-
-            // Update the strategy's stored balance. Cast overflow is unrealistic.
-            strategies[strategy].totalStrategyDebt = balanceThisHarvest;
-
-            // Increase/decrease newTotalDebt based on the profit/loss registered.
-            // We cannot wrap the subtraction in parenthesis as it would underflow if the strategy had a loss.
-            newTotalDebt = newTotalDebt + balanceThisHarvest - debtLastHarvest;
-
-            // Update the total profit/loss accrued since last harvest.
-            // To overflow this would asks enormous debt amounts which are in base of asset
-            totalProfitLossAccrued += int256(balanceThisHarvest) - int256(debtLastHarvest);
-        }
-
-        if (totalProfitLossAccrued > 0) {
-            // Compute fees as the fee percent multiplied by the profit.
-            uint256 feesAccrued = uint256(totalProfitLossAccrued).mulDiv(
-                feePercent,
-                1e18,
-                MathUpgradeable.Rounding.Down
-            );
-            _handleProtocolGain(feesAccrued);
-            // safe as the first term is positive and the second one must be smaller
-            _handleUserGain(uint256(totalProfitLossAccrued) - feesAccrued);
-        } else {
-            uint256 feesDebt = uint256(-totalProfitLossAccrued).mulDiv(feePercent, 1e18, MathUpgradeable.Rounding.Down);
-            _handleProtocolLoss(feesDebt);
-            // safe as the first term is negative and the second one must be smaller in absolute value
-            _handleUserLoss(uint256(-totalProfitLossAccrued) - feesDebt);
-        }
-
-        // Set strategy holdings to our new total.
-        totalDebt = newTotalDebt;
+    /// @notice Claims earned rewards and update working balances
+    /// @return amountClaimed Earned amount
+    function checkpoint() external returns (uint256 amountClaimed) {
+        _updateAccumulator(msg.sender);
+        amountClaimed = _claim(msg.sender);
+        _updateLiquidityLimit(msg.sender, balanceOf(msg.sender), totalSupply());
     }
 
     /// @notice Claims earned rewards
@@ -122,7 +58,152 @@ contract Vault is VaultStorage {
         return _claim(from);
     }
 
+    /// @notice External call to `accumulate()`
+    /// @dev Do not allow partial accumulation (on a sub set of strategies)
+    /// to limit risks on only acknowledging profit
+    function accumulate() external {
+        IStrategy4626[] memory activeStrategies = strategyList;
+        int256 totalProfitLossAccrued = _updateMultiStrategiesBalances(activeStrategies);
+        _accumulate(totalProfitLossAccrued);
+    }
+
+    /// @notice  Kick `addr` for abusing their boost
+    /// Only if either they had another voting event, or their voting escrow lock expired
+    /// @param addr Address to kick
+    function kick(address addr) external {
+        uint256 tLast = lastTimeOf[addr];
+        uint256 tVe = votingEscrow.user_point_history__ts(addr, votingEscrow.user_point_epoch(addr));
+        uint256 _balance = balanceOf(addr);
+
+        if (IERC20(address(votingEscrow)).balanceOf(addr) != 0 && tVe <= tLast) revert KickNotAllowed();
+        if (workingBalances[addr] <= (_balance * tokenlessProduction) / 100) revert KickNotNeeded();
+
+        uint256 totalSupply = totalSupply();
+        _updateAccumulator(addr);
+        _claim(addr);
+        _updateLiquidityLimit(addr, balanceOf(addr), totalSupply);
+    }
+
+    /// @notice Reports the gains or loss made by a strategy
+    /// @param gain Amount strategy has realized as a gain on its investment since its
+    /// last report, and is free to be given back to `PoolManager` as earnings
+    /// @param loss Amount strategy has realized as a loss on its investment since its
+    /// last report, and should be accounted for on the `PoolManager`'s balance sheet.
+    /// The loss will reduce the `debtRatio`. The next time the strategy will harvest,
+    /// it will pay back the debt in an attempt to adjust to the new debt limit.
+    /// @param debtPayment Amount strategy has made available to cover outstanding debt
+    /// @dev This is the main contact point where the strategy interacts with the `PoolManager`
+    /// @dev The strategy reports back what it has free, then the `PoolManager` contract "decides"
+    /// whether to take some back or give it more. Note that the most it can
+    /// take is `gain + _debtPayment`, and the most it can give is all of the
+    /// remaining reserves. Anything outside of those bounds is abnormal behavior.
+    function report(
+        uint256 gain,
+        uint256 loss,
+        uint256 debtPayment
+    ) external onlyStrategy {
+        IStrategy4626 strategy = IStrategy4626(msg.sender);
+
+        if (strategy.maxWithdraw(address(this)) < gain + debtPayment) revert StratgyLowOnCash();
+
+        int256 totalProfitLossAccrued;
+        totalProfitLossAccrued = _updateSingleStrategyBalance(strategy, totalProfitLossAccrued);
+        _accumulate(totalProfitLossAccrued);
+
+        StrategyParams storage params = strategies[strategy];
+        // Warning: `_getTotalAsset` could be manipulated by flashloan attacks.
+        // It may allow external users to transfer funds into strategy or remove funds
+        // from the strategy. Yet, as it does not impact the profit or loss and as attackers
+        // have no interest in making such txs to have a direct profit, we let it as is.
+        // The only issue is if the strategy is compromised; in this case governance
+        // should revoke the strategy
+        // We add `claimableRewards` to take into account all funds in the vault +
+        // Otherwise there would be a discrepancy between the strategies `totalStrategyDebt`
+        // and the target
+        uint256 target = ((totalAssets() + claimableRewards) * params.debtRatio) / BASE_PARAMS;
+        if (target > params.totalStrategyDebt) {
+            // If the strategy has some credit left, tokens can be transferred to this strategy
+            uint256 available = Math.min(target - params.totalStrategyDebt, getBalance());
+            params.totalStrategyDebt = params.totalStrategyDebt + available;
+            totalDebt = totalDebt + available;
+            if (available > 0) {
+                strategy.deposit(available, address(this));
+            }
+        } else {
+            uint256 available = Math.min(params.totalStrategyDebt - target, debtPayment + gain);
+            params.totalStrategyDebt = params.totalStrategyDebt - available;
+            totalDebt = totalDebt - available;
+            if (available > 0) {
+                strategy.withdraw(available, address(this), address(this));
+            }
+        }
+    }
+
     // ===================== Internal functions ==========================
+
+    /// @notice Accumulate profit/loss from all sub strategies.
+    /// @dev This function is only used here to distribute the linear vesting of the strategies
+    /// @dev Profit are linearly vested while losses directly impacts funds
+    /// TODO doesn't looks like it is suited for general strategies
+    /// There is no real harvest, it is just querying balanceOfUnderlying(),
+    /// which in general can be maipulated. Curve example you can move the price
+    /// to fake a profit. You won't have access directly to it, but you need to wait for
+    /// mutliple blocks for the lockedProfit to go to 0. (if nobody calls the harvest between then )
+    /// what if there is a loss, it decrease the strategies balance but not the lockedProfit.
+    /// if an attacker make the profit goes to 10, calling harvest --> totalAssets = oldTotalAssets
+    /// but lockedProfit = 10. Then another harvest takes place and there is a loss of 10. totalAssets = oldTotalAssets
+    // and lockedProfit is still 10 --> 10 has been created out of thin air
+    function _updateMultiStrategiesBalances(IStrategy4626[] memory activeStrategies)
+        internal
+        returns (int256 totalProfitLossAccrued)
+    {
+        for (uint256 i = 0; i < activeStrategies.length; i++) {
+            // Get the strategy at the current index.
+            IStrategy4626 strategy = activeStrategies[i];
+
+            totalProfitLossAccrued = _updateSingleStrategyBalance(strategy, totalProfitLossAccrued);
+        }
+    }
+
+    function _updateSingleStrategyBalance(IStrategy4626 strategy, int256 totalProfitLossAccrued)
+        internal
+        returns (int256)
+    {
+        // Get the strategy's previous and current balance.
+        uint256 debtLastHarvest = strategies[strategy].totalStrategyDebt;
+        strategies[strategy].lastReport = block.timestamp;
+        // strategy should be carefully design and not take into account unrealized profit/loss
+        // it should be designed like this contract: previousDebt + unlocked profit/loss after an harvest in the sub contract
+        // If we would consider the expected value, this function could be manipulated by artificially creating false profit/loss.
+        uint256 balanceThisHarvest = strategy.maxWithdraw(address(this));
+
+        // Update the strategy's stored balance. Cast overflow is unrealistic.
+        strategies[strategy].totalStrategyDebt = balanceThisHarvest;
+
+        // Update the total profit/loss accrued since last harvest.
+        // To overflow this would asks enormous debt amounts which are in base of asset
+        totalProfitLossAccrued += int256(balanceThisHarvest) - int256(debtLastHarvest);
+
+        return totalProfitLossAccrued;
+    }
+
+    function _accumulate(int256 totalProfitLossAccrued) internal {
+        if (totalProfitLossAccrued > 0) {
+            // Compute fees as the fee percent multiplied by the profit.
+            uint256 feesAccrued = uint256(totalProfitLossAccrued).mulDiv(
+                feePercent,
+                1e18,
+                MathUpgradeable.Rounding.Down
+            );
+            _handleProtocolGain(feesAccrued);
+            claimableRewards += uint256(totalProfitLossAccrued) - feesAccrued;
+        } else {
+            uint256 feesDebt = uint256(-totalProfitLossAccrued).mulDiv(feePercent, 1e18, MathUpgradeable.Rounding.Down);
+            _handleProtocolLoss(feesDebt);
+            // Decrease newTotalDebt, this impacts the `totalAssets()` call --> loss directly implied when withdrawing
+            totalDebt -= uint256(-totalProfitLossAccrued) - feesDebt;
+        }
+    }
 
     /// @notice Propagates a gain to the claimable rewards
     /// @param gain Gain to propagate
@@ -133,6 +214,7 @@ contract Vault is VaultStorage {
         } else {
             // If we accrued any fees, mint an equivalent amount of rvTokens.
             // Authorized users can claim the newly minted rvTokens via claimFees.
+            // TODO Rari was doing this (allows to compound revenues but not super useful)
             _mint(address(this), _convertToShares(gain - currentLossVariable, MathUpgradeable.Rounding.Down));
             protocolLoss = 0;
         }
@@ -141,72 +223,28 @@ contract Vault is VaultStorage {
     /// @notice Propagates a loss to the claimable rewards and/or currentLoss
     /// @param loss Loss to propagate
     function _handleProtocolLoss(uint256 loss) internal {
-        uint256 claimableRewards = maxWithdraw(address(this));
-        if (claimableRewards >= loss) {
+        uint256 claimableProtocolRewards = maxWithdraw(address(this));
+        if (claimableProtocolRewards >= loss) {
             _burn(address(this), _convertToShares(loss, MathUpgradeable.Rounding.Down));
         } else {
-            protocolLoss += loss - claimableRewards;
+            protocolLoss += loss - claimableProtocolRewards;
             _burn(address(this), balanceOf(address(this)));
         }
-    }
-
-    /// @notice Propagates a gain to the claimable rewards
-    /// @param gain Gain to propagate
-    function _handleUserGain(uint256 gain) internal {
-        uint256 currentLossVariable = usersLoss;
-        if (currentLossVariable >= gain) {
-            usersLoss -= gain;
-        } else {
-            maxLockedProfit = (lockedProfit() + gain - currentLossVariable);
-            protocolLoss = 0;
-        }
-    }
-
-    /// @notice Propagates a loss to the claimable rewards and/or currentLoss
-    /// @param loss Loss to propagate
-    function _handleUserLoss(uint256 loss) internal {
-        usersLoss += loss;
     }
 
     /// @notice Claims rewards earned by a user
     /// @param from Address to claim rewards from
     /// @return amount Amount claimed by the user
     /// @dev Function will revert if there has been no mint
+    /// @dev when calling `_claim()` we should make sure that there is enough funds
+    /// Recalling that it is called on deposits, withdraws and checkpoints
     function _claim(address from) internal returns (uint256 amount) {
         amount = (claimableRewards * rewardsAccumulatorOf[from]) / (rewardsAccumulator - claimedRewardsAccumulator);
-        uint256 amountAvailable = getBalance();
-        // If we cannot pull enough from the strat then `claim` has no effect
-        if (amountAvailable >= amount) {
-            claimedRewardsAccumulator += rewardsAccumulatorOf[from];
-            rewardsAccumulatorOf[from] = 0;
-            lastTimeOf[from] = block.timestamp;
-            claimableRewards -= amount;
-            IERC20(asset()).transfer(from, amount);
-        }
-    }
-
-    /// @notice Calculate limits which depend on the amount of ANGLE token per-user.
-    /// Effectively it calculates working balances to apply amplification of ANGLE production by ANGLE
-    /// @param addr User address
-    /// @param userShares User's amount of liquidity
-    /// @param totalShares Total amount of liquidity
-    function _updateLiquidityLimit(
-        address addr,
-        uint256 userShares,
-        uint256 totalShares
-    ) internal {
-        // To be called after totalSupply is updated
-        uint256 votingBalance = veBoostProxy.adjusted_balance_of(addr);
-        uint256 votingTotal = votingEscrow.totalSupply();
-
-        uint256 lim = (userShares * tokenlessProduction) / 100;
-        if (votingTotal > 0) lim += (((totalShares * votingBalance) / votingTotal) * (100 - tokenlessProduction)) / 100;
-
-        lim = Math.min(userShares, lim);
-        uint256 oldBal = workingBalances[addr];
-        workingBalances[addr] = lim;
-        uint256 _workingSupply = workingSupply + lim - oldBal;
-        workingSupply = _workingSupply;
+        claimedRewardsAccumulator += rewardsAccumulatorOf[from];
+        rewardsAccumulatorOf[from] = 0;
+        lastTimeOf[from] = block.timestamp;
+        claimableRewards -= amount;
+        IERC20(asset()).transfer(from, amount);
     }
 
     /// @notice Updates global and `msg.sender` accumulator and rewards share
@@ -220,57 +258,94 @@ contract Vault is VaultStorage {
         lastTimeOf[from] = block.timestamp;
     }
 
-    /// @notice Internal function for `deposit` and `mint`
-    /// @dev This function takes `usedAssets` and `looseAssets` as parameters to avoid repeated external calls
-
-    function _deposit(
-        address caller,
-        address receiver,
-        uint256 assets,
-        uint256 shares
-    ) private override {
-        IERC20(asset()).safeTransferFrom(caller, address(this), assets);
-        _updateAccumulator(receiver);
-        _mint(receiver, shares);
-
-        emit Deposit(caller, receiver, assets, shares);
-    }
-
-    /// @notice Internal function for `redeem` and `withdraw`
-    /// @dev This function takes `usedAssets` and `looseAssets` as parameters to avoid repeated external calls
-    function _withdraw(
-        address caller,
-        address receiver,
-        address owner,
-        uint256 assets,
-        uint256 shares
-    ) private override {
-        if (caller != owner) {
-            _spendAllowance(owner, caller, shares);
+    /// @dev This force claiming as we can't feed a boolean on whether or not we should claim
+    /// TODO just let the `claim()` function, there could always be a router on top of it making the different
+    /// calls
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256
+    ) internal override {
+        if (from != address(0)) {
+            _updateAccumulator(from);
+            _claim(from);
         }
-
-        _updateAccumulator(owner);
-        _burn(owner, shares);
-
-        emit Withdraw(caller, receiver, owner, assets, shares);
-
-        IERC20(asset()).safeTransfer(receiver, assets);
+        if (to != address(0)) {
+            _updateAccumulator(to);
+            _claim(to);
+        }
     }
 
-    /// TODO need to check if it works when transferring, because right now it first burn and mint and then
-    /// call the _afterTokenTransfer
     function _afterTokenTransfer(
         address from,
         address to,
-        uint256 amount
+        uint256
     ) internal override {
-        _claim(from);
         uint256 totalSupply_ = totalSupply();
         if (from != address(0)) _updateLiquidityLimit(from, balanceOf(from), totalSupply_);
         if (to != address(0)) _updateLiquidityLimit(to, balanceOf(to), totalSupply_);
     }
 
+    /// @notice Calculate limits which depend on the amount of ANGLE token per-user.
+    /// Effectively it calculates working balances to apply amplification of ANGLE production by ANGLE
+    /// @param addr User address
+    /// @param userShares User's amount of liquidity
+    /// @param totalShares Total amount of liquidity
+    /// @dev We can add anyother metric that seems suitable to adap working balances
+    /// Here we only take into account the veANGLE balances, but we can also add a parameter on
+    /// locking period --> but this would break the ERC4626 interfaces --> NFT
+    function _updateLiquidityLimit(
+        address addr,
+        uint256 userShares,
+        uint256 totalShares
+    ) internal {
+        // To be called after totalSupply is updated
+        uint256 votingBalance = veBoostProxy.adjusted_balance_of(addr);
+        uint256 votingTotal = IERC20(address(votingEscrow)).totalSupply();
+
+        uint256 lim = (userShares * tokenlessProduction) / 100;
+        if (votingTotal > 0) lim += (((totalShares * votingBalance) / votingTotal) * (100 - tokenlessProduction)) / 100;
+
+        lim = Math.min(userShares, lim);
+        uint256 oldBal = workingBalances[addr];
+        workingBalances[addr] = lim;
+        uint256 _workingSupply = workingSupply + lim - oldBal;
+        workingSupply = _workingSupply;
+    }
+
     // ===================== Strategy related functions ==========================
+
+    /// @notice Tells a strategy how much it can borrow from this `PoolManager`
+    /// @param strategy Strategy to consider in the call
+    /// @return Amount of token a strategy has access to as a credit line
+    /// @dev Since this function is a view function, there is no need to have an access control logic
+    /// even though it will just be relevant for a strategy
+    /// @dev Manipulating `_getTotalAsset` with a flashloan will only
+    /// result in tokens being transferred at the cost of the caller
+    function creditAvailable(address strategy) external view returns (uint256) {
+        StrategyParams storage params = strategies[IStrategy4626(strategy)];
+
+        uint256 target = (totalAssets() * params.debtRatio) / BASE_PARAMS;
+
+        if (target < params.totalStrategyDebt) return 0;
+
+        return Math.min(target - params.totalStrategyDebt, getBalance());
+    }
+
+    /// @notice Tells a strategy how much it owes to this `PoolManager`
+    /// @param strategy Strategy to consider in the call
+    /// @return Amount of token a strategy has to reimburse
+    /// @dev Manipulating `_getTotalAsset` with a flashloan will only
+    /// result in tokens being transferred at the cost of the caller
+    function debtOutstanding(address strategy) external view returns (uint256) {
+        StrategyParams storage params = strategies[IStrategy4626(strategy)];
+
+        uint256 target = (totalAssets() * params.debtRatio) / BASE_PARAMS;
+
+        if (target > params.totalStrategyDebt) return 0;
+
+        return (params.totalStrategyDebt - target);
+    }
 
     /// @notice Internal version of `updateStrategyDebtRatio`
     /// @dev Updates the debt ratio for a strategy
@@ -368,33 +443,12 @@ contract Vault is VaultStorage {
     /// @dev Need to be cautious on when to use `totalAssets()` and `balanceOf(address(this))`. As when investing the money
     /// it is better to use the full balance. But need to make sure that there isn't any flaws by using 2 dufferent balances
     function totalAssets() public view override returns (uint256 totalUnderlyingHeld) {
-        totalUnderlyingHeld = totalDebt + getBalance();
+        totalUnderlyingHeld = totalDebt + getBalance() - claimableRewards;
     }
 
     /// @notice Returns this `PoolManager`'s reserve of collateral (not including what has been lent)
     function getBalance() public view returns (uint256) {
         return IERC20(asset()).balanceOf(address(this));
-    }
-
-    /// @notice Calculates the current amount of locked profit.
-    /// @return The current amount of locked profit.
-    function lockedProfit() public view returns (uint256) {
-        // Get the last harvest and harvest delay.
-        uint256 previousHarvest = lastHarvest;
-        uint256 harvestInterval = harvestDelay;
-
-        unchecked {
-            // If the harvest delay has passed, there is no locked profit.
-            // Cannot overflow on human timescales since harvestInterval is capped.
-            if (block.timestamp >= previousHarvest + harvestInterval) return 0;
-
-            // Get the maximum amount we could return.
-            uint256 maximumLockedProfit = maxLockedProfit;
-
-            // Compute how much profit remains locked based on the last harvest and harvest delay.
-            // It's impossible for the previous harvest to be in the future, so this will never underflow.
-            return maximumLockedProfit - (maximumLockedProfit * (block.timestamp - previousHarvest)) / harvestInterval;
-        }
     }
 
     // ============================== Guardian ===================================
@@ -440,50 +494,4 @@ contract Vault is VaultStorage {
 
         emit FeePercentUpdated(msg.sender, newFeePercent);
     }
-
-    /// @notice Sets a new harvest window.
-    /// @param newHarvestWindow The new harvest window.
-    /// @dev The Vault's harvestDelay must already be set before calling.
-    function setHarvestWindow(uint128 newHarvestWindow) external onlyGovernor {
-        // A harvest window longer than the harvest delay doesn't make sense.
-        require(newHarvestWindow <= harvestDelay, "WINDOW_TOO_LONG");
-
-        // Update the harvest window.
-        harvestWindow = newHarvestWindow;
-
-        emit HarvestWindowUpdated(msg.sender, newHarvestWindow);
-    }
-
-    /// @notice Sets a new harvest delay.
-    /// @param newHarvestDelay The new harvest delay to set.
-    /// @dev If the current harvest delay is 0, meaning it has not
-    /// been set before, it will be updated immediately, otherwise
-    /// it will be scheduled to take effect after the next harvest.
-    function setHarvestDelay(uint64 newHarvestDelay) external onlyGovernor {
-        // A harvest delay of 0 makes harvests vulnerable to sandwich attacks.
-        require(newHarvestDelay != 0, "DELAY_CANNOT_BE_ZERO");
-
-        // A harvest delay longer than 1 year doesn't make sense.
-        require(newHarvestDelay <= 365 days, "DELAY_TOO_LONG");
-
-        // If the harvest delay is 0, meaning it has not been set before:
-        if (harvestDelay == 0) {
-            // We'll apply the update immediately.
-            harvestDelay = newHarvestDelay;
-
-            emit HarvestDelayUpdated(msg.sender, newHarvestDelay);
-        } else {
-            // We'll apply the update next harvest.
-            nextHarvestDelay = newHarvestDelay;
-
-            emit HarvestDelayUpdateScheduled(msg.sender, newHarvestDelay);
-        }
-    }
-
-    /*///////////////////////////////////////////////////////////////
-                          RECIEVE ETHER LOGIC
-    //////////////////////////////////////////////////////////////*/
-
-    /// @dev Required for the Vault to receive unwrapped ETH.
-    receive() external payable {}
 }
