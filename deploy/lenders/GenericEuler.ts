@@ -9,7 +9,7 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
   const { deploy } = deployments;
   const { deployer, keeper: fakeKeeper } = await ethers.getNamedSigners();
   const stableName = 'agEUR';
-  const collats = ['USDC', 'DAI'];
+  const collats = ['DAI'];
 
   let guardian: string;
   let governor: string;
@@ -32,7 +32,10 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     guardian = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].Guardian!;
     governor = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].GovernanceMultiSig as string;
     proxyAdminAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].ProxyAdmin as string;
-    keepers = [fakeKeeper.address];
+    keepers = [
+      '0xcC617C6f9725eACC993ac626C7efC6B96476916E',
+      CONTRACTS_ADDRESSES[network.config.chainId as ChainId].KeeperMulticall as string,
+    ];
   }
 
   const lenderImplementationAddress = (await ethers.getContract(`GenericEuler_Implementation`)).address;
@@ -88,5 +91,5 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
 };
 
 func.tags = ['genericEuler'];
-func.dependencies = ['genericEulerImplementation'];
+// func.dependencies = ['genericEulerImplementation'];
 export default func;
