@@ -54,6 +54,9 @@ contract BaseStrategy4626Storage is ERC20TokenizedVaultUpgradeable {
     error NotGovernor();
     error NotGovernorOrGuardian();
     error NotVault();
+    error HarvestWindowTooLarge();
+    error HarvestDelayNull();
+    error HarvestDelayTooLarge();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}

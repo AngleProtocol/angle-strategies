@@ -55,6 +55,8 @@ contract VaultStorage is ERC20TokenizedVaultUpgradeable {
     /// @dev A fixed point number where 1e18 represents 100% and 0 represents 0%.
     uint256 public feePercent;
 
+    /// @dev This parameter will adapt the max boost achievable
+    /// If set to 40% Mwimum boost will be 2.5
     uint256 public tokenlessProduction;
 
     // =============================== Variables ===================================
@@ -107,15 +109,8 @@ contract VaultStorage is ERC20TokenizedVaultUpgradeable {
 
     event FeePercentUpdated(address indexed user, uint256 newFeePercent);
     event Harvest(address indexed user, IStrategy4626[] strategies);
-    event StrategyDeposit(address indexed user, IStrategy4626 indexed strategy, uint256 underlyingAmount);
-    event StrategyWithdrawal(address indexed user, IStrategy4626 indexed strategy, uint256 underlyingAmount);
-    event StrategyTrusted(address indexed user, IStrategy4626 indexed strategy);
-    event StrategyDistrusted(address indexed user, IStrategy4626 indexed strategy);
-
     event WithdrawalStackSet(address indexed user, IStrategy4626[] replacedWithdrawalStack);
-
     event FeesClaimed(address indexed user, uint256 rvTokenAmount);
-
     event StrategyAdded(address indexed strategy, uint256 debtRatio);
     event StrategyRevoked(address indexed strategy);
     event UpdatedDebtRatio(address indexed strategy, uint256 debtRatio);
@@ -135,14 +130,17 @@ contract VaultStorage is ERC20TokenizedVaultUpgradeable {
     error StrategyDoesNotExist();
     error WrongStrategyToken();
     error StrategyAlreadyAdded();
-    error WrongPoolmanagerForStrategy();
     error DebtRatioTooHigh();
     error StrategyInUse();
     error StrategyDebtUnpaid();
-    error revokeStrategyImpossible();
+    error RevokeStrategyImpossible();
     error KickNotAllowed();
     error KickNotNeeded();
     error StratgyLowOnCash();
+    error ProtocolFeeTooHigh();
+    error WithdrawalStackTooDeep();
+    error LossShouldbe0();
+    error SlippageProtection();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}

@@ -11,4 +11,10 @@ interface IStrategy4626 is IERC4626Upgradeable {
     function estimatedAPR() external view returns (uint256);
 
     function poolManager() external view returns (address);
+
+    function setEmergencyExit() external;
+
+    function isVault() external;
+
+    function harvest() external;
 }

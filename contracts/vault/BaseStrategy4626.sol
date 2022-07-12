@@ -51,18 +51,21 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         return estimatedTotalAssets() > 0;
     }
 
-    /// @notice Calculates the total amount of underlying tokens the Vault holds.
+    /// @notice Revert if the caller is not a whitelisted vault
+    function isVault() public view onlyVault {}
+
+    /// @notice Computes the total amount of underlying tokens the Vault holds.
     /// @return totalUnderlyingHeld The total amount of underlying tokens the Vault holds.
     /// @dev Important to not take into account lockedProfit otherwise there could be attacks on
     /// the vault. Someone could artificially make a strategy have large profit, to deposit and withdraw
     /// and earn free money.
-    /// @dev Need to be cautious on when to use `totalAssets()` and totalDebt. As when investing the money
-    /// it is better to use the full balance. But need to make sure that there isn't any flaws by using 2 dufferent balances
+    /// @dev Need to be cautious on when to use `totalAssets()` and totalStrategyHoldings. As when investing the money
+    /// it is better to use the full balance.
     function totalAssets() public view override returns (uint256 totalUnderlyingHeld) {
         totalUnderlyingHeld = totalStrategyHoldings - lockedProfit();
     }
 
-    /// @notice Calculates the current amount of locked profit.
+    /// @notice Computes the current amount of locked profit.
     /// @return The current amount of locked profit.
     function lockedProfit() public view returns (uint256) {
         // Get the last harvest and harvest delay.
@@ -123,6 +126,26 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         return shares;
     }
 
+    /** @dev See {IERC4262-redeem} */
+    /// @dev Currently not used by vaults
+    function redeem(
+        uint256 shares,
+        address receiver,
+        address owner
+    ) public virtual override returns (uint256 _loss) {
+        require(shares <= maxRedeem(owner), "ERC20TokenizedVault: redeem more than max");
+
+        uint256 assets = previewRedeem(shares);
+        uint256 amountFreed;
+        // Liquidate as much as possible `want` (up to `assets`)
+        (amountFreed, _loss) = _liquidatePosition(assets);
+
+        // Should send `assets - _loss`, but should acknowledge `assets` as withdrawn from the strat
+        _withdraw(_msgSender(), receiver, owner, assets - _loss, _loss, shares);
+
+        return assets - _loss;
+    }
+
     /// @notice Harvests the Strategy, recognizing any profits or losses and adjusting
     /// the Strategy's position.
     /// @dev Let the process of `report` and `adjustPosition`, because coupling both in a generic manner
@@ -141,8 +164,6 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
 
         (uint256 gain, uint256 loss, uint256 debtPayment) = _report();
 
-        // TODO to put in the report (and so make it virtual) because it should impact the
-        // globalAssets -> remove loss add gain
         // loss was directly removed from the totalHoldings
         // Update max unlocked profit based on any remaining locked profit plus new profit.
         maxLockedProfit = (lockedProfit() + gain);
@@ -176,7 +197,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /// @dev The Vault's harvestDelay must already be set before calling.
     function setHarvestWindow(uint128 newHarvestWindow) external onlyGovernor {
         // A harvest window longer than the harvest delay doesn't make sense.
-        require(newHarvestWindow <= harvestDelay, "WINDOW_TOO_LONG");
+        if (newHarvestWindow > harvestDelay) revert HarvestWindowTooLarge();
 
         // Update the harvest window.
         harvestWindow = newHarvestWindow;
@@ -191,10 +212,10 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /// it will be scheduled to take effect after the next harvest.
     function setHarvestDelay(uint64 newHarvestDelay) external onlyGovernor {
         // A harvest delay of 0 makes harvests vulnerable to sandwich attacks.
-        require(newHarvestDelay != 0, "DELAY_CANNOT_BE_ZERO");
+        if (newHarvestDelay == 0) revert HarvestDelayNull();
 
         // A harvest delay longer than 1 year doesn't make sense.
-        require(newHarvestDelay <= 365 days, "DELAY_TOO_LONG");
+        if (newHarvestDelay > 365 days) revert HarvestDelayTooLarge();
 
         // If the harvest delay is 0, meaning it has not been set before:
         if (harvestDelay == 0) {
@@ -213,10 +234,10 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /// @notice Activates emergency exit. Once activated, the Strategy will exit its
     /// position upon the next harvest, depositing all funds into the Manager as
     /// quickly as is reasonable given on-chain conditions.
-    /// @dev This may only be called by the `PoolManager`, because when calling this the `PoolManager` should at the same
+    /// @dev This may only be called by the `vault`'s, because when calling this the `vault` should at the same
     /// time update the debt ratio
-    /// @dev This function can only be called once by the `PoolManager` contract
-    /// @dev See `poolManager.setEmergencyExit()` and `harvest()` for further details.
+    /// @dev This function can only be called once by the `vault` contract
+    /// @dev See `vault.setEmergencyExit()` and `harvest()` for further details.
     function setEmergencyExit() external onlyVault {
         emergencyExit = true;
         emit EmergencyExitActivated();
@@ -271,13 +292,16 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         uint256 totalSupply_ = totalSupply();
         for (uint256 i = 0; i < vaultMem.length; i++) {
             uint256 vaultPercentage = (balanceOf(address(vaultMem[i])) * BASE_PARAMS) / totalSupply_;
+            // TODO this is not efficient nor I am sure it is bullet proof
+            uint256 vaultDebtPayment = vaultMem[i].debtOutstanding(address(this));
+            uint256 vaultDebtPaymentPercentage = (vaultDebtPayment * BASE_PARAMS) / debtOutstanding;
             // Allows vault to take up to the "harvested" balance of this contract,
             // which is the amount it has earned since the last time it reported to
             // the Manager.
             vaultMem[i].report(
                 (profit * vaultPercentage) / BASE_PARAMS,
                 (loss * vaultPercentage) / BASE_PARAMS,
-                debtPayment
+                (debtPayment * vaultDebtPaymentPercentage) / BASE_PARAMS
             );
         }
     }

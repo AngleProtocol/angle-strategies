@@ -28,19 +28,74 @@ contract Vault is VaultStorage {
         _;
     }
 
-    /// @notice Checks whether the `msg.sender` has the governor role or not
+    /// @notice Checks whether the `msg.sender` has the governor or guarian role or not
     modifier onlyGovernorOrGuardian() {
         if (!coreBorrow.isGovernorOrGuardian(msg.sender)) revert NotGovernorOrGuardian();
         _;
     }
 
-    /// @notice Checks whether the `msg.sender` has the governor role or not
+    /// @notice Checks whether the `msg.sender` is a strategy
     modifier onlyStrategy() {
         if (strategies[IStrategy4626(msg.sender)].lastReport == 0) revert NotStrategy();
         _;
     }
 
-    // ============================== external ===================================
+    // ============================== View functions ===================================
+
+    /// @notice Gets the full withdrawal stack.
+    /// @return An ordered array of strategies representing the withdrawal stack.
+    /// @dev This is provided because Solidity converts public arrays into index getters,
+    /// but we need a way to allow external contracts and users to access the whole array.
+    function getWithdrawalStack() external view returns (IStrategy4626[] memory) {
+        return withdrawalStack;
+    }
+
+    /// @notice Calculates the total amount of underlying tokens the Vault holds.
+    /// @return totalUnderlyingHeld The total amount of underlying tokens the Vault holds.
+    /// @dev Need to be cautious on when to use `totalAssets()` and `totalDebt + getBalance()`. As when investing the money
+    /// it is better to use the full balance. But we shouldn't count the rewards twice (in the rewards and in the shares)
+    function totalAssets() public view override returns (uint256 totalUnderlyingHeld) {
+        totalUnderlyingHeld = totalDebt + getBalance() - claimableRewards;
+    }
+
+    /// @notice Returns this `vault`'s directly available reserve of collateral (not including what has been lent)
+    function getBalance() public view returns (uint256) {
+        return IERC20(asset()).balanceOf(address(this));
+    }
+
+    /// @notice Tells a strategy how much it can borrow from this `vault`
+    /// @param strategy Strategy to consider in the call
+    /// @return Amount of token a strategy has access to as a credit line
+    /// @dev Since this function is a view function, there is no need to have an access control logic
+    /// even though it will just be relevant for a strategy
+    /// @dev Manipulating `_getTotalAsset` with a flashloan will only
+    /// result in tokens being transferred at the cost of the caller
+    function creditAvailable(address strategy) external view returns (uint256) {
+        StrategyParams storage params = strategies[IStrategy4626(strategy)];
+
+        uint256 target = (totalAssets() * params.debtRatio) / BASE_PARAMS;
+
+        if (target < params.totalStrategyDebt) return 0;
+
+        return Math.min(target - params.totalStrategyDebt, getBalance());
+    }
+
+    /// @notice Tells a strategy how much it owes to this `PoolManager`
+    /// @param strategy Strategy to consider in the call
+    /// @return Amount of token a strategy has to reimburse
+    /// @dev Manipulating `_getTotalAsset` with a flashloan will only
+    /// result in tokens being transferred at the cost of the caller
+    function debtOutstanding(address strategy) external view returns (uint256) {
+        StrategyParams storage params = strategies[IStrategy4626(strategy)];
+
+        uint256 target = (totalAssets() * params.debtRatio) / BASE_PARAMS;
+
+        if (target > params.totalStrategyDebt) return 0;
+
+        return (params.totalStrategyDebt - target);
+    }
+
+    // ====================== External permissionless functions =============================
 
     /** @dev See {IERC4262-withdraw} */
     function withdraw(
@@ -49,7 +104,7 @@ contract Vault is VaultStorage {
         address owner
     ) public virtual override returns (uint256) {
         uint256 loss;
-        (assets, loss) = _beforeBurn(owner, assets);
+        (assets, loss) = _beforeWithdraw(owner, assets);
         require(assets + loss <= maxWithdraw(owner), "ERC20TokenizedVault: withdraw more than max");
 
         uint256 shares = previewWithdraw(assets + loss);
@@ -58,8 +113,26 @@ contract Vault is VaultStorage {
         return shares;
     }
 
+    /** @dev See {IERC4262-redeem} */
+    function redeem(
+        uint256 shares,
+        address receiver,
+        address owner
+    ) public virtual override returns (uint256) {
+        require(shares <= maxRedeem(owner), "ERC20TokenizedVault: redeem more than max");
+
+        uint256 assets = previewRedeem(shares);
+        uint256 loss;
+        (assets, loss) = _beforeWithdraw(owner, assets);
+
+        // `assets-loss`will never revert here because it would revert on the slippage protection in `withdraw()`
+        _withdraw(_msgSender(), receiver, owner, assets - loss, shares);
+
+        return assets - loss;
+    }
+
     /// @notice Claims earned rewards and update working balances
-    /// @return amountClaimed Earned amount
+    /// @return amountClaimed Transferred amount to `msg.sender`
     function checkpoint() external returns (uint256 amountClaimed) {
         _updateAccumulator(msg.sender);
         amountClaimed = _claim(msg.sender);
@@ -68,15 +141,18 @@ contract Vault is VaultStorage {
 
     /// @notice Claims earned rewards
     /// @param from Address to claim for
-    /// @return Amount claimed
+    /// @return Transferred amount to `from`
     function claim(address from) external returns (uint256) {
         _updateAccumulator(from);
         return _claim(from);
     }
 
-    /// @notice External call to `accumulate()`
+    /// @notice Update distributable rewards made from all strategies
     /// @dev Do not allow partial accumulation (on a sub set of strategies)
-    /// to limit risks on only acknowledging profit
+    /// to limit risks on only acknowledging profits
+    /// @dev There should never be any loss distributed calling this function as the only
+    /// way to acknowledge a loss is to harvest the strategy
+    /// TODO It can actually be done via harvesting specific strategies
     function accumulate() external {
         IStrategy4626[] memory activeStrategies = strategyList;
         int256 totalProfitLossAccrued = _updateMultiStrategiesBalances(activeStrategies);
@@ -100,16 +176,133 @@ contract Vault is VaultStorage {
         _updateLiquidityLimit(addr, balanceOf(addr), totalSupply);
     }
 
+    // ============================== Governance functions ===================================
+
+    /// @notice Adds a strategy to the `PoolManager`
+    /// @param strategy The address of the strategy to add
+    /// @param _debtRatio The share of the total assets that the strategy has access to
+    /// @dev Multiple checks are made. For instance, the contract must not already belong to the `PoolManager`
+    /// and the underlying token of the strategy has to be consistent with the `PoolManager` contracts
+    /// @dev This function is a `governor` function and not a `guardian` one because a `guardian` could add a strategy
+    /// enabling the withdraw of the funds of the protocol
+    /// @dev The `_debtRatio` should be expressed in `BASE_PARAMS`
+    function addStrategy(IStrategy4626 strategy, uint256 _debtRatio) external onlyGovernor {
+        StrategyParams storage params = strategies[strategy];
+
+        if (params.lastReport != 0) revert StrategyAlreadyAdded();
+        strategy.isVault();
+        // Using current code, this condition should always be verified as in the constructor
+        // of the strategy the `want()` is set to the token of this `PoolManager`
+        if (asset() != strategy.asset()) revert WrongStrategyToken();
+        if (debtRatio + _debtRatio > BASE_PARAMS) revert DebtRatioTooHigh();
+
+        // Add strategy to approved strategies
+        params.lastReport = 1;
+        params.totalStrategyDebt = 0;
+        params.debtRatio = _debtRatio;
+
+        // Update global parameters
+        debtRatio += _debtRatio;
+        emit StrategyAdded(address(strategy), debtRatio);
+
+        strategyList.push(strategy);
+    }
+
+    /// @notice Sets a new withdrawal stack.
+    /// @param newStack The new withdrawal stack.
+    /// @dev If any strategy is not recognized by the `vault` the tx will revert.
+    function setWithdrawalStack(IStrategy4626[] calldata newStack) external onlyGovernor {
+        // Ensure the new stack is not larger than the maximum stack size.
+        if (newStack.length > MAX_WITHDRAWAL_STACK_SIZE) revert WithdrawalStackTooDeep();
+
+        for (uint256 i = 0; i < newStack.length; i++) {
+            if (strategies[newStack[i]].lastReport > 0) revert StrategyDoesNotExist();
+        }
+
+        // Replace the withdrawal stack.
+        withdrawalStack = newStack;
+
+        emit WithdrawalStackSet(msg.sender, newStack);
+    }
+
+    /// @notice Sets a new fee percentage.
+    /// @param newFeePercent The new fee percentage.
+    function setFeePercent(uint256 newFeePercent) external onlyGovernor {
+        // A fee percentage over 100% doesn't make sense.
+        if (newFeePercent >= BASE_PARAMS) revert ProtocolFeeTooHigh();
+        // Update the fee percentage.
+        feePercent = newFeePercent;
+
+        emit FeePercentUpdated(msg.sender, newFeePercent);
+    }
+
+    // ========================== Governance or Guardian functions ==============================
+
+    /// @notice Claims fees accrued from harvests.
+    /// @param shares The shares claim for the protocol.
+    /// @dev Accrued fees are measured as rvTokens held by the Vault.
+    function claimFees(uint256 shares) external onlyGovernorOrGuardian {
+        emit FeesClaimed(msg.sender, shares);
+
+        // Transfer the provided shares to the caller.
+        _transfer(address(this), msg.sender, shares);
+    }
+
+    /// @notice Modifies the funds a strategy has access to
+    /// @param strategy The address of the Strategy
+    /// @param _debtRatio The share of the total assets that the strategy has access to
+    /// @dev The update has to be such that the `debtRatio` does not exceeds the 100% threshold
+    /// as this `vault` cannot lend collateral that it doesn't not own.
+    /// @dev `_debtRatio` is stored as a uint256 but as any parameter of the protocol, it should be expressed
+    /// in `BASE_PARAMS`
+    function updateStrategyDebtRatio(IStrategy4626 strategy, uint256 _debtRatio) external onlyGovernorOrGuardian {
+        _updateStrategyDebtRatio(strategy, _debtRatio);
+    }
+
+    /// @notice Revokes a strategy
+    /// @param strategy The address of the strategy to revoke
+    /// @dev This should only be called after the following happened in order: the `strategy.debtRatio` has been set to 0,
+    /// `harvest` has been called enough times to recover all capital gain/losses.
+    function revokeStrategy(IStrategy4626 strategy) external onlyGovernorOrGuardian {
+        StrategyParams storage params = strategies[strategy];
+
+        if (params.debtRatio != 0) revert StrategyInUse();
+        if (params.totalStrategyDebt != 0) revert StrategyDebtUnpaid();
+        uint256 strategyListLength = strategyList.length;
+        if (params.lastReport != 0 && strategyListLength >= 1) revert RevokeStrategyImpossible();
+        // It has already been checked whether the strategy was a valid strategy
+        for (uint256 i = 0; i < strategyListLength - 1; i++) {
+            if (strategyList[i] == strategy) {
+                strategyList[i] = strategyList[strategyListLength - 1];
+                break;
+            }
+        }
+
+        strategyList.pop();
+
+        delete strategies[strategy];
+
+        emit StrategyRevoked(address(strategy));
+    }
+
+    /// @notice Triggers an emergency exit for a strategy and then harvests it to fetch all the funds
+    /// @param strategy The address of the `Strategy`
+    function setStrategyEmergencyExit(IStrategy4626 strategy) external onlyGovernorOrGuardian {
+        _updateStrategyDebtRatio(strategy, 0);
+        strategy.setEmergencyExit();
+        strategy.harvest();
+    }
+
+    // ========================== Strategy functions ==============================
+
     /// @notice Reports the gains or loss made by a strategy
     /// @param gain Amount strategy has realized as a gain on its investment since its
-    /// last report, and is free to be given back to `PoolManager` as earnings
+    /// last report, and is free to be given back to `vault` as earnings
     /// @param loss Amount strategy has realized as a loss on its investment since its
-    /// last report, and should be accounted for on the `PoolManager`'s balance sheet.
-    /// The loss will reduce the `debtRatio`. The next time the strategy will harvest,
-    /// it will pay back the debt in an attempt to adjust to the new debt limit.
+    /// last report, and should be accounted for on the `vault`'s balance sheet.
     /// @param debtPayment Amount strategy has made available to cover outstanding debt
-    /// @dev This is the main contact point where the strategy interacts with the `PoolManager`
-    /// @dev The strategy reports back what it has free, then the `PoolManager` contract "decides"
+    /// @dev This is the main contact point where the strategy interacts with the `vault`
+    /// @dev The strategy reports back what it has free, then the `vault` contract "decides"
     /// whether to take some back or give it more. Note that the most it can
     /// take is `gain + _debtPayment`, and the most it can give is all of the
     /// remaining reserves. Anything outside of those bounds is abnormal behavior.
@@ -152,27 +345,19 @@ contract Vault is VaultStorage {
             totalDebt -= available;
             if (available > 0) {
                 uint256 withdrawLoss = strategy.withdraw(available, address(this), address(this));
-                // There will be no loss here because the funds should be already free
+                // TODO There will be no loss here because the funds should be already free
                 // useless to let in prod, but useful for testing purpose
-                assert(withdrawLoss == 0);
+                if (withdrawLoss != 0) revert LossShouldbe0();
             }
         }
     }
 
     // ===================== Internal functions ==========================
 
-    /// @notice Accumulate profit/loss from all sub strategies.
+    /// @notice Accumulate profit/loss from strategies.
+    /// @param activeStrategies Strategy list to consider
     /// @dev This function is only used here to distribute the linear vesting of the strategies
-    /// @dev Profit are linearly vested while losses directly impacts funds
-    /// TODO doesn't looks like it is suited for general strategies
-    /// There is no real harvest, it is just querying balanceOfUnderlying(),
-    /// which in general can be maipulated. Curve example you can move the price
-    /// to fake a profit. You won't have access directly to it, but you need to wait for
-    /// mutliple blocks for the lockedProfit to go to 0. (if nobody calls the harvest between then )
-    /// what if there is a loss, it decrease the strategies balance but not the lockedProfit.
-    /// if an attacker make the profit goes to 10, calling harvest --> totalAssets = oldTotalAssets
-    /// but lockedProfit = 10. Then another harvest takes place and there is a loss of 10. totalAssets = oldTotalAssets
-    // and lockedProfit is still 10 --> 10 has been created out of thin air
+    /// @dev Profits are linearly vested while losses are disctly slashed to the `vault` capital
     function _updateMultiStrategiesBalances(IStrategy4626[] memory activeStrategies)
         internal
         returns (int256 totalProfitLossAccrued)
@@ -185,17 +370,20 @@ contract Vault is VaultStorage {
         }
     }
 
+    /// @notice Accumulate profit/loss for a specific strategy.
+    /// @param strategy Strategy to accumulate for
+    /// @dev It accrues totalProfitLossAccrued, by looking at the difference between what can be
+    /// withdraw from the strategy and the last checkpoint on the strategy debt
     function _updateSingleStrategyBalance(IStrategy4626 strategy, int256 totalProfitLossAccrued)
         internal
         returns (int256)
     {
         StrategyParams storage params = strategies[strategy];
-        // Get the strategy's previous and current balance.
-        uint256 debtLastHarvest = params.totalStrategyDebt;
+        uint256 debtLastCheckpoint = params.totalStrategyDebt;
         params.lastReport = block.timestamp;
-        // strategy should be carefully design and not take into account unrealized profit/loss
-        // it should be designed like this contract: previousDebt + unlocked profit/loss after an harvest in the sub contract
-        // If we would consider the expected value, this function could be manipulated by artificially creating false profit/loss.
+        // strategy should be carefully design and not take into account unrealized profit
+        // If we would consider the expected value and not the vested value,
+        // the function could be manipulated by artificially creating false profit/loss.
         uint256 balanceThisHarvest = strategy.maxWithdraw(address(this));
 
         // Update the strategy's stored balance. Cast overflow is unrealistic.
@@ -203,11 +391,19 @@ contract Vault is VaultStorage {
 
         // Update the total profit/loss accrued since last harvest.
         // To overflow this would asks enormous debt amounts which are in base of asset
-        totalProfitLossAccrued += int256(balanceThisHarvest) - int256(debtLastHarvest);
+        totalProfitLossAccrued += int256(balanceThisHarvest) - int256(debtLastCheckpoint);
 
         return totalProfitLossAccrued;
     }
 
+    /// @notice Distribute profit/loss to the users and protocol.
+    /// @param totalProfitLossAccrued Profit or Loss made in between the 2 calls to `_accumulate`
+    /// @dev It accrues totalProfitLossAccrued, by looking at the difference between what can be
+    /// withdraw from the strategy and the last checkpoint on the strategy debt
+    /// @dev Profits are directly distributed to the user/protocol because all strategies should
+    /// linearly vest the rewards themselves
+    /// @dev User losses are directly slashed from the capital brought by users
+    /// Protocol losses first remove earned interest and keep track of bad debt to impact future gains
     function _accumulate(int256 totalProfitLossAccrued) internal {
         if (totalProfitLossAccrued > 0) {
             // Compute fees as the fee percent multiplied by the profit.
@@ -226,23 +422,23 @@ contract Vault is VaultStorage {
         }
     }
 
-    /// @notice Propagates a gain to the claimable rewards
+    /// @notice Propagates a protocol gain by minting yield bearing tokens
     /// @param gain Gain to propagate
     function _handleProtocolGain(uint256 gain) internal {
         uint256 currentLossVariable = protocolLoss;
         if (currentLossVariable >= gain) {
             protocolLoss -= gain;
         } else {
-            // If we accrued any fees, mint an equivalent amount of rvTokens.
-            // Authorized users can claim the newly minted rvTokens via claimFees.
-            // TODO Rari was doing this (allows to compound revenues but not super useful)
+            // If we accrued any fees, mint an equivalent amount of yield bearing tokens.
             _mint(address(this), _convertToShares(gain - currentLossVariable, MathUpgradeable.Rounding.Down));
             protocolLoss = 0;
         }
     }
 
-    /// @notice Propagates a loss to the claimable rewards and/or currentLoss
+    /// @notice Propagates a loss
     /// @param loss Loss to propagate
+    /// @dev Burning yield bearing tokens owned by the governance
+    /// if it is not enough keep track of the bad debt
     function _handleProtocolLoss(uint256 loss) internal {
         uint256 claimableProtocolRewards = maxWithdraw(address(this));
         if (claimableProtocolRewards >= loss) {
@@ -256,9 +452,7 @@ contract Vault is VaultStorage {
     /// @notice Claims rewards earned by a user
     /// @param from Address to claim rewards from
     /// @return amount Amount claimed by the user
-    /// @dev Function will revert if there has been no mint
-    /// @dev when calling `_claim()` we should make sure that there is enough funds
-    /// Recalling that it is called on deposits, withdraws and checkpoints
+    /// @dev Function will revert if not enough funds are sitting idle on the contract
     function _claim(address from) internal returns (uint256 amount) {
         amount = (claimableRewards * rewardsAccumulatorOf[from]) / (rewardsAccumulator - claimedRewardsAccumulator);
         claimedRewardsAccumulator += rewardsAccumulatorOf[from];
@@ -268,7 +462,7 @@ contract Vault is VaultStorage {
         IERC20(asset()).transfer(from, amount);
     }
 
-    /// @notice Updates global and `msg.sender` accumulator and rewards share
+    /// @notice Updates global and `from` accumulator and rewards share
     /// @param from Address balance changed
     function _updateAccumulator(address from) internal {
         rewardsAccumulator += (block.timestamp - lastTime) * workingSupply;
@@ -279,24 +473,17 @@ contract Vault is VaultStorage {
         lastTimeOf[from] = block.timestamp;
     }
 
-    /// @dev This force claiming as we can't feed a boolean on whether or not we should claim
-    /// TODO just let the `claim()` function, there could always be a router on top of it making the different
-    /// calls
+    /** @dev See {ERC20Upgradeable-_beforeTokenTransfer} */
     function _beforeTokenTransfer(
         address from,
         address to,
         uint256 amount
     ) internal override {
-        if (from != address(0)) {
-            _updateAccumulator(from);
-            _claim(from);
-        }
-        if (to != address(0)) {
-            _updateAccumulator(to);
-            _claim(to);
-        }
+        if (from != address(0)) _updateAccumulator(from);
+        if (to != address(0)) _updateAccumulator(to);
     }
 
+    /** @dev See {ERC20Upgradeable-_afterTokenTransfer} */
     function _afterTokenTransfer(
         address from,
         address to,
@@ -307,7 +494,12 @@ contract Vault is VaultStorage {
         if (to != address(0)) _updateLiquidityLimit(to, balanceOf(to), totalSupply_);
     }
 
-    function _beforeBurn(address from, uint256 value) internal returns (uint256, uint256 totalLoss) {
+    /// @notice If the user need to withdraw more than what is freely available on the contract
+    /// we need to free funds from the strategies in the stack withdrawal order
+    /// @param from Address who wants to withdraw
+    /// @param value Amount needed to be withdrawn
+    /// @dev Any loss incurred during the withdrawal will be fully at the expense of the caller
+    function _beforeWithdraw(address from, uint256 value) internal returns (uint256, uint256 totalLoss) {
         // TODO do we add slippage on this (this would break the interface) or we can have a gov slippage
         // but less modular
         uint256 maxLoss;
@@ -317,7 +509,7 @@ contract Vault is VaultStorage {
 
             uint256 newTotalDebt = totalDebt;
             uint256 vaultBalance;
-            // We need to go get some from our strategies in the withdrawal queue
+            // We need to go get some from our strategies in the withdrawal stack
             // NOTE: This performs forced withdrawals from each Strategy. During
             //      forced withdrawal, a Strategy may realize a loss. That loss
             //      is reported back to the Vault, and will affect the amount
@@ -350,8 +542,7 @@ contract Vault is VaultStorage {
 
                 // NOTE: Withdrawer incurs any losses from liquidation
                 if (loss > 0) {
-                    // TODO this can be negative!
-                    value -= loss;
+                    value = value > loss ? (value - loss) : 0;
                     totalLoss += loss;
                 }
 
@@ -363,9 +554,6 @@ contract Vault is VaultStorage {
 
             totalDebt = newTotalDebt;
 
-            // TODO can't implement that without breaking the ERC4626 interfaces
-            // We can live it with though, because an external caller can anticipate it (hard though if
-            // there are losses)
             // NOTE: We have withdrawn everything possible out of the withdrawal queue
             //      but we still don't have enough to fully pay them back, so adjust
             //      to the total amount we've freed up through forced withdrawals
@@ -376,16 +564,18 @@ contract Vault is VaultStorage {
 
             // NOTE: This loss protection is put in place to revert if losses from
             //       withdrawing are more than what is considered acceptable.
-            assert(totalLoss <= (maxLoss * value) / BASE_PARAMS);
+            if (totalLoss > (maxLoss * value) / BASE_PARAMS) revert SlippageProtection();
         }
     }
 
-    /// @notice Calculate limits which depend on the amount of ANGLE token per-user.
-    /// Effectively it calculates working balances to apply amplification of ANGLE production by ANGLE
+    /// @notice Calculate limits which depend on the amount of veANGLE token per-user.
+    /// Effectively it computes a modified balance and total supply, to redirect rewards
+    /// not only based on liquidity but also external factors
     /// @param addr User address
-    /// @param userShares User's amount of liquidity
-    /// @param totalShares Total amount of liquidity
-    /// @dev We can add anyother metric that seems suitable to adap working balances
+    /// @param userShares User's vault shares
+    /// @param totalShares Total vault shares
+    /// @dev To be called after totalSupply is updated
+    /// @dev We can add any other metric that seems suitable to adapt working balances
     /// Here we only take into account the veANGLE balances, but we can also add a parameter on
     /// locking period --> but this would break the ERC4626 interfaces --> NFT
     function _updateLiquidityLimit(
@@ -393,7 +583,6 @@ contract Vault is VaultStorage {
         uint256 userShares,
         uint256 totalShares
     ) internal {
-        // To be called after totalSupply is updated
         uint256 votingBalance = veBoostProxy.adjusted_balance_of(addr);
         uint256 votingTotal = IERC20(address(votingEscrow)).totalSupply();
 
@@ -433,40 +622,6 @@ contract Vault is VaultStorage {
         emit Withdraw(caller, receiver, owner, assets, shares);
     }
 
-    // ===================== Strategy related functions ==========================
-
-    /// @notice Tells a strategy how much it can borrow from this `PoolManager`
-    /// @param strategy Strategy to consider in the call
-    /// @return Amount of token a strategy has access to as a credit line
-    /// @dev Since this function is a view function, there is no need to have an access control logic
-    /// even though it will just be relevant for a strategy
-    /// @dev Manipulating `_getTotalAsset` with a flashloan will only
-    /// result in tokens being transferred at the cost of the caller
-    function creditAvailable(address strategy) external view returns (uint256) {
-        StrategyParams storage params = strategies[IStrategy4626(strategy)];
-
-        uint256 target = (totalAssets() * params.debtRatio) / BASE_PARAMS;
-
-        if (target < params.totalStrategyDebt) return 0;
-
-        return Math.min(target - params.totalStrategyDebt, getBalance());
-    }
-
-    /// @notice Tells a strategy how much it owes to this `PoolManager`
-    /// @param strategy Strategy to consider in the call
-    /// @return Amount of token a strategy has to reimburse
-    /// @dev Manipulating `_getTotalAsset` with a flashloan will only
-    /// result in tokens being transferred at the cost of the caller
-    function debtOutstanding(address strategy) external view returns (uint256) {
-        StrategyParams storage params = strategies[IStrategy4626(strategy)];
-
-        uint256 target = (totalAssets() * params.debtRatio) / BASE_PARAMS;
-
-        if (target > params.totalStrategyDebt) return 0;
-
-        return (params.totalStrategyDebt - target);
-    }
-
     /// @notice Internal version of `updateStrategyDebtRatio`
     /// @dev Updates the debt ratio for a strategy
     function _updateStrategyDebtRatio(IStrategy4626 strategy, uint256 _debtRatio) internal {
@@ -476,142 +631,5 @@ contract Vault is VaultStorage {
         if (debtRatio > BASE_PARAMS) revert DebtRatioTooHigh();
         params.debtRatio = _debtRatio;
         emit UpdatedDebtRatio(address(strategy), debtRatio);
-    }
-
-    /// @notice Modifies the funds a strategy has access to
-    /// @param strategy The address of the Strategy
-    /// @param _debtRatio The share of the total assets that the strategy has access to
-    /// @dev The update has to be such that the `debtRatio` does not exceeds the 100% threshold
-    /// as this `PoolManager` cannot lend collateral that it doesn't not own.
-    /// @dev `_debtRatio` is stored as a uint256 but as any parameter of the protocol, it should be expressed
-    /// in `BASE_PARAMS`
-    function updateStrategyDebtRatio(IStrategy4626 strategy, uint256 _debtRatio) external onlyGovernorOrGuardian {
-        _updateStrategyDebtRatio(strategy, _debtRatio);
-    }
-
-    /// @notice Adds a strategy to the `PoolManager`
-    /// @param strategy The address of the strategy to add
-    /// @param _debtRatio The share of the total assets that the strategy has access to
-    /// @dev Multiple checks are made. For instance, the contract must not already belong to the `PoolManager`
-    /// and the underlying token of the strategy has to be consistent with the `PoolManager` contracts
-    /// @dev This function is a `governor` function and not a `guardian` one because a `guardian` could add a strategy
-    /// enabling the withdraw of the funds of the protocol
-    /// @dev The `_debtRatio` should be expressed in `BASE_PARAMS`
-    function addStrategy(IStrategy4626 strategy, uint256 _debtRatio) external onlyGovernor {
-        StrategyParams storage params = strategies[strategy];
-
-        if (params.lastReport != 0) revert StrategyAlreadyAdded();
-        if (address(this) != IStrategy4626(strategy).poolManager()) revert WrongPoolmanagerForStrategy();
-        // Using current code, this condition should always be verified as in the constructor
-        // of the strategy the `want()` is set to the token of this `PoolManager`
-        if (asset() != strategy.asset()) revert WrongStrategyToken();
-        require(debtRatio + _debtRatio <= BASE_PARAMS, "76");
-
-        // Add strategy to approved strategies
-        params.lastReport = 1;
-        params.totalStrategyDebt = 0;
-        params.debtRatio = _debtRatio;
-
-        // Update global parameters
-        debtRatio += _debtRatio;
-        emit StrategyAdded(address(strategy), debtRatio);
-
-        strategyList.push(strategy);
-    }
-
-    /// @notice Revokes a strategy
-    /// @param strategy The address of the strategy to revoke
-    /// @dev This should only be called after the following happened in order: the `strategy.debtRatio` has been set to 0,
-    /// `harvest` has been called enough times to recover all capital gain/losses.
-    function revokeStrategy(IStrategy4626 strategy) external onlyGovernorOrGuardian {
-        StrategyParams storage params = strategies[strategy];
-
-        if (params.debtRatio != 0) revert StrategyInUse();
-        if (params.totalStrategyDebt != 0) revert StrategyDebtUnpaid();
-        uint256 strategyListLength = strategyList.length;
-        if (params.lastReport != 0 && strategyListLength >= 1) revert revokeStrategyImpossible();
-        // It has already been checked whether the strategy was a valid strategy
-        for (uint256 i = 0; i < strategyListLength - 1; i++) {
-            if (strategyList[i] == strategy) {
-                strategyList[i] = strategyList[strategyListLength - 1];
-                break;
-            }
-        }
-
-        strategyList.pop();
-
-        delete strategies[strategy];
-
-        emit StrategyRevoked(address(strategy));
-    }
-
-    // ============================== Getters ===================================
-
-    /// @notice Gets the full withdrawal stack.
-    /// @return An ordered array of strategies representing the withdrawal stack.
-    /// @dev This is provided because Solidity converts public arrays into index getters,
-    /// but we need a way to allow external contracts and users to access the whole array.
-    function getWithdrawalStack() external view returns (IStrategy4626[] memory) {
-        return withdrawalStack;
-    }
-
-    /// @notice Calculates the total amount of underlying tokens the Vault holds.
-    /// @return totalUnderlyingHeld The total amount of underlying tokens the Vault holds.
-    /// @dev Important to not take into account lockedProfit otherwise there could be attacks on
-    /// the vault. Someone could artificially make a strategy have large profit, to deposit and withdraw
-    /// and earn free money.
-    /// @dev Need to be cautious on when to use `totalAssets()` and `balanceOf(address(this))`. As when investing the money
-    /// it is better to use the full balance. But need to make sure that there isn't any flaws by using 2 dufferent balances
-    function totalAssets() public view override returns (uint256 totalUnderlyingHeld) {
-        totalUnderlyingHeld = totalDebt + getBalance() - claimableRewards;
-    }
-
-    /// @notice Returns this `PoolManager`'s reserve of collateral (not including what has been lent)
-    function getBalance() public view returns (uint256) {
-        return IERC20(asset()).balanceOf(address(this));
-    }
-
-    // ============================== Guardian ===================================
-
-    /// @notice Claims fees accrued from harvests.
-    /// @param awTokenAmount The amount of rvTokens to claim.
-    /// @dev Accrued fees are measured as rvTokens held by the Vault.
-    function claimFees(uint256 awTokenAmount) external onlyGovernor {
-        emit FeesClaimed(msg.sender, awTokenAmount);
-
-        // Transfer the provided amount of awTokens to the caller.
-        _transfer(address(this), msg.sender, awTokenAmount);
-    }
-
-    // ============================== Governance ===================================
-
-    /// @notice Sets a new withdrawal stack.
-    /// @param newStack The new withdrawal stack.
-    /// @dev Strategies that are untrusted, duplicated, or have no balance are
-    /// filtered out when encountered at withdrawal time, not validated upfront.
-    function setWithdrawalStack(IStrategy4626[] calldata newStack) external onlyGovernor {
-        // Ensure the new stack is not larger than the maximum stack size.
-        require(newStack.length <= MAX_WITHDRAWAL_STACK_SIZE, "STACK_TOO_BIG");
-
-        for (uint256 i = 0; i < newStack.length; i++) {
-            if (strategies[newStack[i]].lastReport > 0) revert StrategyDoesNotExist();
-        }
-
-        // Replace the withdrawal stack.
-        withdrawalStack = newStack;
-
-        emit WithdrawalStackSet(msg.sender, newStack);
-    }
-
-    /// @notice Sets a new fee percentage.
-    /// @param newFeePercent The new fee percentage.
-    function setFeePercent(uint256 newFeePercent) external onlyGovernor {
-        // A fee percentage over 100% doesn't make sense.
-        require(newFeePercent <= 1e18, "FEE_TOO_HIGH");
-
-        // Update the fee percentage.
-        feePercent = newFeePercent;
-
-        emit FeePercentUpdated(msg.sender, newFeePercent);
     }
 }
