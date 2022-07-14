@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.12;
 
-import "./VaultStorage.sol";
+import "./SavingsRateStorage.sol";
 
 /// @title Angle Vault
 /// @author Angle Protocol
 /// @notice Yield aggregator vault which can connect multiple ERC4626 strategies
 /// @notice Integrate boosting mecanism on the yield
-contract Vault is VaultStorage {
+contract SavingsRate is SavingsRateStorage {
     using SafeERC20 for IERC20;
     using Address for address;
     using MathUpgradeable for uint256;
 
     function initialize(ICoreBorrow _coreBorrow, IERC20MetadataUpgradeable _token) external initializer {
-        __ERC20_init(
+        __ERC20_init_unchained(
             // Angle token Wrapper
             string(abi.encodePacked("Angle ", _token.name(), " Wrapper")),
             string(abi.encodePacked("aw", _token.symbol()))
         );
-        __ERC20TokenizedVault_init(_token);
+        __ERC4626_init_unchained(_token);
         coreBorrow = _coreBorrow;
     }
 
@@ -48,6 +48,11 @@ contract Vault is VaultStorage {
     /// but we need a way to allow external contracts and users to access the whole array.
     function getWithdrawalStack() external view returns (IStrategy4626[] memory) {
         return withdrawalStack;
+    }
+
+    /// @notice Returns the list of all AMOs supported by this contract
+    function getStrategyList() external view returns (IStrategy4626[] memory) {
+        return strategyList;
     }
 
     /// @notice Calculates the total amount of underlying tokens the Vault holds.
@@ -95,6 +100,36 @@ contract Vault is VaultStorage {
         return (params.totalStrategyDebt - target);
     }
 
+    /** @dev See {IERC4262-previewWithdraw}. */
+    function previewWithdraw(uint256 assets) public view override returns (uint256) {
+        return previewWithdraw(msg.sender, assets);
+    }
+
+    /** @dev See {IERC4262-previewRedeem}. */
+    function previewRedeem(uint256 shares) public view override returns (uint256) {
+        return previewRedeem(msg.sender, shares);
+    }
+
+    /** @dev See {IERC4262-previewWithdraw}. */
+    function previewWithdraw(address owner, uint256 assets) public view returns (uint256) {
+        uint256 ownerReward = _claimableRewardsOf(owner);
+        /// TODO can we take into account possible losses? Looks hard
+        if (assets >= ownerReward) {
+            return _convertToShares(assets - ownerReward, MathUpgradeable.Rounding.Up);
+        } else {
+            return 0;
+        }
+    }
+
+    /** @dev See {IERC4262-previewRedeem}. */
+    function previewRedeem(address owner, uint256 shares) public view returns (uint256) {
+        uint256 ownerTotalShares = maxRedeem(owner);
+        uint256 ownerReward = _claimableRewardsOf(owner);
+        uint256 ownerRewardShares = (ownerReward * shares) / ownerTotalShares;
+        /// TODO can we take into account possible losses? Looks hard
+        return _convertToAssets(shares, MathUpgradeable.Rounding.Down) + ownerRewardShares;
+    }
+
     // ====================== External permissionless functions =============================
 
     /** @dev See {IERC4262-withdraw} */
@@ -103,11 +138,20 @@ contract Vault is VaultStorage {
         address receiver,
         address owner
     ) public virtual override returns (uint256) {
+        uint256 ownerReward = _claim(owner);
         uint256 loss;
-        (assets, loss) = _beforeWithdraw(owner, assets);
-        require(assets + loss <= maxWithdraw(owner), "ERC20TokenizedVault: withdraw more than max");
+        (assets, loss) = _beforeWithdraw(assets);
 
-        uint256 shares = previewWithdraw(assets + loss);
+        uint256 shares;
+        uint256 assetsTrueCost = assets + loss;
+        if (ownerReward < assetsTrueCost) {
+            require(assetsTrueCost - ownerReward <= maxWithdraw(owner), "ERC4626: withdraw more than max");
+            shares = _convertToShares(assetsTrueCost - ownerReward, MathUpgradeable.Rounding.Up);
+            rewardBalances[owner] -= ownerReward;
+        } else {
+            rewardBalances[owner] -= assets;
+        }
+
         _withdraw(_msgSender(), receiver, owner, assets, shares);
 
         return shares;
@@ -119,32 +163,54 @@ contract Vault is VaultStorage {
         address receiver,
         address owner
     ) public virtual override returns (uint256) {
-        require(shares <= maxRedeem(owner), "ERC20TokenizedVault: redeem more than max");
+        uint256 ownerTotalShares = maxRedeem(owner);
+        require(shares <= ownerTotalShares, "ERC4626: redeem more than max");
 
-        uint256 assets = previewRedeem(shares);
+        uint256 ownerReward = _claim(owner);
+        uint256 ownerRewardShares = (ownerReward * shares) / ownerTotalShares;
+
+        uint256 assets = _convertToAssets(shares, MathUpgradeable.Rounding.Down);
         uint256 loss;
-        (assets, loss) = _beforeWithdraw(owner, assets);
+        uint256 freedAssets;
+        (freedAssets, loss) = _beforeWithdraw(assets + ownerRewardShares);
+        // if we didn't suceed to withdraw enough, we need to decrease the number of shares burnt
+        if (freedAssets < ownerRewardShares) {
+            shares = 0;
+            rewardBalances[owner] -= freedAssets;
+        } else if (freedAssets < assets + ownerRewardShares) {
+            assets = freedAssets - ownerRewardShares;
+            shares = _convertToShares(assets, MathUpgradeable.Rounding.Up);
+            rewardBalances[owner] -= ownerRewardShares;
+        } else {
+            rewardBalances[owner] -= ownerRewardShares;
+        }
 
-        // `assets-loss`will never revert here because it would revert on the slippage protection in `withdraw()`
-        _withdraw(_msgSender(), receiver, owner, assets - loss, shares);
+        // `assets-loss` will never revert here because it would revert on the slippage protection in `withdraw()`
+        _withdraw(_msgSender(), receiver, owner, freedAssets - loss, shares);
 
-        return assets - loss;
+        return freedAssets - loss;
     }
 
     /// @notice Claims earned rewards and update working balances
-    /// @return amountClaimed Transferred amount to `msg.sender`
-    function checkpoint() external returns (uint256 amountClaimed) {
-        _updateAccumulator(msg.sender);
-        amountClaimed = _claim(msg.sender);
+    /// @return rewardBalance `msg.sender` reward balance at the end of the function
+    function checkpoint() external returns (uint256 rewardBalance) {
+        rewardBalance = _claim(msg.sender);
         _updateLiquidityLimit(msg.sender, balanceOf(msg.sender), totalSupply());
     }
 
-    /// @notice Claims earned rewards
-    /// @param from Address to claim for
-    /// @return Transferred amount to `from`
-    function claim(address from) external returns (uint256) {
-        _updateAccumulator(from);
-        return _claim(from);
+    /// @notice Helper to estimate claimble rewards for a specific user
+    /// @param from Address to estimate rewards from
+    /// @return amount `from` reward balance if it gets updated
+    function claimableRewardsOf(address from) external view returns (uint256) {
+        return _claimableRewardsOf(from);
+    }
+
+    /// @notice To deposit directly rewards onto the contract
+    /// TODO not a fan it looks weird to have the equivalent of a strategy here
+    /// while we can just do a dumb strategy and link it to this country, so that they all have the same interface
+    function notifyRewardAmount(uint256 amount) external {
+        SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(asset()), msg.sender, address(this), amount);
+        claimableRewards += amount;
     }
 
     /// @notice Update distributable rewards made from all strategies
@@ -171,7 +237,6 @@ contract Vault is VaultStorage {
         if (workingBalances[addr] <= (_balance * tokenlessProduction) / 100) revert KickNotNeeded();
 
         uint256 totalSupply = totalSupply();
-        _updateAccumulator(addr);
         _claim(addr);
         _updateLiquidityLimit(addr, balanceOf(addr), totalSupply);
     }
@@ -188,12 +253,13 @@ contract Vault is VaultStorage {
     /// @dev The `_debtRatio` should be expressed in `BASE_PARAMS`
     function addStrategy(IStrategy4626 strategy, uint256 _debtRatio) external onlyGovernor {
         StrategyParams storage params = strategies[strategy];
+        IERC20 asset = IERC20(asset());
 
         if (params.lastReport != 0) revert StrategyAlreadyAdded();
         strategy.isVault();
         // Using current code, this condition should always be verified as in the constructor
         // of the strategy the `want()` is set to the token of this `PoolManager`
-        if (asset() != strategy.asset()) revert WrongStrategyToken();
+        if (address(asset) != strategy.asset()) revert WrongStrategyToken();
         if (debtRatio + _debtRatio > BASE_PARAMS) revert DebtRatioTooHigh();
 
         // Add strategy to approved strategies
@@ -204,6 +270,8 @@ contract Vault is VaultStorage {
         // Update global parameters
         debtRatio += _debtRatio;
         emit StrategyAdded(address(strategy), debtRatio);
+
+        asset.safeApprove(address(strategy), type(uint256).max);
 
         strategyList.push(strategy);
     }
@@ -238,16 +306,6 @@ contract Vault is VaultStorage {
 
     // ========================== Governance or Guardian functions ==============================
 
-    /// @notice Claims fees accrued from harvests.
-    /// @param shares The shares claim for the protocol.
-    /// @dev Accrued fees are measured as rvTokens held by the Vault.
-    function claimFees(uint256 shares) external onlyGovernorOrGuardian {
-        emit FeesClaimed(msg.sender, shares);
-
-        // Transfer the provided shares to the caller.
-        _transfer(address(this), msg.sender, shares);
-    }
-
     /// @notice Modifies the funds a strategy has access to
     /// @param strategy The address of the Strategy
     /// @param _debtRatio The share of the total assets that the strategy has access to
@@ -279,6 +337,7 @@ contract Vault is VaultStorage {
         }
 
         strategyList.pop();
+        IERC20(asset()).safeApprove(address(strategy), 0);
 
         delete strategies[strategy];
 
@@ -291,6 +350,17 @@ contract Vault is VaultStorage {
         _updateStrategyDebtRatio(strategy, 0);
         strategy.setEmergencyExit();
         strategy.harvest();
+    }
+
+    /// @notice Changes allowance of a set of tokens to addresses
+    /// @param spenders Addresses to approve
+    /// @param amounts Approval amounts for each address
+    function changeAllowance(address[] calldata spenders, uint256[] calldata amounts) external onlyGovernorOrGuardian {
+        if (spenders.length != amounts.length) revert IncompatibleLengths();
+        for (uint256 i = 0; i < spenders.length; i++) {
+            if (strategies[IStrategy4626(spenders[i])].lastReport == 0) revert StrategyDoesNotExist();
+            _changeAllowance(spenders[i], amounts[i]);
+        }
     }
 
     // ========================== Strategy functions ==============================
@@ -430,7 +500,7 @@ contract Vault is VaultStorage {
             protocolLoss -= gain;
         } else {
             // If we accrued any fees, mint an equivalent amount of yield bearing tokens.
-            _mint(address(this), _convertToShares(gain - currentLossVariable, MathUpgradeable.Rounding.Down));
+            _mint(surplusManager, _convertToShares(gain - currentLossVariable, MathUpgradeable.Rounding.Down));
             protocolLoss = 0;
         }
     }
@@ -449,17 +519,27 @@ contract Vault is VaultStorage {
         }
     }
 
+    /// @notice Claims earned rewards
+    /// @param from Address to claim for
+    /// @return Transferred amount to `from`
+    function _claim(address from) internal returns (uint256) {
+        _updateAccumulator(from);
+        return _updateRewardBalance(from);
+    }
+
     /// @notice Claims rewards earned by a user
     /// @param from Address to claim rewards from
-    /// @return amount Amount claimed by the user
+    /// @return amount `from`reward balance at the end of the call
     /// @dev Function will revert if not enough funds are sitting idle on the contract
-    function _claim(address from) internal returns (uint256 amount) {
+    function _updateRewardBalance(address from) internal returns (uint256 amount) {
         amount = (claimableRewards * rewardsAccumulatorOf[from]) / (rewardsAccumulator - claimedRewardsAccumulator);
         claimedRewardsAccumulator += rewardsAccumulatorOf[from];
         rewardsAccumulatorOf[from] = 0;
         lastTimeOf[from] = block.timestamp;
         claimableRewards -= amount;
-        IERC20(asset()).transfer(from, amount);
+        uint256 currentRewardBalance = rewardBalances[from];
+        rewardBalances[from] = currentRewardBalance + amount;
+        return currentRewardBalance + amount;
     }
 
     /// @notice Updates global and `from` accumulator and rewards share
@@ -473,14 +553,33 @@ contract Vault is VaultStorage {
         lastTimeOf[from] = block.timestamp;
     }
 
+    /// @notice Helper to estimate claimble rewards for a specific user
+    /// @param from Address to check rewards from
+    /// @return amount `from` reward balance if it gets updated
+    function _claimableRewardsOf(address from) internal view returns (uint256 amount) {
+        uint256 rewardsAccumulatorTmp = rewardsAccumulator + (block.timestamp - lastTime) * workingSupply;
+        // This will be 0 on the first deposit since the balance is initialized later
+        uint256 rewardsAccumulatorOfTmp = rewardsAccumulatorOf[from] +
+            (block.timestamp - lastTimeOf[from]) *
+            workingBalances[from];
+        amount = (claimableRewards * rewardsAccumulatorOfTmp) / (rewardsAccumulatorTmp - claimedRewardsAccumulator);
+        uint256 currentRewardBalance = rewardBalances[from];
+        return currentRewardBalance + amount;
+    }
+
     /** @dev See {ERC20Upgradeable-_beforeTokenTransfer} */
+    /// @dev In the case of a burn the call has been already made
     function _beforeTokenTransfer(
         address from,
         address to,
-        uint256 amount
+        uint256
     ) internal override {
-        if (from != address(0)) _updateAccumulator(from);
-        if (to != address(0)) _updateAccumulator(to);
+        if (to != address(0)) {
+            _claim(to);
+            if (from != address(0)) {
+                _claim(from);
+            }
+        }
     }
 
     /** @dev See {ERC20Upgradeable-_afterTokenTransfer} */
@@ -496,19 +595,20 @@ contract Vault is VaultStorage {
 
     /// @notice If the user need to withdraw more than what is freely available on the contract
     /// we need to free funds from the strategies in the stack withdrawal order
-    /// @param from Address who wants to withdraw
     /// @param value Amount needed to be withdrawn
+    /// @return the actual assets that can be withdrawn
+    /// @return totalLoss Losses incurred when withdrawing from the strategies
     /// @dev Any loss incurred during the withdrawal will be fully at the expense of the caller
-    function _beforeWithdraw(address from, uint256 value) internal returns (uint256, uint256 totalLoss) {
+    function _beforeWithdraw(uint256 value) internal returns (uint256, uint256 totalLoss) {
         // TODO do we add slippage on this (this would break the interface) or we can have a gov slippage
         // but less modular
         uint256 maxLoss;
 
-        if (value > getBalance()) {
+        uint256 vaultBalance = getBalance();
+        if (value > vaultBalance) {
             IStrategy4626[] memory withdrawalStackMemory = withdrawalStack;
 
             uint256 newTotalDebt = totalDebt;
-            uint256 vaultBalance;
             // We need to go get some from our strategies in the withdrawal stack
             // NOTE: This performs forced withdrawals from each Strategy. During
             //      forced withdrawal, a Strategy may realize a loss. That loss
@@ -522,7 +622,6 @@ contract Vault is VaultStorage {
                 // We've exhausted the queue
                 if (address(strategy) == address(0)) break;
 
-                vaultBalance = getBalance();
                 // We're done withdrawing
                 if (value <= vaultBalance) break;
                 uint256 amountNeeded = value - vaultBalance;
@@ -538,7 +637,10 @@ contract Vault is VaultStorage {
 
                 // Force withdraw amount from each Strategy in the order set by governance
                 uint256 loss = strategy.withdraw(amountNeeded, address(this), address(this));
-                uint256 withdrawn = getBalance() - vaultBalance;
+
+                uint256 newVaultBalance = getBalance();
+                uint256 withdrawn = newVaultBalance - vaultBalance;
+                vaultBalance = newVaultBalance;
 
                 // NOTE: Withdrawer incurs any losses from liquidation
                 if (loss > 0) {
@@ -557,7 +659,6 @@ contract Vault is VaultStorage {
             // NOTE: We have withdrawn everything possible out of the withdrawal queue
             //      but we still don't have enough to fully pay them back, so adjust
             //      to the total amount we've freed up through forced withdrawals
-            vaultBalance = getBalance();
             if (value > vaultBalance) {
                 value = vaultBalance;
             }
@@ -565,6 +666,8 @@ contract Vault is VaultStorage {
             // NOTE: This loss protection is put in place to revert if losses from
             //       withdrawing are more than what is considered acceptable.
             if (totalLoss > (maxLoss * value) / BASE_PARAMS) revert SlippageProtection();
+
+            return (value, totalLoss);
         }
     }
 
@@ -596,32 +699,6 @@ contract Vault is VaultStorage {
         workingSupply = _workingSupply;
     }
 
-    /**
-     * @dev Withdraw/redeem common workflow
-     */
-    function _withdraw(
-        address caller,
-        address receiver,
-        address owner,
-        uint256 assets,
-        uint256 shares
-    ) private override {
-        if (caller != owner) {
-            _spendAllowance(owner, caller, shares);
-        }
-
-        // If _asset is ERC777, `transfer` can trigger trigger a reentrancy AFTER the transfer happens through the
-        // `tokensReceived` hook. On the other hand, the `tokensToSend` hook, that is triggered before the transfer,
-        // calls the vault, which is assumed not malicious.
-        //
-        // Conclusion: we need to do the transfer after the burn so that any reentrancy would happen after the
-        // shares are burned and after the assets are transfered, which is a valid state.
-        _burn(owner, shares);
-        SafeERC20Upgradeable.safeTransfer(IERC20Upgradeable(asset()), receiver, assets);
-
-        emit Withdraw(caller, receiver, owner, assets, shares);
-    }
-
     /// @notice Internal version of `updateStrategyDebtRatio`
     /// @dev Updates the debt ratio for a strategy
     function _updateStrategyDebtRatio(IStrategy4626 strategy, uint256 _debtRatio) internal {
@@ -631,5 +708,18 @@ contract Vault is VaultStorage {
         if (debtRatio > BASE_PARAMS) revert DebtRatioTooHigh();
         params.debtRatio = _debtRatio;
         emit UpdatedDebtRatio(address(strategy), debtRatio);
+    }
+
+    /// @notice Changes allowance of a set of tokens to addresses
+    /// @param spender Address to approve
+    /// @param amount Approval amount
+    function _changeAllowance(address spender, uint256 amount) internal {
+        IERC20 asset = IERC20(asset());
+        uint256 currentAllowance = asset.allowance(address(this), address(spender));
+        if (currentAllowance < amount) {
+            asset.safeIncreaseAllowance(address(spender), amount - currentAllowance);
+        } else if (currentAllowance > amount) {
+            asset.safeDecreaseAllowance(address(spender), currentAllowance - amount);
+        }
     }
 }

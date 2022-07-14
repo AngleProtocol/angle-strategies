@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.12;
 
-import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20TokenizedVaultUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
 import "../interfaces/ICoreBorrow.sol";
-import "./Vault.sol";
+import "./SavingsRate.sol";
 
 /// @title Angle Base Strategy ERC4626 Storage
 /// @author Angle Protocol
-contract BaseStrategy4626Storage is ERC20TokenizedVaultUpgradeable {
+contract BaseStrategy4626Storage is ERC4626Upgradeable {
     uint256 internal constant BASE_PARAMS = 10**9;
 
-    Vault[] public vaults;
+    SavingsRate[] public savingsRate;
 
     /// @notice CoreBorrow used to get governance addresses
     ICoreBorrow public coreBorrow;
@@ -20,7 +20,7 @@ contract BaseStrategy4626Storage is ERC20TokenizedVaultUpgradeable {
 
     /// @notice The period in seconds during which multiple harvests can occur
     /// regardless if they are taking place before the harvest delay has elapsed.
-    /// @dev Long harvest windows open the Vault up to profit distribution slowdown attacks.
+    /// @dev Long harvest windows open the SavingsRate up to profit distribution slowdown attacks.
     /// TODO is this one really useful?
     uint128 public harvestWindow;
 
@@ -53,7 +53,7 @@ contract BaseStrategy4626Storage is ERC20TokenizedVaultUpgradeable {
 
     error NotGovernor();
     error NotGovernorOrGuardian();
-    error NotVault();
+    error NotSavingsRate();
     error HarvestWindowTooLarge();
     error HarvestDelayNull();
     error HarvestDelayTooLarge();

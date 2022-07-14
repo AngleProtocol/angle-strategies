@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts-upgradeable/interfaces/IERC20MetadataUpgradeable.sol";
 // TODO changed to ERC4626 when the package is updated
 // The only difference is that the `_deposit` and the `_withdraw` will be internal virtual instead of private
-import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20TokenizedVaultUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
@@ -30,7 +30,7 @@ struct StrategyParams {
 /// @title VaultStorage
 /// @author Angle Core Team
 /// @dev Variables, references, parameters and events needed in the `VaultManager` contract
-contract VaultStorage is ERC20TokenizedVaultUpgradeable {
+contract SavingsRateStorage is ERC4626Upgradeable {
     /// @notice The maximum number of elements allowed on the withdrawal stack.
     /// @dev Needed to prevent denial of service attacks by queue operators.
     uint256 internal constant MAX_WITHDRAWAL_STACK_SIZE = 32;
@@ -58,6 +58,9 @@ contract VaultStorage is ERC20TokenizedVaultUpgradeable {
     /// @dev This parameter will adapt the max boost achievable
     /// If set to 40% Mwimum boost will be 2.5
     uint256 public tokenlessProduction;
+
+    /// @notice Address to redirect protocol revenues
+    address public surplusManager;
 
     // =============================== Variables ===================================
 
@@ -103,7 +106,11 @@ contract VaultStorage is ERC20TokenizedVaultUpgradeable {
     /// @notice Mapping between the address of a strategy contract and its corresponding details
     mapping(IStrategy4626 => StrategyParams) public strategies;
 
+    /// @notice Users shares balances taking into account the veBoost
     mapping(address => uint256) public workingBalances;
+
+    /// @notice Users claimable rewards balances
+    mapping(address => uint256) public rewardBalances;
 
     // =============================== Events ======================================
 
@@ -141,6 +148,7 @@ contract VaultStorage is ERC20TokenizedVaultUpgradeable {
     error WithdrawalStackTooDeep();
     error LossShouldbe0();
     error SlippageProtection();
+    error IncompatibleLengths();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}

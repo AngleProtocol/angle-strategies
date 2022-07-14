@@ -9,8 +9,8 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     using SafeERC20 for IERC20;
 
     /// @notice Constructor of the `BaseStrategyERC4626`
-    function _initialize(Vault[] memory _vaults, address[] memory keepers) internal initializer {
-        vaults = _vaults;
+    function _initialize(SavingsRate[] memory _savingsRate, address[] memory keepers) internal initializer {
+        savingsRate = savingsRate;
     }
 
     /// @notice Checks whether the `msg.sender` has the governor role or not
@@ -26,17 +26,17 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     }
 
     /// @notice Checks whether the `msg.sender` has the governor role or not
-    modifier onlyVault() {
+    modifier onlySavingsRate() {
         // List should be small (less than 5) so looping is not an issue
-        Vault[] memory vaultMem = vaults;
+        SavingsRate[] memory savingsRateMem = savingsRate;
         bool inList;
-        for (uint256 i = 0; i < vaultMem.length; i++) {
-            if (address(vaultMem[i]) != msg.sender) {
+        for (uint256 i = 0; i < savingsRateMem.length; i++) {
+            if (address(savingsRateMem[i]) != msg.sender) {
                 inList = true;
                 continue;
             }
         }
-        if (!inList) revert NotVault();
+        if (!inList) revert NotSavingsRate();
         _;
     }
 
@@ -51,13 +51,13 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         return estimatedTotalAssets() > 0;
     }
 
-    /// @notice Revert if the caller is not a whitelisted vault
-    function isVault() public view onlyVault {}
+    /// @notice Revert if the caller is not a whitelisted savingsRate
+    function isSavingsRate() public view onlySavingsRate {}
 
-    /// @notice Computes the total amount of underlying tokens the Vault holds.
-    /// @return totalUnderlyingHeld The total amount of underlying tokens the Vault holds.
+    /// @notice Computes the total amount of underlying tokens the SavingsRate holds.
+    /// @return totalUnderlyingHeld The total amount of underlying tokens the SavingsRate holds.
     /// @dev Important to not take into account lockedProfit otherwise there could be attacks on
-    /// the vault. Someone could artificially make a strategy have large profit, to deposit and withdraw
+    /// the savingsRate. Someone could artificially make a strategy have large profit, to deposit and withdraw
     /// and earn free money.
     /// @dev Need to be cautious on when to use `totalAssets()` and totalStrategyHoldings. As when investing the money
     /// it is better to use the full balance.
@@ -127,7 +127,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     }
 
     /** @dev See {IERC4262-redeem} */
-    /// @dev Currently not used by vaults
+    /// @dev Currently not used by savingsRates
     function redeem(
         uint256 shares,
         address receiver,
@@ -194,7 +194,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
 
     /// @notice Sets a new harvest window.
     /// @param newHarvestWindow The new harvest window.
-    /// @dev The Vault's harvestDelay must already be set before calling.
+    /// @dev The SavingsRate's harvestDelay must already be set before calling.
     function setHarvestWindow(uint128 newHarvestWindow) external onlyGovernor {
         // A harvest window longer than the harvest delay doesn't make sense.
         if (newHarvestWindow > harvestDelay) revert HarvestWindowTooLarge();
@@ -234,11 +234,11 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /// @notice Activates emergency exit. Once activated, the Strategy will exit its
     /// position upon the next harvest, depositing all funds into the Manager as
     /// quickly as is reasonable given on-chain conditions.
-    /// @dev This may only be called by the `vault`'s, because when calling this the `vault` should at the same
+    /// @dev This may only be called by the `savingsRate`'s, because when calling this the `savingsRate` should at the same
     /// time update the debt ratio
-    /// @dev This function can only be called once by the `vault` contract
-    /// @dev See `vault.setEmergencyExit()` and `harvest()` for further details.
-    function setEmergencyExit() external onlyVault {
+    /// @dev This function can only be called once by the `savingsRate` contract
+    /// @dev See `savingsRate.setEmergencyExit()` and `harvest()` for further details.
+    function setEmergencyExit() external onlySavingsRate {
         emergencyExit = true;
         emit EmergencyExitActivated();
     }
@@ -257,7 +257,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /// @dev As keepers may directly profit from this function, there may be front-running problems with miners bots,
     /// we may have to put an access control logic for this function to only allow white-listed addresses to act
     /// as keepers for the protocol
-    /// TODO can be done better(?), like right now they report to all vaults but this seems too much
+    /// TODO can be done better(?), like right now they report to all SavingsRates but this seems too much
     function _report()
         internal
         returns (
@@ -266,11 +266,11 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
             uint256 debtPayment
         )
     {
-        Vault[] memory vaultMem = vaults;
+        SavingsRate[] memory savingsRateMem = savingsRate;
 
         uint256 debtOutstanding;
-        for (uint256 i = 0; i < vaultMem.length; i++) {
-            debtOutstanding += vaultMem[i].debtOutstanding(address(this));
+        for (uint256 i = 0; i < savingsRateMem.length; i++) {
+            debtOutstanding += savingsRateMem[i].debtOutstanding(address(this));
         }
 
         if (emergencyExit) {
@@ -283,25 +283,25 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
             }
             debtPayment = debtOutstanding - loss;
         } else {
-            // Free up returns for vault to pull
+            // Free up returns for savingsRate to pull
             (profit, loss, debtPayment) = _prepareReturn(debtOutstanding);
         }
         emit Harvested(profit, loss, debtPayment, debtOutstanding);
         totalStrategyHoldings += profit - loss - debtPayment;
 
         uint256 totalSupply_ = totalSupply();
-        for (uint256 i = 0; i < vaultMem.length; i++) {
-            uint256 vaultPercentage = (balanceOf(address(vaultMem[i])) * BASE_PARAMS) / totalSupply_;
+        for (uint256 i = 0; i < savingsRateMem.length; i++) {
+            uint256 savingsRatePercentage = (balanceOf(address(savingsRateMem[i])) * BASE_PARAMS) / totalSupply_;
             // TODO this is not efficient nor I am sure it is bullet proof
-            uint256 vaultDebtPayment = vaultMem[i].debtOutstanding(address(this));
-            uint256 vaultDebtPaymentPercentage = (vaultDebtPayment * BASE_PARAMS) / debtOutstanding;
-            // Allows vault to take up to the "harvested" balance of this contract,
+            uint256 savingsRateDebtPayment = savingsRateMem[i].debtOutstanding(address(this));
+            uint256 savingsRateDebtPaymentPercentage = (savingsRateDebtPayment * BASE_PARAMS) / debtOutstanding;
+            // Allows savingsRate to take up to the "harvested" balance of this contract,
             // which is the amount it has earned since the last time it reported to
             // the Manager.
-            vaultMem[i].report(
-                (profit * vaultPercentage) / BASE_PARAMS,
-                (loss * vaultPercentage) / BASE_PARAMS,
-                (debtPayment * vaultDebtPaymentPercentage) / BASE_PARAMS
+            savingsRateMem[i].report(
+                (profit * savingsRatePercentage) / BASE_PARAMS,
+                (loss * savingsRatePercentage) / BASE_PARAMS,
+                (debtPayment * savingsRateDebtPaymentPercentage) / BASE_PARAMS
             );
         }
     }
@@ -318,10 +318,10 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         address receiver,
         uint256 assets,
         uint256 shares
-    ) private override onlyVault {
+    ) internal override onlySavingsRate {
         // If _asset is ERC777, `transferFrom` can trigger a reenterancy BEFORE the transfer happens through the
         // `tokensToSend` hook. On the other hand, the `tokenReceived` hook, that is triggered after the transfer,
-        // calls the vault, which is assumed not malicious.
+        // calls the savingsRate, which is assumed not malicious.
         //
         // Conclusion: we need to do the transfer before we mint so that any reentrancy would happen before the
         // assets are transfered and before the shares are minted, which is a valid state.
@@ -343,14 +343,14 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         uint256 assets,
         uint256 loss,
         uint256 shares
-    ) private onlyVault {
+    ) private onlySavingsRate {
         if (caller != owner) {
             _spendAllowance(owner, caller, shares);
         }
 
         // If _asset is ERC777, `transfer` can trigger trigger a reentrancy AFTER the transfer happens through the
         // `tokensReceived` hook. On the other hand, the `tokensToSend` hook, that is triggered before the transfer,
-        // calls the vault, which is assumed not malicious.
+        // calls the savingsRate, which is assumed not malicious.
         //
         // Conclusion: we need to do the transfer after the burn so that any reentrancy would happen after the
         // shares are burned and after the assets are transfered, which is a valid state.
@@ -360,6 +360,17 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
 
         emit Withdraw(caller, receiver, owner, assets, shares);
     }
+
+    // /** @dev See {ERC20Upgradeable-_afterTokenTransfer} */
+    // function _afterTokenTransfer(
+    //     address from,
+    //     address to,
+    //     uint256
+    // ) internal override {
+
+    //     if (from == address(0)) _updateLiquidityLimit(from, balanceOf(from), totalSupply_);
+    //     if (to == address(0)) _updateLiquidityLimit(to, balanceOf(to), totalSupply_);
+    // }
 
     // ============================ Internal virtual Functions =============================
 
