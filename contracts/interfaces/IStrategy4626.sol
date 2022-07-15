@@ -16,5 +16,5 @@ interface IStrategy4626 is IERC4626Upgradeable {
 
     function isVault() external;
 
-    function harvest() external;
+    function report() external;
 }

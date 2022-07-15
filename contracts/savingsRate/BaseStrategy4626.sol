@@ -146,90 +146,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         return assets - _loss;
     }
 
-    /// @notice Harvests the Strategy, recognizing any profits or losses and adjusting
-    /// the Strategy's position.
-    /// @dev Let the process of `report` and `adjustPosition`, because coupling both in a generic manner
-    /// is not obvious
-    /// TODO not sure limiting harvest is needed with linear vesting
-    function harvest() external {
-        // If this is the first harvest after the last window:
-        if (block.timestamp >= lastHarvest + harvestDelay) {
-            // Set the harvest window's start timestamp.
-            // Cannot overflow 64 bits on human timescales.
-            lastHarvestWindowStart = uint64(block.timestamp);
-        } else {
-            // We know this harvest is not the first in the window so we need to ensure it's within it.
-            require(block.timestamp <= lastHarvestWindowStart + harvestWindow, "BAD_HARVEST_TIME");
-        }
-
-        (uint256 gain, uint256 loss, uint256 debtPayment) = _report();
-
-        // loss was directly removed from the totalHoldings
-        // Update max unlocked profit based on any remaining locked profit plus new profit.
-        maxLockedProfit = (lockedProfit() + gain);
-
-        // Check if free returns are left, and re-invest them
-        _adjustPosition();
-
-        // Update the last harvest timestamp.
-        // Cannot overflow on human timescales.
-        lastHarvest = uint64(block.timestamp);
-
-        // Get the next harvest delay.
-        uint64 newHarvestDelay = nextHarvestDelay;
-
-        // If the next harvest delay is not 0:
-        if (newHarvestDelay != 0) {
-            // Update the harvest delay.
-            harvestDelay = newHarvestDelay;
-
-            // Reset the next harvest delay.
-            nextHarvestDelay = 0;
-
-            emit HarvestDelayUpdated(msg.sender, newHarvestDelay);
-        }
-    }
-
     // ============================ Setters =============================
-
-    /// @notice Sets a new harvest window.
-    /// @param newHarvestWindow The new harvest window.
-    /// @dev The SavingsRate's harvestDelay must already be set before calling.
-    function setHarvestWindow(uint128 newHarvestWindow) external onlyGovernor {
-        // A harvest window longer than the harvest delay doesn't make sense.
-        if (newHarvestWindow > harvestDelay) revert HarvestWindowTooLarge();
-
-        // Update the harvest window.
-        harvestWindow = newHarvestWindow;
-
-        emit HarvestWindowUpdated(msg.sender, newHarvestWindow);
-    }
-
-    /// @notice Sets a new harvest delay.
-    /// @param newHarvestDelay The new harvest delay to set.
-    /// @dev If the current harvest delay is 0, meaning it has not
-    /// been set before, it will be updated immediately, otherwise
-    /// it will be scheduled to take effect after the next harvest.
-    function setHarvestDelay(uint64 newHarvestDelay) external onlyGovernor {
-        // A harvest delay of 0 makes harvests vulnerable to sandwich attacks.
-        if (newHarvestDelay == 0) revert HarvestDelayNull();
-
-        // A harvest delay longer than 1 year doesn't make sense.
-        if (newHarvestDelay > 365 days) revert HarvestDelayTooLarge();
-
-        // If the harvest delay is 0, meaning it has not been set before:
-        if (harvestDelay == 0) {
-            // We'll apply the update immediately.
-            harvestDelay = newHarvestDelay;
-
-            emit HarvestDelayUpdated(msg.sender, newHarvestDelay);
-        } else {
-            // We'll apply the update next harvest.
-            nextHarvestDelay = newHarvestDelay;
-
-            emit HarvestDelayUpdateScheduled(msg.sender, newHarvestDelay);
-        }
-    }
 
     /// @notice Activates emergency exit. Once activated, the Strategy will exit its
     /// position upon the next harvest, depositing all funds into the Manager as
@@ -259,13 +176,24 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /// as keepers for the protocol
     /// TODO can be done better(?), like right now they report to all SavingsRates but this seems too much
     function _report()
-        internal
+        public
+        onlySavingsRate
         returns (
             uint256 profit,
             uint256 loss,
             uint256 debtPayment
         )
     {
+        // If this is the first harvest after the last window:
+        if (block.timestamp >= lastHarvest + harvestDelay) {
+            // Set the harvest window's start timestamp.
+            // Cannot overflow 64 bits on human timescales.
+            lastHarvestWindowStart = uint64(block.timestamp);
+        } else {
+            // We know this harvest is not the first in the window so we need to ensure it's within it.
+            require(block.timestamp <= lastHarvestWindowStart + harvestWindow, "BAD_HARVEST_TIME");
+        }
+
         SavingsRate[] memory savingsRateMem = savingsRate;
 
         uint256 debtOutstanding;
@@ -289,20 +217,24 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         emit Harvested(profit, loss, debtPayment, debtOutstanding);
         totalStrategyHoldings += profit - loss - debtPayment;
 
-        uint256 totalSupply_ = totalSupply();
-        for (uint256 i = 0; i < savingsRateMem.length; i++) {
-            uint256 savingsRatePercentage = (balanceOf(address(savingsRateMem[i])) * BASE_PARAMS) / totalSupply_;
-            // TODO this is not efficient nor I am sure it is bullet proof
-            uint256 savingsRateDebtPayment = savingsRateMem[i].debtOutstanding(address(this));
-            uint256 savingsRateDebtPaymentPercentage = (savingsRateDebtPayment * BASE_PARAMS) / debtOutstanding;
-            // Allows savingsRate to take up to the "harvested" balance of this contract,
-            // which is the amount it has earned since the last time it reported to
-            // the Manager.
-            savingsRateMem[i].report(
-                (profit * savingsRatePercentage) / BASE_PARAMS,
-                (loss * savingsRatePercentage) / BASE_PARAMS,
-                (debtPayment * savingsRateDebtPaymentPercentage) / BASE_PARAMS
-            );
+        // loss is directly removed from the totalHoldings
+        // Update max unlocked profit based on any remaining locked profit plus new profit.
+        maxLockedProfit = (lockedProfit() + profit);
+
+        // Update the last harvest timestamp.
+        // Cannot overflow on human timescales.
+        lastHarvest = uint64(block.timestamp);
+
+        // Get the next harvest delay.
+        uint64 newHarvestDelay = nextHarvestDelay;
+
+        // If the next harvest delay is not 0:
+        if (newHarvestDelay != 0) {
+            // Update the harvest delay.
+            harvestDelay = newHarvestDelay;
+
+            // Reset the next harvest delay.
+            nextHarvestDelay = 0;
         }
     }
 
@@ -361,16 +293,15 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         emit Withdraw(caller, receiver, owner, assets, shares);
     }
 
-    // /** @dev See {ERC20Upgradeable-_afterTokenTransfer} */
-    // function _afterTokenTransfer(
-    //     address from,
-    //     address to,
-    //     uint256
-    // ) internal override {
-
-    //     if (from == address(0)) _updateLiquidityLimit(from, balanceOf(from), totalSupply_);
-    //     if (to == address(0)) _updateLiquidityLimit(to, balanceOf(to), totalSupply_);
-    // }
+    /** @dev See {ERC20Upgradeable-_afterTokenTransfer} */
+    function _afterTokenTransfer(
+        address from,
+        address to,
+        uint256
+    ) internal override {
+        // mint, check if free returns are left, and re-invest them
+        if (from == address(0)) _adjustPosition();
+    }
 
     // ============================ Internal virtual Functions =============================
 

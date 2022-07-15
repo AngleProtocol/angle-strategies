@@ -17,7 +17,6 @@ contract BaseStrategy4626Storage is ERC4626Upgradeable {
 
     /// @notice See note on `setEmergencyExit()`
     bool public emergencyExit;
-
     /// @notice The period in seconds during which multiple harvests can occur
     /// regardless if they are taking place before the harvest delay has elapsed.
     /// @dev Long harvest windows open the SavingsRate up to profit distribution slowdown attacks.
@@ -46,17 +45,11 @@ contract BaseStrategy4626Storage is ERC4626Upgradeable {
     uint256 public totalStrategyHoldings;
 
     event Harvested(uint256 profit, uint256 loss, uint256 debtPayment, uint256 debtOutstanding);
-    event HarvestWindowUpdated(address indexed user, uint128 newHarvestWindow);
-    event HarvestDelayUpdated(address indexed user, uint64 newHarvestDelay);
-    event HarvestDelayUpdateScheduled(address indexed user, uint64 newHarvestDelay);
     event EmergencyExitActivated();
 
     error NotGovernor();
     error NotGovernorOrGuardian();
     error NotSavingsRate();
-    error HarvestWindowTooLarge();
-    error HarvestDelayNull();
-    error HarvestDelayTooLarge();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}
