@@ -294,14 +294,37 @@ contract SavingsRate is SavingsRateStorage {
     }
 
     /// @notice Sets a new fee percentage.
-    /// @param newFeePercent The new fee percentage.
-    function setFeePercent(uint256 newFeePercent) external onlyGovernor {
+    /// @param tokenlessProduction_ The new tokenlessProduction, which efectively set the boost in `_updateLiquidityLimit`
+    /// TODO not as easy --> we need to update everyones boost, if we lower the max boost then nobody is going to call it
+    function setTokenlessProduction(uint256 tokenlessProduction_) external onlyGovernor {
         // A fee percentage over 100% doesn't make sense.
-        if (newFeePercent >= BASE_PARAMS) revert ProtocolFeeTooHigh();
+        if (tokenlessProduction_ >= BASE_PARAMS) revert ProtocolFeeTooHigh();
         // Update the fee percentage.
-        feePercent = newFeePercent;
+        tokenlessProduction = tokenlessProduction_;
 
-        emit FeePercentUpdated(msg.sender, newFeePercent);
+        emit TokenlessProductionUpdated(msg.sender, tokenlessProduction_);
+    }
+
+    /// @notice Sets a new share of revenues going to the protocol.
+    /// @param protocolFee_ the new protocolFee.
+    function setProtocolFee(uint256 protocolFee_) external onlyGovernor {
+        // A fee percentage over 100% doesn't make sense.
+        if (protocolFee_ >= BASE_PARAMS) revert ProtocolFeeTooHigh();
+        // Update the fee percentage.
+        protocolFee = protocolFee_;
+
+        emit ProtocolFeeUpdated(msg.sender, protocolFee_);
+    }
+
+    /// @notice Sets a new share of revenues going to the strategist.
+    /// @param strategistFee_ the new strategistFee.
+    function setStrategistFee(uint256 strategistFee_) external onlyGovernor {
+        // A fee percentage over 100% doesn't make sense.
+        if (strategistFee_ >= BASE_PARAMS) revert ProtocolFeeTooHigh();
+        // Update the fee percentage.
+        strategistFee = strategistFee_;
+
+        emit StrategistFeeUpdated(msg.sender, strategistFee_);
     }
 
     // ========================== Governance or Guardian functions ==============================
@@ -478,14 +501,18 @@ contract SavingsRate is SavingsRateStorage {
         if (totalProfitLossAccrued > 0) {
             // Compute fees as the fee percent multiplied by the profit.
             uint256 feesAccrued = uint256(totalProfitLossAccrued).mulDiv(
-                feePercent,
+                protocolFee,
                 1e18,
                 MathUpgradeable.Rounding.Down
             );
             _handleProtocolGain(feesAccrued);
             claimableRewards += uint256(totalProfitLossAccrued) - feesAccrued;
         } else {
-            uint256 feesDebt = uint256(-totalProfitLossAccrued).mulDiv(feePercent, 1e18, MathUpgradeable.Rounding.Down);
+            uint256 feesDebt = uint256(-totalProfitLossAccrued).mulDiv(
+                protocolFee,
+                1e18,
+                MathUpgradeable.Rounding.Down
+            );
             _handleProtocolLoss(feesDebt);
             // Decrease newTotalDebt, this impacts the `totalAssets()` call --> loss directly implied when withdrawing
             totalDebt -= uint256(-totalProfitLossAccrued) - feesDebt;

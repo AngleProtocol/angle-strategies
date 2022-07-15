@@ -51,9 +51,13 @@ contract SavingsRateStorage is ERC4626Upgradeable {
     // =============================== Parameters ==================================
     // Unless specified otherwise, parameters of this contract are expressed in `BASE_PARAMS`
 
-    /// @notice The percentage of profit recognized each harvest to reserve as fees.
-    /// @dev A fixed point number where 1e18 represents 100% and 0 represents 0%.
-    uint256 public feePercent;
+    /// @notice The share of profit going to the protocol.
+    /// @dev Should be lower than `BASE_PARAM`.
+    uint256 public protocolFee;
+
+    /// @notice The share of profit going to the creator.
+    /// @dev Should be lower than `BASE_PARAM`.
+    uint256 public strategistFee;
 
     /// @dev This parameter will adapt the max boost achievable
     /// If set to 40% Mwimum boost will be 2.5
@@ -114,7 +118,9 @@ contract SavingsRateStorage is ERC4626Upgradeable {
 
     // =============================== Events ======================================
 
-    event FeePercentUpdated(address indexed user, uint256 newFeePercent);
+    event TokenlessProductionUpdated(address indexed user, uint256 tokenlessProduction);
+    event ProtocolFeeUpdated(address indexed user, uint256 protocolFee);
+    event StrategistFeeUpdated(address indexed user, uint256 strategistFee);
     event Harvest(address indexed user, IStrategy4626[] strategies);
     event WithdrawalStackSet(address indexed user, IStrategy4626[] replacedWithdrawalStack);
     event FeesClaimed(address indexed user, uint256 rvTokenAmount);
