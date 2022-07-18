@@ -9,8 +9,11 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     using SafeERC20 for IERC20;
 
     /// @notice Constructor of the `BaseStrategyERC4626`
-    function _initialize(SavingsRate[] memory _savingsRate, address[] memory keepers) internal initializer {
-        savingsRate = savingsRate;
+    function _initialize(ISavingsRate[] memory _savingsRate) internal initializer {
+        savingsRateList = _savingsRate;
+        for (uint256 i = 0; i < _savingsRate.length; i++) {
+            savingsRate[_savingsRate[i]] = true;
+        }
     }
 
     /// @notice Checks whether the `msg.sender` has the governor role or not
@@ -27,16 +30,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
 
     /// @notice Checks whether the `msg.sender` has the governor role or not
     modifier onlySavingsRate() {
-        // List should be small (less than 5) so looping is not an issue
-        SavingsRate[] memory savingsRateMem = savingsRate;
-        bool inList;
-        for (uint256 i = 0; i < savingsRateMem.length; i++) {
-            if (address(savingsRateMem[i]) != msg.sender) {
-                inList = true;
-                continue;
-            }
-        }
-        if (!inList) revert NotSavingsRate();
+        if (!savingsRate[ISavingsRate(msg.sender)]) revert NotSavingsRate();
         _;
     }
 
@@ -52,8 +46,8 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     }
 
     /// @notice Revert if the caller is not a whitelisted savingsRate
-    function savingsRateActive() external view returns (SavingsRate[] memory) {
-        return savingsRate;
+    function savingsRateActive() external view returns (ISavingsRate[] memory) {
+        return savingsRateList;
     }
 
     /// @notice Revert if the caller is not a whitelisted savingsRate
@@ -165,6 +159,41 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         emit EmergencyExitActivated();
     }
 
+    /// @notice Add a vault to the whitelist, allowed to interact with the strategy
+    /// @param saving_ The saving rate to add
+    /// @dev This may only be called by the governance or guardians as not any users
+    /// should be able to use the strategy
+    function addSavingsRate(ISavingsRate saving_) external onlyGovernorOrGuardian {
+        if (savingsRate[saving_]) revert SavingRateKnown();
+        savingsRate[saving_] = true;
+        savingsRateList.push(saving_);
+        emit SavingsRateActivated(address(saving_));
+    }
+
+    /// @notice Revokes a strategy
+    /// @param saving_ The saving rate to revoke
+    /// @dev This should only be called after all funds has been removed from the strategy by the saving rate.
+    function revokeSavingsRate(ISavingsRate saving_) external onlyGovernorOrGuardian {
+        if (!savingsRate[saving_]) revert SavingRateUnknown();
+        if (balanceOf(address(saving_)) != 0) revert StrategyInUse();
+
+        ISavingsRate[] memory savingsRateMem = savingsRateList;
+        uint256 strategyListLength = savingsRateMem.length;
+        // It has already been checked whether the strategy was a valid strategy
+        for (uint256 i = 0; i < strategyListLength - 1; i++) {
+            if (savingsRateMem[i] == saving_) {
+                savingsRateList[i] = savingsRateList[strategyListLength - 1];
+                break;
+            }
+        }
+
+        savingsRateList.pop();
+
+        delete savingsRate[saving_];
+
+        emit SavingsRateRevoked(address(saving_));
+    }
+
     // ============================ Internal Functions =============================
 
     /// @notice PrepareReturn the Strategy, recognizing any profits or losses
@@ -199,7 +228,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
             // TODO instead of reverting we can just continue without doing the report part and just the `adjustPosition`
         }
 
-        SavingsRate[] memory savingsRateMem = savingsRate;
+        ISavingsRate[] memory savingsRateMem = savingsRateList;
 
         uint256 debtOutstanding;
         for (uint256 i = 0; i < savingsRateMem.length; i++) {
