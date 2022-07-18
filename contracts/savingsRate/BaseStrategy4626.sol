@@ -52,6 +52,11 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     }
 
     /// @notice Revert if the caller is not a whitelisted savingsRate
+    function savingsRateActive() external view returns (SavingsRate[] memory) {
+        return savingsRate;
+    }
+
+    /// @notice Revert if the caller is not a whitelisted savingsRate
     function isSavingsRate() public view onlySavingsRate {}
 
     /// @notice Computes the total amount of underlying tokens the SavingsRate holds.
@@ -165,16 +170,15 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /// @notice PrepareReturn the Strategy, recognizing any profits or losses
     /// @dev In the rare case the Strategy is in emergency shutdown, this will exit
     /// the Strategy's position.
-    /// @dev  When `_report()` is called, the Strategy reports to the Manager (via
-    /// `poolManager.report()`), so in some cases `harvest()` must be called in order
-    /// to take in profits, to borrow newly available funds from the Manager, or
+    /// @dev  When `_report()` is called, the Strategy reports to the vaults,
+    /// so in some cases `harvest()` must be called in order to take in profits,
+    /// to borrow newly available funds from the vaults, or
     /// otherwise adjust its position. In other cases `harvest()` must be
-    /// called to report to the Manager on the Strategy's position, especially if
+    /// called to report to the vaults on the Strategy's position, especially if
     /// any losses have occurred.
-    /// @dev As keepers may directly profit from this function, there may be front-running problems with miners bots,
-    /// we may have to put an access control logic for this function to only allow white-listed addresses to act
-    /// as keepers for the protocol
-    /// TODO can be done better(?), like right now they report to all SavingsRates but this seems too much
+    /// @dev Currently the only vault that will adjust its position is the one from which
+    /// the harvest happened, the others one will need to harvest to adjust their positions
+    /// @dev Called by any harvest with no limitations, vesting should limit manipulation, but lets be cautious
     function _report()
         public
         onlySavingsRate
@@ -192,6 +196,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         } else {
             // We know this harvest is not the first in the window so we need to ensure it's within it.
             require(block.timestamp <= lastHarvestWindowStart + harvestWindow, "BAD_HARVEST_TIME");
+            // TODO instead of reverting we can just continue without doing the report part and just the `adjustPosition`
         }
 
         SavingsRate[] memory savingsRateMem = savingsRate;
@@ -275,7 +280,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         uint256 assets,
         uint256 loss,
         uint256 shares
-    ) private onlySavingsRate {
+    ) internal onlySavingsRate {
         if (caller != owner) {
             _spendAllowance(owner, caller, shares);
         }
@@ -296,7 +301,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /** @dev See {ERC20Upgradeable-_afterTokenTransfer} */
     function _afterTokenTransfer(
         address from,
-        address to,
+        address,
         uint256
     ) internal override {
         // mint, check if free returns are left, and re-invest them

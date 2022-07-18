@@ -120,6 +120,8 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @param strategiesToHarvest List of strategies to harvest
     /// @dev Let the process of `report` and `adjustPosition`, because coupling both in a generic manner
     /// is not obvious
+    /// TODO we can have another function to do everuthing except the rport phase (which acknowledge profit/loss on one strategy)
+    /// because if the strategies got harvested on other vaults, report is useless and expensive
     function harvest(IStrategy4626[] memory strategiesToHarvest) public {
         for (uint256 i = 0; i < strategiesToHarvest.length; i++) {
             strategiesToHarvest[i].report();
