@@ -289,6 +289,9 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     function adjustPosition(IStrategy4626[] memory strategyToAdjust) internal {
         uint256 managedAssets_ = managedAssets();
 
+        uint256 positiveChangedDebt;
+        uint256 negativeChangedDebt;
+
         for (uint256 i = 0; i < strategyToAdjust.length; i++) {
             // Losses are generally not well taken into account
             uint256 maxWithdraw = strategyToAdjust[i].maxWithdraw(address(this));
@@ -308,14 +311,14 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
                 // If the strategy has some credit left, tokens can be transferred to this strategy
                 uint256 available = Math.min(target - params.totalStrategyDebt, getBalance());
                 params.totalStrategyDebt = params.totalStrategyDebt + available;
-                totalDebt += available;
+                positiveChangedDebt += available;
                 if (available > 0) {
                     strategyToAdjust[i].deposit(available, address(this));
                 }
             } else {
                 uint256 available = Math.min(params.totalStrategyDebt - target, maxWithdraw);
                 params.totalStrategyDebt = params.totalStrategyDebt - available;
-                totalDebt -= available;
+                negativeChangedDebt += available;
                 if (available > 0) {
                     uint256 withdrawLoss = strategyToAdjust[i].withdraw(available, address(this), address(this));
                     // TODO There will be no loss here because the funds should be already free
@@ -324,6 +327,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
                 }
             }
         }
+        totalDebt = totalDebt + positiveChangedDebt - negativeChangedDebt;
     }
 
     // ===================== Internal functions ==========================
