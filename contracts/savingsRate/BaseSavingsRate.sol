@@ -258,16 +258,6 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         emit StrategyRevoked(address(strategy));
     }
 
-    /// @notice Triggers an emergency exit for a strategy and then harvests it to fetch all the funds
-    /// @param strategy The address of the `Strategy`
-    function setStrategyEmergencyExit(IStrategy4626 strategy) external onlyGovernorOrGuardian {
-        _updateStrategyDebtRatio(strategy, 0);
-        strategy.setEmergencyExit();
-        IStrategy4626[] memory strategiesToHarvest = new IStrategy4626[](1);
-        strategiesToHarvest[0] = strategy;
-        harvest(strategiesToHarvest);
-    }
-
     /// @notice Changes allowance of a set of tokens to addresses
     /// @param spenders Addresses to approve
     /// @param amounts Approval amounts for each address

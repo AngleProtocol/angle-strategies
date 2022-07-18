@@ -148,13 +148,11 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     // ============================ Setters =============================
 
     /// @notice Activates emergency exit. Once activated, the Strategy will exit its
-    /// position upon the next harvest, depositing all funds into the Manager as
-    /// quickly as is reasonable given on-chain conditions.
-    /// @dev This may only be called by the `savingsRate`'s, because when calling this the `savingsRate` should at the same
-    /// time update the debt ratio
+    /// position upon the next harvest, letting capital sitting idle for all related vaults to
+    /// withdraw their positions
+    /// @dev This should only be called when all `savingsRate`'s set their debt ratio to 0,
     /// @dev This function can only be called once by the `savingsRate` contract
-    /// @dev See `savingsRate.setEmergencyExit()` and `harvest()` for further details.
-    function setEmergencyExit() external onlySavingsRate {
+    function setEmergencyExit() external onlyGovernorOrGuardian {
         emergencyExit = true;
         emit EmergencyExitActivated();
     }
