@@ -13,8 +13,12 @@ contract SavingsRateNoBoost is BaseSavingsRate {
     using Address for address;
     using MathUpgradeable for uint256;
 
-    function initialize(ICoreBorrow _coreBorrow, IERC20MetadataUpgradeable _token) external {
-        _initialize(_coreBorrow, _token);
+    function initialize(
+        ICoreBorrow _coreBorrow,
+        IERC20MetadataUpgradeable _token,
+        string memory suffixName
+    ) external {
+        _initialize(_coreBorrow, _token, suffixName);
     }
 
     // ============================== View functions ===================================
@@ -44,8 +48,8 @@ contract SavingsRateNoBoost is BaseSavingsRate {
         (assets, loss) = _beforeWithdraw(assets);
 
         uint256 assetsTrueCost = assets + loss;
-        require(assetsTrueCost <= maxWithdraw(owner), "ERC4626: withdraw more than max");
         uint256 shares = _convertToShares(assetsTrueCost, MathUpgradeable.Rounding.Up);
+        if (shares > balanceOf(owner)) revert WithdrawLimit();
         _withdraw(_msgSender(), receiver, owner, assets, shares);
 
         return shares;
@@ -57,7 +61,7 @@ contract SavingsRateNoBoost is BaseSavingsRate {
         address receiver,
         address owner
     ) public virtual override returns (uint256) {
-        require(shares <= maxRedeem(owner), "ERC4626: redeem more than max");
+        require(shares <= balanceOf(owner), "ERC4626: redeem more than max");
         uint256 assets = _convertToAssets(shares, MathUpgradeable.Rounding.Down);
         uint256 loss;
         uint256 freedAssets;
@@ -94,11 +98,6 @@ contract SavingsRateNoBoost is BaseSavingsRate {
     function _handleUserLoss(uint256 loss) internal override {
         // Decrease newTotalDebt, this impacts the `totalAssets()` call --> loss directly implied when withdrawing
         totalDebt -= loss;
-    }
-
-    /// @notice Useless when there is no boost
-    function _claim(address) internal pure override returns (uint256) {
-        return 0;
     }
 
     /// @notice Useless when there is no boost

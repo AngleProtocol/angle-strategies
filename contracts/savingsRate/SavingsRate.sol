@@ -16,10 +16,11 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     function initialize(
         ICoreBorrow _coreBorrow,
         IERC20MetadataUpgradeable _token,
+        string memory suffixName,
         IVotingEscrow _votingEscrow,
         IVotingEscrowBoost _veBoostProxy
     ) external {
-        _initialize(_coreBorrow, _token);
+        _initialize(_coreBorrow, _token, suffixName);
         votingEscrow = _votingEscrow;
         veBoostProxy = _veBoostProxy;
     }
@@ -54,8 +55,8 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         uint256 shares;
         uint256 assetsTrueCost = assets + loss;
         if (ownerReward < assetsTrueCost) {
-            require(assetsTrueCost - ownerReward <= maxWithdraw(owner), "ERC4626: withdraw more than max");
             shares = _convertToShares(assetsTrueCost - ownerReward, MathUpgradeable.Rounding.Up);
+            if (shares > balanceOf(owner)) revert WithdrawLimit();
             rewardBalances[owner] -= ownerReward;
         } else {
             rewardBalances[owner] -= assets;
@@ -72,7 +73,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         address receiver,
         address owner
     ) public virtual override returns (uint256) {
-        uint256 ownerTotalShares = maxRedeem(owner);
+        uint256 ownerTotalShares = balanceOf(owner);
         require(shares <= ownerTotalShares, "ERC4626: redeem more than max");
 
         uint256 ownerReward = _claim(owner);
@@ -143,6 +144,8 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     /// @notice Sets a new fee percentage.
     /// @param tokenlessProduction_ The new tokenlessProduction, which efectively set the boost in `_updateLiquidityLimit`
     /// TODO not as easy --> we need to update everyones boost, if we lower the max boost then nobody is going to call it
+    /// TODO to solve the above issue we need to add a scaling factor that is always multiplier to the working balances - both individual and global
+    /// whenever we look at it and change this scaling factor whenever the tokenless production changes
     function setTokenlessProduction(uint256 tokenlessProduction_) external onlyGovernor {
         // A fee percentage over 100% doesn't make sense.
         if (tokenlessProduction_ >= BASE_PARAMS) revert ProtocolFeeTooHigh();
@@ -170,7 +173,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     /// @notice Claims earned rewards
     /// @param from Address to claim for
     /// @return Transferred amount to `from`
-    function _claim(address from) internal override returns (uint256) {
+    function _claim(address from) internal returns (uint256) {
         _updateAccumulator(from);
         return _updateRewardBalance(from);
     }

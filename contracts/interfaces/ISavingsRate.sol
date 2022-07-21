@@ -10,10 +10,6 @@ import "@openzeppelin/contracts-upgradeable/interfaces/IERC4626Upgradeable.sol";
 interface ISavingsRate is IERC4626Upgradeable {
     function estimatedAPR() external view returns (uint256);
 
-    function debtOutstanding(address strategy) external view returns (uint256);
-
-    function setEmergencyExit() external;
-
     function isVault() external;
 
     function report() external;

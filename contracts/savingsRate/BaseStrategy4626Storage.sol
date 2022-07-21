@@ -53,7 +53,7 @@ contract BaseStrategy4626Storage is ERC4626Upgradeable {
 
     // ================================ Events ===================================
 
-    event Harvested(uint256 profit, uint256 loss, uint256 debtPayment, uint256 debtOutstanding);
+    event Harvested(uint256 profit, uint256 loss, uint256 debt, address indexed vault);
     event EmergencyExitActivated();
     event SavingsRateActivated(address indexed saving);
     event SavingsRateRevoked(address indexed saving);

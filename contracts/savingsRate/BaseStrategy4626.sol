@@ -9,7 +9,8 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     using SafeERC20 for IERC20;
 
     /// @notice Constructor of the `BaseStrategyERC4626`
-    function _initialize(ISavingsRate[] memory _savingsRate) internal initializer {
+    function _initialize(ISavingsRate[] memory _savingsRate, ICoreBorrow coreBorrow_) internal initializer {
+        coreBorrow = coreBorrow_;
         savingsRateList = _savingsRate;
         for (uint256 i = 0; i < _savingsRate.length; i++) {
             savingsRate[_savingsRate[i]] = true;
@@ -195,6 +196,9 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     // ============================ Internal Functions =============================
 
     /// @notice PrepareReturn the Strategy, recognizing any profits or losses
+    /// @param _vaultCallerDebtOutstanding will be 0 if the Strategy is not past the configured
+    /// debt limit, otherwise its value will be how far past the debt limit
+    /// the Strategy is.
     /// @dev In the rare case the Strategy is in emergency shutdown, this will exit
     /// the Strategy's position.
     /// @dev  When `_report()` is called, the Strategy reports to the vaults,
@@ -206,14 +210,13 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /// @dev Currently the only vault that will adjust its position is the one from which
     /// the harvest happened, the others one will need to harvest to adjust their positions
     /// @dev Called by any harvest with no limitations, vesting should limit manipulation, but lets be cautious
-    function _report()
+    /// TODO 2 options here: we can withdraw enough for all vaults connected to the strategies to recover the debtOutstanding
+    /// or we can just free funds only for the vault caller.
+    /// Option 2 is more gas efficient if harvest in different strategies are not made to be called in a raw
+    function _report(uint256 _vaultCallerDebtOutstanding)
         public
         onlySavingsRate
-        returns (
-            uint256 profit,
-            uint256 loss,
-            uint256 debtPayment
-        )
+        returns (uint256 profit, uint256 loss)
     {
         // If this is the first harvest after the last window:
         if (block.timestamp >= lastHarvest + harvestDelay) {
@@ -226,28 +229,23 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
             // TODO instead of reverting we can just continue without doing the report part and just the `adjustPosition`
         }
 
-        ISavingsRate[] memory savingsRateMem = savingsRateList;
-
-        uint256 debtOutstanding;
-        for (uint256 i = 0; i < savingsRateMem.length; i++) {
-            debtOutstanding += savingsRateMem[i].debtOutstanding(address(this));
-        }
+        uint256 currentDebt = totalStrategyHoldings;
 
         if (emergencyExit) {
             // Free up as much capital as possible
             uint256 amountFreed = _liquidateAllPositions();
-            if (amountFreed < debtOutstanding) {
-                loss = debtOutstanding - amountFreed;
-            } else if (amountFreed > debtOutstanding) {
-                profit = amountFreed - debtOutstanding;
+            if (amountFreed < currentDebt) {
+                loss = currentDebt - amountFreed;
+            } else if (amountFreed > currentDebt) {
+                profit = amountFreed - currentDebt;
             }
-            debtPayment = debtOutstanding - loss;
         } else {
             // Free up returns for savingsRate to pull
-            (profit, loss, debtPayment) = _prepareReturn(debtOutstanding);
+            (profit, loss) = _prepareReturn(_vaultCallerDebtOutstanding);
         }
-        emit Harvested(profit, loss, debtPayment, debtOutstanding);
-        totalStrategyHoldings += profit - loss - debtPayment;
+        emit Harvested(profit, loss, _vaultCallerDebtOutstanding, msg.sender);
+        // It won't revert as long as there are enough funds to cover for the losses
+        totalStrategyHoldings += profit - loss;
 
         // loss is directly removed from the totalHoldings
         // Update max unlocked profit based on any remaining locked profit plus new profit.
@@ -344,13 +342,14 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /// should be optimized to minimize losses as much as possible.
     ///
     /// This method returns any realized profits and/or realized losses
-    /// incurred, and should return the total amounts of profits/losses/debt
-    /// payments (in `want` tokens) for the Manager's accounting (e.g.
-    /// `want.balanceOf(this) >= _debtPayment + _profit`).
+    /// incurred, and should return the total amounts of profits/losses
+    /// payments (in `want` tokens) for the strategy's accounting in the total assets
     ///
     /// `_debtOutstanding` will be 0 if the Strategy is not past the configured
     /// debt limit, otherwise its value will be how far past the debt limit
     /// the Strategy is. The Strategy's debt limit is configured in the Manager.
+    ///
+    /// `_debt` Represent the vault previous liabilities to its lenders a.k.a `savings`.
     ///
     /// NOTE: `_debtPayment` should be less than or equal to `_debtOutstanding`.
     ///       It is okay for it to be less than `_debtOutstanding`, as that
@@ -358,15 +357,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     ///       Payments should be made to minimize loss from slippage, debt,
     ///       withdrawal fees, etc.
     ///
-    /// See `poolManager.debtOutstanding()`.
-    function _prepareReturn(uint256 _debtOutstanding)
-        internal
-        virtual
-        returns (
-            uint256 _profit,
-            uint256 _loss,
-            uint256 _debtPayment
-        );
+    function _prepareReturn(uint256 _debtOutstanding) internal virtual returns (uint256 _profit, uint256 _loss);
 
     /// @notice Performs any adjustments to the core position(s) of this Strategy given
     /// what change the Manager made in the "investable capital" available to the

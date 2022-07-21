@@ -5,8 +5,6 @@ import "../interfaces/ICoreBorrow.sol";
 import "../interfaces/IStrategy4626.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts-upgradeable/interfaces/IERC20MetadataUpgradeable.sol";
-// TODO changed to ERC4626 when the package is updated
-// The only difference is that the `_deposit` and the `_withdraw` will be internal virtual instead of private
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -117,6 +115,7 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
     error LossShouldbe0();
     error SlippageProtection();
     error IncompatibleLengths();
+    error WithdrawLimit();
 
     /// TODO need to count number of slot used
     uint256[50] private __gapBaseSavingsRate;

@@ -12,11 +12,15 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     using Address for address;
     using MathUpgradeable for uint256;
 
-    function _initialize(ICoreBorrow _coreBorrow, IERC20MetadataUpgradeable _token) internal initializer {
+    function _initialize(
+        ICoreBorrow _coreBorrow,
+        IERC20MetadataUpgradeable _token,
+        string memory suffixName
+    ) internal initializer {
         __ERC20_init_unchained(
             // Angle token Wrapper
             string(abi.encodePacked("Angle ", _token.name(), " Wrapper")),
-            string(abi.encodePacked("aw", _token.symbol()))
+            string(abi.encodePacked("aw", _token.symbol(), " ", suffixName))
         );
         __ERC4626_init_unchained(_token);
         coreBorrow = _coreBorrow;
@@ -63,19 +67,84 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @notice Returns this `vault`'s directly available reserve of collateral (not including what has been lent)
     function managedAssets() public view virtual returns (uint256);
 
-    /// @notice Tells a strategy how much it owes to this `PoolManager`
+    /// @notice Provides an estimated Annual Percentage Rate for SLPs based on lending to other protocols
+    /// @dev This function is an estimation and is made for external use only
+    /// @dev This does not take into account transaction fees which accrue to SLPs too
+    /// @dev This can be manipulated by a flash loan attack (SLP deposit/ withdraw) via `_getTotalAsset`
+    /// when entering you should make sure this hasn't be called by a flash loan and look
+    /// at a mean of past APR.
+    function estimatedAPR() external view returns (uint256 apr) {
+        apr = 0;
+        uint256 protocolFee_ = protocolFee;
+        IStrategy4626[] memory strategyListMem = strategyList;
+
+        for (uint256 i = 0; i < strategyListMem.length; i++) {
+            apr =
+                apr +
+                (strategies[strategyListMem[i]].debtRatio * IStrategy4626(strategyListMem[i]).estimatedAPR()) /
+                BASE_PARAMS;
+        }
+        apr = (apr * (BASE_PARAMS - protocolFee_)) / BASE_PARAMS;
+    }
+
+    /// @notice Tells a strategy how much it owes to this `vault`
     /// @param strategy Strategy to consider in the call
+    /// @param _managedAssets `asset` available for strategies - you can also set it to 0 to recompute it
     /// @return Amount of token a strategy has to reimburse
     /// @dev Manipulating `_getTotalAsset` with a flashloan will only
     /// result in tokens being transferred at the cost of the caller
-    function debtOutstanding(address strategy) external view returns (uint256) {
-        StrategyParams storage params = strategies[IStrategy4626(strategy)];
+    function debtOutstanding(IStrategy4626 strategy, uint256 _managedAssets) internal view returns (uint256) {
+        if (_managedAssets == 0) _managedAssets = managedAssets();
 
-        uint256 target = (totalAssets() * params.debtRatio) / BASE_PARAMS;
+        StrategyParams storage params = strategies[strategy];
+
+        uint256 target = (_managedAssets * params.debtRatio) / BASE_PARAMS;
 
         if (target > params.totalStrategyDebt) return 0;
 
         return (params.totalStrategyDebt - target);
+    }
+
+    /** @dev See {IERC4262-maxWithdraw}. */
+    function maxWithdraw(address owner) public view override returns (uint256) {
+        uint256 maxAsset = _convertToAssets(balanceOf(owner), MathUpgradeable.Rounding.Down) +
+            _claimableRewardsOf(owner);
+        // To fit in the interface, we consider only the `want` balance directly available
+        // The interface state to underestimate the withdrawal amount, but this come at the cost
+        // to be far from optimal in the estimation
+        return Math.min(maxAsset, getBalance());
+    }
+
+    /** @dev See {IERC4262-maxRedeem}. */
+    function maxRedeem(address owner) public view virtual override returns (uint256) {
+        uint256 contractBalance = getBalance();
+        uint256 shares = balanceOf(owner);
+
+        if (shares == 0) return 0;
+
+        uint256 assets = _convertToAssets(shares, MathUpgradeable.Rounding.Down);
+        uint256 reward = _claimableRewardsOf(owner);
+        // To fit in the interface, we consider only the `want` balance directly available
+        // The interface state to underestimate the withdrawal amount, but this come at the cost
+        // to be far from optimal in the estimation
+        if (contractBalance > reward + assets) {
+            return shares;
+        } else if (contractBalance > reward) {
+            // total supply can only be > 0 as the owner have shares
+            uint256 totalSupply_ = totalSupply();
+            uint256 totalAssets_ = totalAssets();
+            uint256 shareBase = 10**decimals();
+            uint256 proportionAssetPerShare = shareBase.mulDiv(totalAssets_, totalSupply_, MathUpgradeable.Rounding.Up);
+            uint256 proportionReward = shareBase.mulDiv(reward, shares, MathUpgradeable.Rounding.Up);
+            uint256 maxShares = contractBalance.mulDiv(
+                shareBase,
+                proportionAssetPerShare + proportionReward,
+                MathUpgradeable.Rounding.Down
+            );
+            return maxShares;
+        } else {
+            return 0;
+        }
     }
 
     /** @dev See {IERC4262-previewWithdraw}. */
@@ -91,7 +160,9 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /** @dev See {IERC4262-previewWithdraw}. */
     function previewWithdraw(address owner, uint256 assets) public view returns (uint256) {
         uint256 ownerReward = _claimableRewardsOf(owner);
-        /// TODO can we take into account possible losses? Looks hard
+        /// TODO doesn't follow interfaces as this returns a number of shares <= what will be burnt through a `withdraw`
+        /// because impossible to the know the losses we will incur.
+        /// If there could be a slippage factor given by the user it would make it possible to find a lower bound
         if (assets >= ownerReward) {
             return _convertToShares(assets - ownerReward, MathUpgradeable.Rounding.Up);
         } else {
@@ -101,10 +172,11 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
 
     /** @dev See {IERC4262-previewRedeem}. */
     function previewRedeem(address owner, uint256 shares) public view returns (uint256) {
-        uint256 ownerTotalShares = maxRedeem(owner);
+        uint256 ownerTotalShares = balanceOf(owner);
         uint256 ownerReward = _claimableRewardsOf(owner);
         uint256 ownerRewardShares = (ownerReward * shares) / ownerTotalShares;
-        /// TODO can we take into account possible losses? Looks hard
+        /// TODO doesn't follow interfaces as this returns a number of assets > what will be sent through a `redeem`
+        /// as it doesn't take into account a loss
         return _convertToAssets(shares, MathUpgradeable.Rounding.Down) + ownerRewardShares;
     }
 
@@ -120,24 +192,29 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @param strategiesToHarvest List of strategies to harvest
     /// @dev Let the process of `report` and `adjustPosition`, because coupling both in a generic manner
     /// is not obvious
-    /// TODO we can have another function to do everuthing except the rport phase (which acknowledge profit/loss on one strategy)
-    /// because if the strategies got harvested on other vaults, report is useless and expensive
+    /// TODO we can have another function to do everything except the report phase (which acknowledge profit/loss on one strategy) and free funds if needed
+    /// because if the strategies got harvested on other vaults, report can be useless and expensive
+    /// If doing it we can group the function with the 2 belows into 1, with an enum for instance
     function harvest(IStrategy4626[] memory strategiesToHarvest) public {
+        uint256 managedAssets_ = managedAssets();
+        uint256 _debtOutstanding;
         for (uint256 i = 0; i < strategiesToHarvest.length; i++) {
-            strategiesToHarvest[i].report();
+            if (strategies[strategiesToHarvest[i]].lastReport == 0) revert StrategyDoesNotExist();
+            _debtOutstanding = debtOutstanding(strategiesToHarvest[i], managedAssets_);
+            strategiesToHarvest[i].report(_debtOutstanding);
         }
-        int256 totalProfitLossAccrued;
-        totalProfitLossAccrued = _updateMultiStrategiesBalances(strategiesToHarvest);
+
+        int256 totalProfitLossAccrued = _updateMultiStrategiesBalances(strategiesToHarvest);
         _accumulate(totalProfitLossAccrued);
-        adjustPosition(strategiesToHarvest);
+        adjustPosition(strategiesToHarvest, managedAssets_);
     }
 
     /// @notice Update distributable rewards made from all strategies
     /// @dev Do not allow partial accumulation (on a sub set of strategies)
     /// to limit risks on only acknowledging profits
-    /// @dev The only possibility to acknowledge a loss is if one of the strategy incurred
-    /// a loss and this strategy was harvest by another vault
     /// TODO It can actually be done via harvesting specific strategies
+    /// @dev The only possibility to acknowledge a loss is if one of the strategy incurred
+    /// a loss and this strategy was harvested by another vault
     function accumulate() external {
         IStrategy4626[] memory activeStrategies = strategyList;
         int256 totalProfitLossAccrued = _updateMultiStrategiesBalances(activeStrategies);
@@ -261,11 +338,15 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @notice Changes allowance of a set of tokens to addresses
     /// @param spenders Addresses to approve
     /// @param amounts Approval amounts for each address
-    function changeAllowance(address[] calldata spenders, uint256[] calldata amounts) external onlyGovernorOrGuardian {
-        if (spenders.length != amounts.length) revert IncompatibleLengths();
+    function changeAllowance(
+        IERC20[] calldata tokens,
+        address[] calldata spenders,
+        uint256[] calldata amounts
+    ) external onlyGovernorOrGuardian {
+        if (tokens.length != amounts.length && spenders.length != amounts.length) revert IncompatibleLengths();
         for (uint256 i = 0; i < spenders.length; i++) {
             if (strategies[IStrategy4626(spenders[i])].lastReport == 0) revert StrategyDoesNotExist();
-            _changeAllowance(spenders[i], amounts[i]);
+            _changeAllowance(tokens[i], spenders[i], amounts[i]);
         }
     }
 
@@ -273,20 +354,19 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
 
     /// @notice Reports the gains or loss made by a strategy
     /// @param strategyToAdjust List of strategies to adjust their positions
+    /// @param managedAssets_ Total `asset` amount available
     /// @dev This is the main contact point where the strategy interacts with the `vault`
     /// @dev The strategy reports back what it has free, then the `vault` contract "decides"
     /// whether to take some back or give it more. Note that the most it can
     /// take is `gain + _debtPayment`, and the most it can give is all of the
     /// remaining reserves. Anything outside of those bounds is abnormal behavior.
-    function adjustPosition(IStrategy4626[] memory strategyToAdjust) internal {
-        uint256 managedAssets_ = managedAssets();
-
+    function adjustPosition(IStrategy4626[] memory strategyToAdjust, uint256 managedAssets_) internal {
         uint256 positiveChangedDebt;
         uint256 negativeChangedDebt;
 
         for (uint256 i = 0; i < strategyToAdjust.length; i++) {
             // Losses are generally not well taken into account
-            uint256 maxWithdraw = strategyToAdjust[i].maxWithdraw(address(this));
+            uint256 maxWithdrawal = strategyToAdjust[i].maxWithdraw(address(this));
 
             StrategyParams storage params = strategies[strategyToAdjust[i]];
             // Warning: `totalAssets` could be manipulated by flashloan attacks.
@@ -308,12 +388,12 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
                     strategyToAdjust[i].deposit(available, address(this));
                 }
             } else {
-                uint256 available = Math.min(params.totalStrategyDebt - target, maxWithdraw);
+                uint256 available = Math.min(params.totalStrategyDebt - target, maxWithdrawal);
                 params.totalStrategyDebt = params.totalStrategyDebt - available;
                 negativeChangedDebt += available;
                 if (available > 0) {
                     uint256 withdrawLoss = strategyToAdjust[i].withdraw(available, address(this), address(this));
-                    // TODO There will be no loss here because the funds should be already free
+                    // TODO There won't be loss here because the funds should be already free
                     // useless to let in prod, but useful for testing purpose
                     if (withdrawLoss != 0) revert LossShouldbe0();
                 }
@@ -326,8 +406,9 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
 
     /// @notice Accumulate profit/loss from strategies.
     /// @param activeStrategies Strategy list to consider
-    /// @dev This function is only used here to distribute the linear vesting of the strategies
-    /// @dev Profits are linearly vested while losses are disctly slashed to the `vault` capital
+    /// @dev It accrues totalProfitLossAccrued, by looking at the difference between what can be
+    /// withdrawn from the strategy and the last checkpoint on the strategy debt
+    /// @dev Profits are linearly vested while losses are directly slashed to the `vault` capital
     function _updateMultiStrategiesBalances(IStrategy4626[] memory activeStrategies)
         internal
         returns (int256 totalProfitLossAccrued)
@@ -336,34 +417,21 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
             // Get the strategy at the current index.
             IStrategy4626 strategy = activeStrategies[i];
 
-            totalProfitLossAccrued = _updateSingleStrategyBalance(strategy, totalProfitLossAccrued);
+            StrategyParams storage params = strategies[strategy];
+            uint256 debtLastCheckpoint = params.totalStrategyDebt;
+            params.lastReport = block.timestamp;
+            // strategy should be carefully design and not take into account unrealized profit
+            // If we would consider the expected value and not the vested value,
+            // the function could be manipulated by artificially creating false profit/loss.
+            uint256 balanceThisHarvest = strategy.maxWithdraw(address(this));
+
+            // Update the strategy's stored balance. Cast overflow is unrealistic.
+            params.totalStrategyDebt = balanceThisHarvest;
+
+            // Update the total profit/loss accrued since last harvest.
+            // To overflow this would asks enormous debt amounts which are in base of asset
+            totalProfitLossAccrued += int256(balanceThisHarvest) - int256(debtLastCheckpoint);
         }
-    }
-
-    /// @notice Accumulate profit/loss for a specific strategy.
-    /// @param strategy Strategy to accumulate for
-    /// @dev It accrues totalProfitLossAccrued, by looking at the difference between what can be
-    /// withdraw from the strategy and the last checkpoint on the strategy debt
-    function _updateSingleStrategyBalance(IStrategy4626 strategy, int256 totalProfitLossAccrued)
-        internal
-        returns (int256)
-    {
-        StrategyParams storage params = strategies[strategy];
-        uint256 debtLastCheckpoint = params.totalStrategyDebt;
-        params.lastReport = block.timestamp;
-        // strategy should be carefully design and not take into account unrealized profit
-        // If we would consider the expected value and not the vested value,
-        // the function could be manipulated by artificially creating false profit/loss.
-        uint256 balanceThisHarvest = strategy.maxWithdraw(address(this));
-
-        // Update the strategy's stored balance. Cast overflow is unrealistic.
-        params.totalStrategyDebt = balanceThisHarvest;
-
-        // Update the total profit/loss accrued since last harvest.
-        // To overflow this would asks enormous debt amounts which are in base of asset
-        totalProfitLossAccrued += int256(balanceThisHarvest) - int256(debtLastCheckpoint);
-
-        return totalProfitLossAccrued;
     }
 
     /// @notice Distribute profit/loss to the users and protocol.
@@ -413,12 +481,13 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @dev Burning yield bearing tokens owned by the governance
     /// if it is not enough keep track of the bad debt
     function _handleProtocolLoss(uint256 loss) internal {
-        uint256 claimableProtocolRewards = maxWithdraw(address(this));
+        address surplusOwner = surplusManager;
+        uint256 claimableProtocolRewards = _convertToAssets(balanceOf(surplusManager), MathUpgradeable.Rounding.Down);
         if (claimableProtocolRewards >= loss) {
-            _burn(address(this), _convertToShares(loss, MathUpgradeable.Rounding.Down));
+            _burn(surplusOwner, _convertToShares(loss, MathUpgradeable.Rounding.Down));
         } else {
             protocolLoss += loss - claimableProtocolRewards;
-            _burn(address(this), balanceOf(address(this)));
+            _burn(surplusOwner, balanceOf(address(this)));
         }
     }
 
@@ -429,11 +498,6 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @notice Propagates a user side loss
     /// @param loss Loss to propagate
     function _handleUserLoss(uint256 loss) internal virtual;
-
-    /// @notice Claims earned rewards
-    /// @param from Address to claim for
-    /// @return Transferred amount to `from`
-    function _claim(address from) internal virtual returns (uint256);
 
     /// @notice Helper to estimate claimble rewards for a specific user
     /// @param from Address to check rewards from
@@ -530,15 +594,19 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     }
 
     /// @notice Changes allowance of a set of tokens to addresses
+    /// @param token ERC20 token to perform the approval on
     /// @param spender Address to approve
     /// @param amount Approval amount
-    function _changeAllowance(address spender, uint256 amount) internal {
-        IERC20 asset = IERC20(asset());
-        uint256 currentAllowance = asset.allowance(address(this), address(spender));
+    function _changeAllowance(
+        IERC20 token,
+        address spender,
+        uint256 amount
+    ) internal {
+        uint256 currentAllowance = token.allowance(address(this), address(spender));
         if (currentAllowance < amount) {
-            asset.safeIncreaseAllowance(address(spender), amount - currentAllowance);
+            token.safeIncreaseAllowance(address(spender), amount - currentAllowance);
         } else if (currentAllowance > amount) {
-            asset.safeDecreaseAllowance(address(spender), currentAllowance - amount);
+            token.safeDecreaseAllowance(address(spender), currentAllowance - amount);
         }
     }
 }
