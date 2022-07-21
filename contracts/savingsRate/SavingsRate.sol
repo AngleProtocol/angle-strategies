@@ -18,11 +18,13 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         IERC20MetadataUpgradeable _token,
         string memory suffixName,
         IVotingEscrow _votingEscrow,
-        IVotingEscrowBoost _veBoostProxy
+        IVotingEscrowBoost _veBoostProxy,
+        uint256 tokenlessProduction_
     ) external {
         _initialize(_coreBorrow, _token, suffixName);
         votingEscrow = _votingEscrow;
         veBoostProxy = _veBoostProxy;
+        tokenlessProduction = tokenlessProduction_;
     }
 
     // ============================== View functions ===================================
@@ -105,7 +107,9 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     /// @return rewardBalance `msg.sender` reward balance at the end of the function
     function checkpoint() external returns (uint256 rewardBalance) {
         rewardBalance = _claim(msg.sender);
-        _updateLiquidityLimit(msg.sender, balanceOf(msg.sender), totalSupply());
+
+        uint256 votingTotal = IERC20(address(votingEscrow)).totalSupply();
+        _updateLiquidityLimit(msg.sender, balanceOf(msg.sender), totalSupply(), votingTotal);
     }
 
     /// @notice Helper to estimate claimble rewards for a specific user
@@ -135,17 +139,17 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         if (workingBalances[addr] <= (_balance * tokenlessProduction) / 100) revert KickNotNeeded();
 
         uint256 totalSupply = totalSupply();
+        uint256 votingTotal = IERC20(address(votingEscrow)).totalSupply();
         _claim(addr);
-        _updateLiquidityLimit(addr, balanceOf(addr), totalSupply);
+        _updateLiquidityLimit(addr, balanceOf(addr), totalSupply, votingTotal);
     }
 
     // ============================== Governance functions ===================================
 
     /// @notice Sets a new fee percentage.
     /// @param tokenlessProduction_ The new tokenlessProduction, which efectively set the boost in `_updateLiquidityLimit`
-    /// TODO not as easy --> we need to update everyones boost, if we lower the max boost then nobody is going to call it
-    /// TODO to solve the above issue we need to add a scaling factor that is always multiplier to the working balances - both individual and global
-    /// whenever we look at it and change this scaling factor whenever the tokenless production changes
+    /// @dev Not as easy --> we need to update everyones boost, if we lower the max boost then nobody is going to call it
+    /// Therefore after the tx passed for all users governance should call `governanceKick`
     function setTokenlessProduction(uint256 tokenlessProduction_) external onlyGovernor {
         // A fee percentage over 100% doesn't make sense.
         if (tokenlessProduction_ >= BASE_PARAMS) revert ProtocolFeeTooHigh();
@@ -153,6 +157,19 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         tokenlessProduction = tokenlessProduction_;
 
         emit TokenlessProductionUpdated(msg.sender, tokenlessProduction_);
+    }
+
+    /// @notice Update working balances when there is an update on the tokenless production parameters
+    /// @param addrs List of address to update balances of
+    /// @dev Governance should make sure to call it on all owners
+    function governanceKick(address[] memory addrs) external onlyGovernor {
+        uint256 totalSupply = totalSupply();
+        uint256 votingTotal = IERC20(address(votingEscrow)).totalSupply();
+
+        for (uint256 i = 0; i < addrs.length; i++) {
+            _claim(addrs[i]);
+            _updateLiquidityLimit(addrs[i], balanceOf(addrs[i]), totalSupply, votingTotal);
+        }
     }
 
     // ===================== Internal functions ==========================
@@ -240,8 +257,9 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         uint256
     ) internal override {
         uint256 totalSupply_ = totalSupply();
-        if (from != address(0)) _updateLiquidityLimit(from, balanceOf(from), totalSupply_);
-        if (to != address(0)) _updateLiquidityLimit(to, balanceOf(to), totalSupply_);
+        uint256 votingTotal = IERC20(address(votingEscrow)).totalSupply();
+        if (from != address(0)) _updateLiquidityLimit(from, balanceOf(from), totalSupply_, votingTotal);
+        if (to != address(0)) _updateLiquidityLimit(to, balanceOf(to), totalSupply_, votingTotal);
     }
 
     /// @notice Calculate limits which depend on the amount of veANGLE token per-user.
@@ -250,6 +268,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     /// @param addr User address
     /// @param userShares User's vault shares
     /// @param totalShares Total vault shares
+    /// @param votingTotal Total supply of ve tokens
     /// @dev To be called after totalSupply is updated
     /// @dev We can add any other metric that seems suitable to adapt working balances
     /// Here we only take into account the veANGLE balances, but we can also add a parameter on
@@ -257,10 +276,10 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     function _updateLiquidityLimit(
         address addr,
         uint256 userShares,
-        uint256 totalShares
+        uint256 totalShares,
+        uint256 votingTotal
     ) internal {
         uint256 votingBalance = veBoostProxy.adjusted_balance_of(addr);
-        uint256 votingTotal = IERC20(address(votingEscrow)).totalSupply();
 
         uint256 lim = (userShares * tokenlessProduction) / 100;
         if (votingTotal > 0) lim += (((totalShares * votingBalance) / votingTotal) * (100 - tokenlessProduction)) / 100;

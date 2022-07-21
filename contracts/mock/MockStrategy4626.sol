@@ -12,25 +12,13 @@ contract Strategy4626 is BaseStrategy4626 {
 
     function estimatedTotalAssets() public view override returns (uint256) {}
 
-    function poolManager() external view returns (address) {
-        return address(0);
-    }
-
     /// @notice Returns the amount of underlying tokens that idly sit in the Vault.
     /// @return The amount of underlying tokens that sit idly in the Vault.
     function availableBalance() public view returns (uint256) {
         return IERC20(asset()).balanceOf(address(this));
     }
 
-    function _prepareReturn(uint256 _debtOutstanding)
-        internal
-        override
-        returns (
-            uint256 _profit,
-            uint256 _loss,
-            uint256 _debtPayment
-        )
-    {}
+    function _prepareReturn(uint256 _debtOutstanding) internal override returns (uint256 _profit, uint256 _loss) {}
 
     function _adjustPosition() internal override {}
 

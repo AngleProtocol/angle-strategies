@@ -158,6 +158,29 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         emit EmergencyExitActivated();
     }
 
+    /// @notice Sets a new harvest delay.
+    /// @param newHarvestDelay The new harvest delay to set.
+    /// @dev If the current harvest delay is 0, meaning it has not
+    /// been set before, it will be updated immediately, otherwise
+    /// it will be scheduled to take effect after the next harvest.
+    function setHarvestDelay(uint64 newHarvestDelay) external onlyGovernorOrGuardian {
+        // A harvest delay of 0 makes harvests vulnerable to sandwich attacks.
+        if (newHarvestDelay == 0 || newHarvestDelay > 365 days) revert WrongHarvestDelay();
+
+        // If the harvest delay is 0, meaning it has not been set before:
+        if (harvestDelay == 0) {
+            // We'll apply the update immediately.
+            harvestDelay = newHarvestDelay;
+
+            emit HarvestDelayUpdated(msg.sender, newHarvestDelay);
+        } else {
+            // We'll apply the update next harvest.
+            nextHarvestDelay = newHarvestDelay;
+
+            emit HarvestDelayUpdateScheduled(msg.sender, newHarvestDelay);
+        }
+    }
+
     /// @notice Add a vault to the whitelist, allowed to interact with the strategy
     /// @param saving_ The saving rate to add
     /// @dev This may only be called by the governance or guardians as not any users
@@ -218,17 +241,6 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         onlySavingsRate
         returns (uint256 profit, uint256 loss)
     {
-        // If this is the first harvest after the last window:
-        if (block.timestamp >= lastHarvest + harvestDelay) {
-            // Set the harvest window's start timestamp.
-            // Cannot overflow 64 bits on human timescales.
-            lastHarvestWindowStart = uint64(block.timestamp);
-        } else {
-            // We know this harvest is not the first in the window so we need to ensure it's within it.
-            require(block.timestamp <= lastHarvestWindowStart + harvestWindow, "BAD_HARVEST_TIME");
-            // TODO instead of reverting we can just continue without doing the report part and just the `adjustPosition`
-        }
-
         uint256 currentDebt = totalStrategyHoldings;
 
         if (emergencyExit) {
@@ -268,9 +280,6 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         }
     }
 
-    /// @dev can't use the _afterTokenDeposit because we don't have access to 'assets' but only 'shares'
-    /// We can if we are using a less gas friendly implementation by making inverse computation to get back 'assets'
-    /// TODO test both way
     /**
      * @dev Deposit/mint common workflow
      */

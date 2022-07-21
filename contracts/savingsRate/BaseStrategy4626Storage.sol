@@ -57,6 +57,8 @@ contract BaseStrategy4626Storage is ERC4626Upgradeable {
     event EmergencyExitActivated();
     event SavingsRateActivated(address indexed saving);
     event SavingsRateRevoked(address indexed saving);
+    event HarvestDelayUpdated(address indexed sender, uint256 newHarvestDelay);
+    event HarvestDelayUpdateScheduled(address indexed sender, uint256 newHarvestDelay);
 
     error NotGovernor();
     error NotGovernorOrGuardian();
@@ -64,6 +66,7 @@ contract BaseStrategy4626Storage is ERC4626Upgradeable {
     error SavingRateKnown();
     error SavingRateUnknown();
     error StrategyInUse();
+    error WrongHarvestDelay();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}
