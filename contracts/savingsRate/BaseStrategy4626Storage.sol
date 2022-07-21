@@ -18,29 +18,6 @@ contract BaseStrategy4626Storage is ERC4626Upgradeable {
 
     /// @notice See note on `setEmergencyExit()`
     bool public emergencyExit;
-    /// @notice The period in seconds during which multiple harvests can occur
-    /// regardless if they are taking place before the harvest delay has elapsed.
-    /// @dev Long harvest windows open the SavingsRate up to profit distribution slowdown attacks.
-    /// TODO is this one really useful?
-    uint128 public harvestWindow;
-
-    /// @notice The period in seconds over which locked profit is unlocked.
-    /// @dev Cannot be 0 as it opens harvests up to sandwich attacks.
-    uint64 public harvestDelay;
-
-    /// @notice The value that will replace harvestDelay next harvest.
-    /// @dev In the case that the next delay is 0, no update will be applied.
-    uint64 public nextHarvestDelay;
-
-    /// @notice A timestamp representing when the first harvest in the most recent harvest window occurred.
-    /// @dev May be equal to lastHarvest if there was/has only been one harvest in the most last/current window.
-    uint64 public lastHarvestWindowStart;
-
-    /// @notice A timestamp representing when the most recent harvest occurred.
-    uint64 public lastHarvest;
-
-    /// @notice The amount of locked profit at the end of the last harvest.
-    uint256 public maxLockedProfit;
 
     /// @notice The strategy holdings
     uint256 public totalStrategyHoldings;
@@ -57,8 +34,6 @@ contract BaseStrategy4626Storage is ERC4626Upgradeable {
     event EmergencyExitActivated();
     event SavingsRateActivated(address indexed saving);
     event SavingsRateRevoked(address indexed saving);
-    event HarvestDelayUpdated(address indexed sender, uint256 newHarvestDelay);
-    event HarvestDelayUpdateScheduled(address indexed sender, uint256 newHarvestDelay);
 
     error NotGovernor();
     error NotGovernorOrGuardian();
@@ -66,7 +41,6 @@ contract BaseStrategy4626Storage is ERC4626Upgradeable {
     error SavingRateKnown();
     error SavingRateUnknown();
     error StrategyInUse();
-    error WrongHarvestDelay();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}

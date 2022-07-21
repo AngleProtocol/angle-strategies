@@ -52,6 +52,14 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
     /// @notice Address to redirect protocol revenues
     address public surplusManager;
 
+    /// @notice The period in seconds over which locked profit is unlocked.
+    /// @dev Cannot be 0 as it opens harvests up to sandwich attacks.
+    uint64 public harvestDelay;
+
+    /// @notice The value that will replace harvestDelay next harvest.
+    /// @dev In the case that the next delay is 0, no update will be applied.
+    uint64 public nextHarvestDelay;
+
     // =============================== Variables ===================================
 
     /// @notice The total amount of underlying tokens held in strategies at the time of the last harvest/deposit/withdraw.
@@ -72,6 +80,12 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
 
     /// @notice Unpaid loss from the protocol
     uint256 public protocolLoss;
+
+    /// @notice A timestamp representing when the most recent harvest occurred.
+    uint64 public lastHarvest;
+
+    /// @notice The amount of locked profit at the end of the last harvest.
+    uint256 public maxLockedProfit;
 
     // ================================ Mappings ===================================
 
@@ -96,6 +110,8 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
         uint256 debtPayment,
         uint256 totalDebt
     );
+    event HarvestDelayUpdated(address indexed sender, uint256 newHarvestDelay);
+    event HarvestDelayUpdateScheduled(address indexed sender, uint256 newHarvestDelay);
 
     // =============================== Errors ======================================
 
@@ -116,6 +132,7 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
     error SlippageProtection();
     error IncompatibleLengths();
     error WithdrawLimit();
+    error WrongHarvestDelay();
 
     /// TODO need to count number of slot used
     uint256[50] private __gapBaseSavingsRate;

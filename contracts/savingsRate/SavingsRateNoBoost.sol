@@ -28,12 +28,12 @@ contract SavingsRateNoBoost is BaseSavingsRate {
     /// @dev Need to be cautious on when to use `totalAssets()` and `totalDebt + getBalance()`. As when investing the money
     /// it is better to use the full balance. But we shouldn't count the rewards twice (in the rewards and in the shares)
     function totalAssets() public view override returns (uint256 totalUnderlyingHeld) {
-        totalUnderlyingHeld = totalDebt + getBalance();
+        totalUnderlyingHeld = totalDebt + getBalance() - lockedProfit();
     }
 
     /// @notice Returns this `vault`'s directly available reserve of collateral (not including what has been lent)
     function managedAssets() public view override returns (uint256) {
-        return totalAssets();
+        return totalDebt + getBalance();
     }
 
     // ====================== External permissionless functions =============================
@@ -83,6 +83,8 @@ contract SavingsRateNoBoost is BaseSavingsRate {
     /// while we can just do a dumb strategy and link it to this country, so that they all have the same interface
     function notifyRewardAmount(uint256 amount) external override {
         SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(asset()), msg.sender, address(this), amount);
+        // Update max unlocked profit based on any remaining locked profit plus new profit.
+        maxLockedProfit = (lockedProfit() + amount);
     }
 
     // ===================== Internal functions ==========================
@@ -90,6 +92,10 @@ contract SavingsRateNoBoost is BaseSavingsRate {
     /// @notice Propagates a user side gain
     /// @param gain Gain to propagate
     function _handleUserGain(uint256 gain) internal override {
+        // loss is directly removed from the totalHoldings
+        // Update max unlocked profit based on any remaining locked profit plus new profit.
+        maxLockedProfit = (lockedProfit() + gain);
+
         totalDebt += gain;
     }
 

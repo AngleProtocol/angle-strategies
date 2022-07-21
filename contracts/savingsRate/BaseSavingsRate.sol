@@ -180,6 +180,27 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         return _convertToAssets(shares, MathUpgradeable.Rounding.Down) + ownerRewardShares;
     }
 
+    /// @notice Computes the current amount of locked profit.
+    /// @return The current amount of locked profit.
+    function lockedProfit() public view returns (uint256) {
+        // Get the last harvest and harvest delay.
+        uint256 previousHarvest = lastHarvest;
+        uint256 harvestInterval = harvestDelay;
+
+        unchecked {
+            // If the harvest delay has passed, there is no locked profit.
+            // Cannot overflow on human timescales since harvestInterval is capped.
+            if (block.timestamp >= previousHarvest + harvestInterval) return 0;
+
+            // Get the maximum amount we could return.
+            uint256 maximumLockedProfit = maxLockedProfit;
+
+            // Compute how much profit remains locked based on the last harvest and harvest delay.
+            // It's impossible for the previous harvest to be in the future, so this will never underflow.
+            return maximumLockedProfit - (maximumLockedProfit * (block.timestamp - previousHarvest)) / harvestInterval;
+        }
+    }
+
     // ====================== External permissionless functions =============================
 
     /// @notice To deposit directly rewards onto the contract
@@ -207,6 +228,22 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         int256 totalProfitLossAccrued = _updateMultiStrategiesBalances(strategiesToHarvest);
         _accumulate(totalProfitLossAccrued);
         adjustPosition(strategiesToHarvest, managedAssets_);
+
+        // Update the last harvest timestamp.
+        // Cannot overflow on human timescales.
+        lastHarvest = uint64(block.timestamp);
+
+        // Get the next harvest delay.
+        uint64 newHarvestDelay = nextHarvestDelay;
+
+        // If the next harvest delay is not 0:
+        if (newHarvestDelay != 0) {
+            // Update the harvest delay.
+            harvestDelay = newHarvestDelay;
+
+            // Reset the next harvest delay.
+            nextHarvestDelay = 0;
+        }
     }
 
     /// @notice Update distributable rewards made from all strategies
@@ -293,6 +330,29 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         strategistFee = strategistFee_;
 
         emit StrategistFeeUpdated(msg.sender, strategistFee_);
+    }
+
+    /// @notice Sets a new harvest delay.
+    /// @param newHarvestDelay The new harvest delay to set.
+    /// @dev If the current harvest delay is 0, meaning it has not
+    /// been set before, it will be updated immediately, otherwise
+    /// it will be scheduled to take effect after the next harvest.
+    function setHarvestDelay(uint64 newHarvestDelay) external onlyGovernorOrGuardian {
+        // A harvest delay of 0 makes harvests vulnerable to sandwich attacks.
+        if (newHarvestDelay == 0 || newHarvestDelay > 365 days) revert WrongHarvestDelay();
+
+        // If the harvest delay is 0, meaning it has not been set before:
+        if (harvestDelay == 0) {
+            // We'll apply the update immediately.
+            harvestDelay = newHarvestDelay;
+
+            emit HarvestDelayUpdated(msg.sender, newHarvestDelay);
+        } else {
+            // We'll apply the update next harvest.
+            nextHarvestDelay = newHarvestDelay;
+
+            emit HarvestDelayUpdateScheduled(msg.sender, newHarvestDelay);
+        }
     }
 
     // ========================== Governance or Guardian functions ==============================

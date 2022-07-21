@@ -120,11 +120,9 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     }
 
     /// @notice To deposit directly rewards onto the contract
-    /// TODO not a fan it looks weird to have the equivalent of a strategy here
-    /// while we can just do a dumb strategy and link it to this country, so that they all have the same interface
     function notifyRewardAmount(uint256 amount) external override {
         SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(asset()), msg.sender, address(this), amount);
-        claimableRewards += amount;
+        _handleUserGain(amount);
     }
 
     /// @notice  Kick `addr` for abusing their boost
@@ -177,6 +175,9 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     /// @notice Propagates a user side gain
     /// @param gain Gain to propagate
     function _handleUserGain(uint256 gain) internal override {
+        // loss is directly removed from the totalHoldings
+        // Update max unlocked profit based on any remaining locked profit plus new profit.
+        maxLockedProfit = (lockedProfit() + gain);
         claimableRewards += gain;
     }
 
@@ -200,7 +201,8 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     /// @return amount `from`reward balance at the end of the call
     /// @dev Function will revert if not enough funds are sitting idle on the contract
     function _updateRewardBalance(address from) internal returns (uint256 amount) {
-        amount = (claimableRewards * rewardsAccumulatorOf[from]) / (rewardsAccumulator - claimedRewardsAccumulator);
+        uint256 unlockedProfit = claimableRewards - lockedProfit();
+        amount = (unlockedProfit * rewardsAccumulatorOf[from]) / (rewardsAccumulator - claimedRewardsAccumulator);
         claimedRewardsAccumulator += rewardsAccumulatorOf[from];
         rewardsAccumulatorOf[from] = 0;
         lastTimeOf[from] = block.timestamp;

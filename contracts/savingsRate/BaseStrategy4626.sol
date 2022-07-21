@@ -62,28 +62,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /// @dev Need to be cautious on when to use `totalAssets()` and totalStrategyHoldings. As when investing the money
     /// it is better to use the full balance.
     function totalAssets() public view override returns (uint256 totalUnderlyingHeld) {
-        totalUnderlyingHeld = totalStrategyHoldings - lockedProfit();
-    }
-
-    /// @notice Computes the current amount of locked profit.
-    /// @return The current amount of locked profit.
-    function lockedProfit() public view returns (uint256) {
-        // Get the last harvest and harvest delay.
-        uint256 previousHarvest = lastHarvest;
-        uint256 harvestInterval = harvestDelay;
-
-        unchecked {
-            // If the harvest delay has passed, there is no locked profit.
-            // Cannot overflow on human timescales since harvestInterval is capped.
-            if (block.timestamp >= previousHarvest + harvestInterval) return 0;
-
-            // Get the maximum amount we could return.
-            uint256 maximumLockedProfit = maxLockedProfit;
-
-            // Compute how much profit remains locked based on the last harvest and harvest delay.
-            // It's impossible for the previous harvest to be in the future, so this will never underflow.
-            return maximumLockedProfit - (maximumLockedProfit * (block.timestamp - previousHarvest)) / harvestInterval;
-        }
+        totalUnderlyingHeld = totalStrategyHoldings;
     }
 
     // ============================ View virtual functions =================================
@@ -156,29 +135,6 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     function setEmergencyExit() external onlyGovernorOrGuardian {
         emergencyExit = true;
         emit EmergencyExitActivated();
-    }
-
-    /// @notice Sets a new harvest delay.
-    /// @param newHarvestDelay The new harvest delay to set.
-    /// @dev If the current harvest delay is 0, meaning it has not
-    /// been set before, it will be updated immediately, otherwise
-    /// it will be scheduled to take effect after the next harvest.
-    function setHarvestDelay(uint64 newHarvestDelay) external onlyGovernorOrGuardian {
-        // A harvest delay of 0 makes harvests vulnerable to sandwich attacks.
-        if (newHarvestDelay == 0 || newHarvestDelay > 365 days) revert WrongHarvestDelay();
-
-        // If the harvest delay is 0, meaning it has not been set before:
-        if (harvestDelay == 0) {
-            // We'll apply the update immediately.
-            harvestDelay = newHarvestDelay;
-
-            emit HarvestDelayUpdated(msg.sender, newHarvestDelay);
-        } else {
-            // We'll apply the update next harvest.
-            nextHarvestDelay = newHarvestDelay;
-
-            emit HarvestDelayUpdateScheduled(msg.sender, newHarvestDelay);
-        }
     }
 
     /// @notice Add a vault to the whitelist, allowed to interact with the strategy
@@ -258,26 +214,6 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         emit Harvested(profit, loss, _vaultCallerDebtOutstanding, msg.sender);
         // It won't revert as long as there are enough funds to cover for the losses
         totalStrategyHoldings += profit - loss;
-
-        // loss is directly removed from the totalHoldings
-        // Update max unlocked profit based on any remaining locked profit plus new profit.
-        maxLockedProfit = (lockedProfit() + profit);
-
-        // Update the last harvest timestamp.
-        // Cannot overflow on human timescales.
-        lastHarvest = uint64(block.timestamp);
-
-        // Get the next harvest delay.
-        uint64 newHarvestDelay = nextHarvestDelay;
-
-        // If the next harvest delay is not 0:
-        if (newHarvestDelay != 0) {
-            // Update the harvest delay.
-            harvestDelay = newHarvestDelay;
-
-            // Reset the next harvest delay.
-            nextHarvestDelay = 0;
-        }
     }
 
     /**
