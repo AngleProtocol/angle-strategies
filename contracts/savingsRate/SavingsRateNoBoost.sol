@@ -79,8 +79,6 @@ contract SavingsRateNoBoost is BaseSavingsRate {
 
     /// @notice To deposit directly rewards onto the contract
     /// @dev You can just transfer the token without calling this function as it will be counted in the `totalAssets` via getBalnce()
-    /// TODO not a fan it looks weird to have the equivalent of a strategy here
-    /// while we can just do a dumb strategy and link it to this country, so that they all have the same interface
     function notifyRewardAmount(uint256 amount) external override {
         SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(asset()), msg.sender, address(this), amount);
         // Update max unlocked profit based on any remaining locked profit plus new profit.
