@@ -9,7 +9,6 @@ import "./BaseSavingsRateStorage.sol";
 /// @dev This base contract can be used for savings rate contracts that give a boost in yield to some addresses
 /// as well as for contracts that do not handle such boosts
 // TODO:
-// - add support for deposit and withdrawal fee: with a function for deposit and withdrawal fee
 // - make sure it works perfect for normal contract with no boost everywhere
 // - way to price the token easily for the strategy so that it can be easily integrated
 abstract contract BaseSavingsRate is BaseSavingsRateStorage {
@@ -56,23 +55,28 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     }
 
     // ============================== View functions ===============================
+    // Most of these view functions are designed as helpers for UIs getting built
+    // on top of this savings rate contract
 
-    /// @notice Gets the full withdrawal stack.
-    /// @return An ordered array of strategies representing the withdrawal stack.
-    /// @dev Helper for UIs
+    /// @notice Gets the full withdrawal stack
+    /// @return An ordered array of strategies representing the withdrawal stack
     function getWithdrawalStack() external view returns (IStrategy4626[] memory) {
         return withdrawalStack;
     }
 
     /// @notice Returns the list of all AMOs supported by this contract
-    /// @dev Helper for UIs
     function getStrategyList() external view returns (IStrategy4626[] memory) {
         return strategyList;
     }
 
-    /// @notice Returns this savings rate contract's directly available reserve of collateral (not including what has been lent)
+    /// @notice Returns this savings rate contract's directly available
+    /// reserve of collateral (not including what has been lent)
     function getBalance() public view returns (uint256) {
         return IERC20(asset()).balanceOf(address(this));
+    }
+
+    function getSharePrice() external view returns(uint256) {
+        return previewRedeem(decimals());
     }
 
     /// @notice Returns this contract's managed assets
@@ -101,7 +105,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     }
 
     /// @inheritdoc ERC4626Upgradeable
-    /// @dev The amount returned here will be underestimated if the balance of the vault is inferior than the
+    /// @dev The amount returned here will be underestimated if the balance of the vault is inferior to the
     /// asset value of the owner's shares
     /// @dev The reason for this is that the ERC4626 interface states that the max withdrawal
     /// amount can be underestimated and we only consider the `asset` balance directly available in the contract
@@ -119,15 +123,26 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         uint256 shares = balanceOf(owner);
         if (shares == 0) return 0;
         uint256 contractBalance = getBalance();
-        uint256 assets = _convertToAssets(shares, MathUpgradeable.Rounding.Down);
-        uint256 reward = _claimableRewardsOf(owner);
+        uint256 controlledAssets = _convertToAssets(shares, MathUpgradeable.Rounding.Down) + _claimableRewardsOf(owner);
         // If there is enough asset in the contract for the rewards plus the asset value of the shares,
         // then the `owner` can withdraw all its shares
-        if (contractBalance > reward + assets) return shares;
+        if (contractBalance > controlledAssets) return shares;
         // In the other case, the `owner` may only be able to redeem a certain proportion of its shares.
         // If there are only 5 agEUR available and I have 20 shares worth 10 agEUR in the contract,
         // then my max redemption amount is 10 shares
-        else return shares.mulDiv(contractBalance, reward + assets, MathUpgradeable.Rounding.Down);
+        else return shares.mulDiv(contractBalance, controlledAssets, MathUpgradeable.Rounding.Down);
+    }
+
+    /// @inheritdoc ERC4626Upgradeable
+    function previewDeposit(uint256 assets) public view virtual override returns (uint256) {
+        (uint256 shares,) = _previewDepositAndFees(assets);
+        return shares;
+    }
+
+    /// @inheritdoc ERC4626Upgradeable
+    function previewMint(uint256 shares) public view virtual override returns (uint256) {
+        (uint256 assets,) = _previewMintAndFees(shares);
+        return assets;
     }
 
     /// @inheritdoc ERC4626Upgradeable
@@ -143,22 +158,24 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         return previewRedeem(msg.sender, shares);
     }
 
-
     /// @notice Allows an on-chain or off-chain user to simulate the effects of their withdrawal
     /// at the current block, given current on-chain conditions and for a chosen address
-    /// @dev This function is made for implementations of savings rate contracts where a boost is given to
+    /// @dev This function is specific for implementations of savings rate contracts where a boost is given to
     /// some addresses and not all users are equivalent
     function previewWithdraw(address owner, uint256 assets) public view returns (uint256) {
         // If there is no boost, this should be independent of the owner
         uint256 ownerReward = _claimableRewardsOf(owner);
-        if (ownerReward == 0) return _convertToShares(assets, MathUpgradeable.Rounding.Up);
+        uint256 ownerShares = balanceOf(owner);
+        if (ownerReward == 0 || ownerShares == 0) {
+            (uint256 shares,) = _computeWithdrawalFees(assets);
+            return shares;
+        }
         else {
             // If there is a boost, let's say you brought 10 of assets, got 20 shares and then earned 1 of asset, then
             // to get back 2 of assets in this case where shares are not the same for everyone you need to burn:
             // 2 * 20 / (12)
-            uint256 ownerShares = balanceOf(owner);
             uint256 ownerAssets = _convertToAssets(ownerShares, MathUpgradeable.Rounding.Down);
-            return assets.mulDiv(ownerShares, ownerReward + ownerAssets, MathUpgradeable.Rounding.Up);
+            return assets.mulDiv(ownerShares * BASE_PARAMS, (ownerReward + ownerAssets)*(BASE_PARAMS-withdrawFee), MathUpgradeable.Rounding.Up);
         }
     }
 
@@ -166,10 +183,20 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @dev This function could return a number of assets greater than what a `redeem` call would give
     /// in case the strategy faces a loss
     function previewRedeem(address owner, uint256 shares) public view returns (uint256) {
-        uint256 ownerTotalShares = balanceOf(owner);
         uint256 ownerReward = _claimableRewardsOf(owner);
-        uint256 ownerRewardShares = (ownerReward * shares) / ownerTotalShares;
-        return _convertToAssets(shares, MathUpgradeable.Rounding.Down) + ownerRewardShares;
+        uint256 ownerShares = balanceOf(owner);
+        if (ownerReward == 0 || ownerShares == 0) {
+            (uint256 assets,) = _computeRedemptionFees(shares);
+            return assets;
+        } else {
+            uint256 ownerRewardShares = (ownerReward * shares) / ownerShares;
+            uint256 assetsPlusFees = _convertToAssets(shares, MathUpgradeable.Rounding.Down) + ownerRewardShares;
+            return assetsPlusFees - assetsPlusFees.mulDiv(
+                    withdrawFee,
+                    BASE_PARAMS,
+                    MathUpgradeable.Rounding.Up
+            );
+        }
     }
 
     /// @notice Computes the current amount of locked profit
@@ -195,42 +222,51 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
 
     // ====================== External permissionless functions ====================
 
-    /**
-     * @dev Deposit/mint common workflow
-     */
-    /// @dev can't use the _afterTokenDeposit because we don't have access to 'assets' but only 'shares'
-    function _deposit(
-        address caller,
-        address receiver,
-        uint256 assets,
-        uint256 shares
-    ) internal override {
-        // If _asset is ERC777, `transferFrom` can trigger a reenterancy BEFORE the transfer happens through the
-        // `tokensToSend` hook. On the other hand, the `tokenReceived` hook, that is triggered after the transfer,
-        // calls the savingsRate, which is assumed not malicious.
-        //
-        // Conclusion: we need to do the transfer before we mint so that any reentrancy would happen before the
-        // assets are transfered and before the shares are minted, which is a valid state.
-        // slither-disable-next-line reentrancy-no-eth
-        SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(asset()), caller, address(this), assets);
-        _mint(receiver, shares);
-
-        emit Deposit(caller, receiver, assets, shares);
+    /// @inheritdoc ERC4626Upgradeable
+    function deposit(uint256 assets, address receiver) public virtual override returns (uint256) {
+        if(assets > maxDeposit(receiver)) revert TooHighDeposit();
+        (uint256 shares, uint256 fees) = _previewDepositAndFees(assets);
+        _deposit(_msgSender(), receiver, assets, shares);
+        _handleProtocolGain(fees);
+        return shares;
     }
 
     /// @inheritdoc ERC4626Upgradeable
     function mint(uint256 shares, address receiver) public virtual override returns (uint256) {
-        if (shares > maxMint(receiver)) revert TooHighDeposit();
-        
-
-        uint256 assets = previewMint(shares);
+        if(shares > maxMint(receiver)) revert TooHighDeposit();
+        (uint256 assets, uint256 fees) = _previewMintAndFees(shares);
         _deposit(_msgSender(), receiver, assets, shares);
-
+        _handleProtocolGain(fees);
         return assets;
     }
 
-    /// @notice To deposit directly rewards onto the contract
-    function notifyRewardAmount(uint256 amount) external virtual;
+    /// @inheritdoc ERC4626Upgradeable
+    function withdraw(
+        uint256 assets,
+        address receiver,
+        address owner
+    ) public virtual override returns (uint256) {
+        (, uint256 loss) = _beforeWithdraw(assets);
+        // Function should withdraw if we cannot get enough assets
+        (uint256 shares, uint256 fees) = _computeWithdrawalFees(assets+loss);
+        _handleProtocolGain(fees);
+        // Function reverts if there is not enough available in the contract
+        _withdraw(_msgSender(), receiver, owner, assets, shares);
+        return shares;
+    }
+
+    /// @inheritdoc ERC4626Upgradeable
+    function redeem(
+        uint256 shares,
+        address receiver,
+        address owner
+    ) public virtual override returns (uint256) {
+        (uint256 assets, uint256 fees) = _computeRedemptionFees(shares);
+        (, uint256 loss) = _beforeWithdraw(assets);
+        _handleProtocolGain(fees);
+        _withdraw(_msgSender(), receiver, owner, assets-loss-fees, shares);
+        return assets+loss-fees;
+    }
 
     /// @notice Harvests a set of strategies, recognizing any profits or losses and adjusting
     /// the strategies position.
@@ -243,11 +279,9 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         // The only issue is if the strategy is compromised; in this case governance
         // should revoke the strategy
         uint256 managedAssets_ = managedAssets();
-        uint256 debtOutstanding;
         for (uint256 i = 0; i < strategiesToHarvest.length; i++) {
             if (strategies[strategiesToHarvest[i]].lastReport == 0) revert InvalidStrategy();
-            debtOutstanding = _debtOutstanding(strategiesToHarvest[i], managedAssets_);
-            strategiesToHarvest[i].report(debtOutstanding);
+            strategiesToHarvest[i].report(_debtOutstanding(strategiesToHarvest[i], managedAssets_));
         }
         _checkpointPnL(strategiesToHarvest);
         _adjustStrategiesPositions(strategiesToHarvest, managedAssets_);
@@ -260,6 +294,9 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         IStrategy4626[] memory activeStrategies = strategyList;
         _checkpointPnL(activeStrategies);
     }
+
+    /// @notice To deposit directly rewards onto the contract
+    function notifyRewardAmount(uint256 amount) external virtual;
 
     // =========================== Governance functions ============================
 
@@ -276,6 +313,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         IERC20 asset = IERC20(asset());
         if (params.lastReport != 0 || !strategy.isVault() || address(asset) != strategy.asset())
             revert InvalidStrategy();
+
         // Add strategy to approved strategies
         params.lastReport = block.timestamp;
         params.totalStrategyDebt = 0;
@@ -401,6 +439,43 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
 
     // ========================== Internal functions ===============================
 
+    function _previewDepositAndFees(uint256 assets) public view virtual returns(uint256 shares,uint256 fees) {
+        fees = assets.mulDiv(
+                depositFee,
+                BASE_PARAMS,
+                MathUpgradeable.Rounding.Up
+        );
+        shares = _convertToShares(assets-fees, MathUpgradeable.Rounding.Down);
+    }
+
+    function _previewMintAndFees(uint256 shares) public view virtual returns(uint256 assets,uint256 fees) {
+        assets = _convertToAssets(shares, MathUpgradeable.Rounding.Up);
+        fees = assets.mulDiv(
+                BASE_PARAMS,
+                BASE_PARAMS - depositFee,
+                MathUpgradeable.Rounding.Up
+        ) - assets;
+    }
+
+    function _computeWithdrawalFees(uint256 assets) internal view returns(uint256 shares, uint256 fees) {
+        uint256 assetsPlusFees = assets.mulDiv(
+                BASE_PARAMS,
+                BASE_PARAMS - withdrawFee,
+                MathUpgradeable.Rounding.Up
+        );
+        shares = _convertToShares(assetsPlusFees, MathUpgradeable.Rounding.Up);
+        fees = assetsPlusFees - assets;
+    }
+
+    function _computeRedemptionFees(uint256 shares) internal view returns(uint256 assets, uint256 fees) {
+        assets = _convertToAssets(shares, MathUpgradeable.Rounding.Down);
+        fees = assets.mulDiv(
+                withdrawFee,
+                BASE_PARAMS,
+                MathUpgradeable.Rounding.Up
+        );
+    }
+
     /// @notice Tells a strategy how much it owes to this contract
     /// @param strategy Strategy to consider in the call
     /// @param _managedAssets Amount of `asset` controlled by the savings rate contract
@@ -421,7 +496,6 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     function _adjustStrategiesPositions(IStrategy4626[] memory strategiesToAdjust, uint256 managedAssets_) internal {
         uint256 positiveChangedDebt;
         uint256 negativeChangedDebt;
-
         for (uint256 i = 0; i < strategiesToAdjust.length; i++) {
             StrategyParams storage params = strategies[strategiesToAdjust[i]];
             uint256 target = (managedAssets_ * params.debtRatio) / BASE_PARAMS;
@@ -475,16 +549,16 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         if (totalProfitLossAccrued > 0) {
             // Compute fees as the fee percent multiplied by the profit.
             uint256 feesAccrued = uint256(totalProfitLossAccrued).mulDiv(
-                uint256(protocolFee),
-                1e9,
+                protocolFee,
+                BASE_PARAMS,
                 MathUpgradeable.Rounding.Up
             );
             _handleProtocolGain(feesAccrued);
             _handleUserGain(uint256(totalProfitLossAccrued) - feesAccrued);
         } else {
             uint256 feesDebt = uint256(-totalProfitLossAccrued).mulDiv(
-                uint256(protocolFee),
-                1e9,
+                protocolFee,
+                BASE_PARAMS,
                 MathUpgradeable.Rounding.Down
             );
             _handleProtocolLoss(feesDebt);
@@ -523,11 +597,19 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
 
     /// @notice Propagates a user side gain
     /// @param gain Gain to propagate
-    function _handleUserGain(uint256 gain) internal virtual;
+    function _handleUserGain(uint256 gain) internal virtual {
+        maxLockedProfit = (lockedProfit() + gain);
+        totalDebt += gain;
+        lastGain = uint64(block.timestamp);
+    }
 
     /// @notice Propagates a user side loss
     /// @param loss Loss to propagate
-    function _handleUserLoss(uint256 loss) internal virtual;
+    /// @dev To apply a loss, we simply have to decrease `newTotalDebt` which impacts the `totalAssets()` call where losses
+    /// are implied
+    function _handleUserLoss(uint256 loss) internal virtual {
+        totalDebt -= loss;
+    }
 
     /// @notice Helper to estimate claimble rewards for a specific user
     /// @param from Address to check rewards from

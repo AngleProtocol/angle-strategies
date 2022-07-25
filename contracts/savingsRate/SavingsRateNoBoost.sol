@@ -37,72 +37,16 @@ contract SavingsRateNoBoost is BaseSavingsRate {
 
     // ====================== External permissionless functions ====================
 
-    /** @dev See {IERC4262-withdraw} */
-    function withdraw(
-        uint256 assets,
-        address receiver,
-        address owner
-    ) public virtual override returns (uint256) {
-        uint256 loss;
-        (assets, loss) = _beforeWithdraw(assets);
-
-        uint256 assetsTrueCost = assets + loss;
-        uint256 shares = _convertToShares(assetsTrueCost, MathUpgradeable.Rounding.Up);
-        // TODO must revert if cannot withdraw exactly
-        if (shares > balanceOf(owner)) revert WithdrawLimit();
-        _withdraw(_msgSender(), receiver, owner, assets, shares);
-
-        return shares;
-    }
-
-    /** @dev See {IERC4262-redeem} */
-    function redeem(
-        uint256 shares,
-        address receiver,
-        address owner
-    ) public virtual override returns (uint256) {
-        // TODO must revert if cannot withdraw exactly
-        require(shares <= balanceOf(owner), "ERC4626: redeem more than max");
-        uint256 assets = _convertToAssets(shares, MathUpgradeable.Rounding.Down);
-        uint256 loss;
-        uint256 freedAssets;
-        (freedAssets, loss) = _beforeWithdraw(assets);
-        // if we didn't suceed to withdraw enough, we need to decrease the number of shares burnt
-        if (freedAssets < assets) {
-            shares = _convertToShares(freedAssets, MathUpgradeable.Rounding.Up);
-        }
-
-        // `assets-loss` will never revert here because it would revert on the slippage protection in `withdraw()`
-        _withdraw(_msgSender(), receiver, owner, freedAssets - loss, shares);
-
-        return freedAssets - loss;
-    }
-
-    /// @notice To deposit directly rewards onto the contract and have them given to users
-    /// @dev You can just transfer the token without calling this function as it will be counted in the `totalAssets` via getBalnce()
+    /// @inheritdoc BaseSavingsRate
     function notifyRewardAmount(uint256 amount) external override {
         SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(asset()), msg.sender, address(this), amount);
         _handleUserGain(amount);
     }
 
-    // ===================== Internal functions ==========================
-
-    /// @notice Propagates a user side gain
-    /// @param gain Gain to propagate
-    function _handleUserGain(uint256 gain) internal override {
-        maxLockedProfit = (lockedProfit() + gain);
-        totalDebt += gain;
-        lastGain = uint64(block.timestamp);
-    }
-
-    /// @notice Propagates a user side loss
-    /// @param loss Loss to propagate
-    function _handleUserLoss(uint256 loss) internal override {
-        // Decrease newTotalDebt, this impacts the `totalAssets()` call --> loss directly implied when withdrawing
-        totalDebt -= loss;
-    }
-
-    /// @notice Useless when there is no boost
+    // ============================ Internal functions =============================
+    
+    /// @inheritdoc BaseSavingsRate
+    /// @dev This function is useless in settings when there are no boosts
     function _claimableRewardsOf(address) internal pure override returns (uint256) {
         return 0;
     }

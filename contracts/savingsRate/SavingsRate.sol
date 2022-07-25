@@ -4,15 +4,17 @@ pragma solidity 0.8.12;
 import "./BaseSavingsRate.sol";
 import "./SavingsRateStorage.sol";
 
-/// @title Angle Vault
+/// @title SavingsRate
 /// @author Angle Protocol
-/// @notice Yield aggregator vault which can connect multiple ERC4626 strategies
-/// @notice Integrate boosting mecanism on the yield
+/// @notice Contract for yield aggregator vaults which can connect to multiple ERC4626 strategies
+/// @notice In this implementation, share price is not the same for all depositors as some may bet a boost
+/// on their rewards while others do not
 contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     using SafeERC20 for IERC20;
     using Address for address;
     using MathUpgradeable for uint256;
 
+    /// @notice Initializes the SavingsRate contract
     function initialize(
         ICoreBorrow _coreBorrow,
         IERC20MetadataUpgradeable _token,
@@ -172,54 +174,41 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
 
     // ===================== Internal functions ==========================
 
-    /// @notice Propagates a user side gain
-    /// @param gain Gain to propagate
-    function _handleUserGain(uint256 gain) internal override {
-        // loss is directly removed from the totalHoldings
-        // Update max unlocked profit based on any remaining locked profit plus new profit.
-        maxLockedProfit = (lockedProfit() + gain);
-        claimableRewards += gain;
-    }
-
-    /// @notice Propagates a user side loss
-    /// @param loss Loss to propagate
-    function _handleUserLoss(uint256 loss) internal override {
-        // Decrease newTotalDebt, this impacts the `totalAssets()` call --> loss directly implied when withdrawing
-        totalDebt -= loss;
-    }
-
     /// @notice Claims earned rewards
     /// @param from Address to claim for
     /// @return Transferred amount to `from`
     function _claim(address from) internal returns (uint256) {
         uint256 globalRewardsAccumulator = rewardsAccumulator + (block.timestamp - lastTime) * workingSupply;
+        uint256 userRewardsAccumulator = (block.timestamp - lastTimeOf[from]) * workingBalances[from];
+
         rewardsAccumulator = globalRewardsAccumulator;
         lastTime = block.timestamp;
-        // This will be 0 on the first deposit since the balance is initialized later
-        uint256 userRewardsAccumulator = (block.timestamp - lastTimeOf[from]) * workingBalances[from];
         lastTimeOf[from] = block.timestamp;
+
         uint256 unlockedProfit = claimableRewards - lockedProfit();
         uint256 amount = (unlockedProfit * userRewardsAccumulator) /
             (globalRewardsAccumulator - claimedRewardsAccumulator);
+        uint256 currentRewardBalance = rewardBalances[from];
+        // TODO finish looking into how this works and if this works 
         claimedRewardsAccumulator += userRewardsAccumulator;
         claimableRewards -= amount;
-        uint256 currentRewardBalance = rewardBalances[from];
+        
         rewardBalances[from] = currentRewardBalance + amount;
         return currentRewardBalance + amount;
     }
+
 
     /// @notice Helper to estimate claimable rewards for a specific user
     /// @param from Address to check rewards from
     /// @return amount `from` reward balance if it gets updated
     function _claimableRewardsOf(address from) internal view override returns (uint256 amount) {
-        uint256 rewardsAccumulatorTmp = rewardsAccumulator + (block.timestamp - lastTime) * workingSupply;
+        uint256 globalRewardsAccumulator = rewardsAccumulator + (block.timestamp - lastTime) * workingSupply;
         // This will be 0 on the first deposit since the balance is initialized later
-        uint256 rewardsAccumulatorOfTmp = rewardsAccumulatorOf[from] +
+        uint256 userRewardsAccumulator = 
             (block.timestamp - lastTimeOf[from]) *
             workingBalances[from];
-        amount = (claimableRewards * rewardsAccumulatorOfTmp) / (rewardsAccumulatorTmp - claimedRewardsAccumulator);
-        uint256 currentRewardBalance = rewardBalances[from];
-        return currentRewardBalance + amount;
+        amount = (claimableRewards - lockedProfit()) * userRewardsAccumulator / (globalRewardsAccumulator - claimedRewardsAccumulator);
+        return rewardBalances[from] + amount;
     }
 
     /** @dev See {ERC20Upgradeable-_beforeTokenTransfer} */
@@ -229,6 +218,9 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         address to,
         uint256
     ) internal override {
+        // TODO handle transfers so that it can integrate pretty well with everything -> rewards are still
+        // getting accumulated 
+        // Of sending x% of token balance, then you're sending x% of reward balance as well
         if (to != address(0)) {
             _claim(to);
             if (from != address(0)) {

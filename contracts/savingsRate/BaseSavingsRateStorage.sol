@@ -122,6 +122,7 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
     error NotGovernorOrGuardian();
     error NotStrategy();
     error TooHighDeposit();
+    error WithdrawLimit();
     error StrategyDoesNotExist();
     error WrongStrategyToken();
     error StrategyAlreadyAdded();
@@ -134,7 +135,6 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
     error LossShouldbe0();
     error SlippageProtection();
     error IncompatibleLengths();
-    error WithdrawLimit();
     error ZeroAddress();
 
     uint256[50] private __gapBaseSavingsRate;
