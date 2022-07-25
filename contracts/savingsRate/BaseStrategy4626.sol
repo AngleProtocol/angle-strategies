@@ -10,6 +10,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
 
     /// @notice Constructor of the `BaseStrategyERC4626`
     function _initialize(ISavingsRate[] memory _savingsRate, ICoreBorrow coreBorrow_) internal initializer {
+        // TODO: verify zero address
         coreBorrow = coreBorrow_;
         savingsRateList = _savingsRate;
         for (uint256 i = 0; i < _savingsRate.length; i++) {
@@ -192,11 +193,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /// TODO 2 options here: we can withdraw enough for all vaults connected to the strategies to recover the debtOutstanding
     /// or we can just free funds only for the vault caller.
     /// Option 2 is more gas efficient if harvest in different strategies are not made to be called in a raw
-    function _report(uint256 _vaultCallerDebtOutstanding)
-        public
-        onlySavingsRate
-        returns (uint256 profit, uint256 loss)
-    {
+    function report(uint256 _vaultCallerDebtOutstanding) public onlySavingsRate returns (uint256 profit, uint256 loss) {
         uint256 currentDebt = totalStrategyHoldings;
 
         if (emergencyExit) {

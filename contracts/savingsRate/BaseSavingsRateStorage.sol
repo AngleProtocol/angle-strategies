@@ -10,99 +10,96 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
-// Struct for the parameters associated to a strategy interacting with a collateral `PoolManager`
-// contract
+// Struct for the parameters associated to a strategy interacting with a savings rate contract
 struct StrategyParams {
     // Timestamp of last report made by this strategy
     // It is also used to check if a strategy has been initialized
     uint256 lastReport;
     // Total amount the strategy is expected to have
     uint256 totalStrategyDebt;
-    // The share of the total assets in the `PoolManager` contract that the `strategy` can access to.
+    // The share of the total assets controlled by the savings rate contract that the `strategy` can access to.
     uint256 debtRatio;
-    /// TODO add `minDebtPerHarvest` and `maxDebtPerHarvest`? need to check as yarn
 }
 
-/// @title VaultStorage
+/// @title BaseSavingsRateStorage
 /// @author Angle Core Team
-/// @dev Variables, references, parameters and events needed in the `VaultManager` contract
+/// @dev Variables, references, parameters and events needed in all `SavingsRate` contracts
 contract BaseSavingsRateStorage is ERC4626Upgradeable {
-    /// @notice The maximum number of elements allowed on the withdrawal stack.
-    /// @dev Needed to prevent denial of service attacks by queue operators.
+    /// @notice Maximum number of elements allowed on the withdrawal stack
+    /// @dev Needed to prevent denial of service attacks by queue operators
     uint256 internal constant MAX_WITHDRAWAL_STACK_SIZE = 32;
 
     uint256 internal constant BASE_PARAMS = 10**9;
+
+    // =============================== Parameters ==================================
+
+    /// @notice The share of profit going to the protocol
+    /// @dev Should be lower than `BASE_PARAMS`
+    uint64 public protocolFee;
+
+    /// @notice Max loss that can be supported during a withdrawal
+    /// @dev Should be lower than `BASE_PARAMS`
+    uint64 public maxWithdrawalLoss;
+
+    /// @notice Fee paid by depositors when depositing in the savings rate contract
+    /// @dev Should be lower than `BASE_PARAMS`
+    uint64 public depositFee;
+
+    /// @notice Fee paid by users withdrawing from the savings rate contract
+    /// @dev Should be lower than `BASE_PARAMS`
+    uint64 public withdrawFee;
+
+    /// @notice The period in seconds over which locked profit is unlocked
+    /// @dev Cannot be 0 as it opens harvests up to sandwich attacks
+    uint64 public vestingPeriod;
+
+    /// @notice Timestamp representing for when the last gain occurred for users
+    uint64 public lastGain;
 
     // =============================== References ==================================
 
     /// @notice CoreBorrow used to get governance addresses
     ICoreBorrow public coreBorrow;
 
-    // =============================== Parameters ==================================
-    // Unless specified otherwise, parameters of this contract are expressed in `BASE_PARAMS`
-
-    /// @notice The share of profit going to the protocol.
-    /// @dev Should be lower than `BASE_PARAM`.
-    uint256 public protocolFee;
-
-    /// @notice The share of profit going to the creator.
-    /// @dev Should be lower than `BASE_PARAM`.
-    uint256 public strategistFee;
-
     /// @notice Address to redirect protocol revenues
     address public surplusManager;
 
-    /// @notice The period in seconds over which locked profit is unlocked.
-    /// @dev Cannot be 0 as it opens harvests up to sandwich attacks.
-    uint64 public harvestDelay;
-
-    /// @notice The value that will replace harvestDelay next harvest.
-    /// @dev In the case that the next delay is 0, no update will be applied.
-    uint64 public nextHarvestDelay;
-
     // =============================== Variables ===================================
 
-    /// @notice The total amount of underlying tokens held in strategies at the time of the last harvest/deposit/withdraw.
+    /// @notice The total amount of underlying tokens held in strategies at the time of the last harvest/deposit/withdraw
     uint256 public totalDebt;
 
     /// @notice Proportion of the funds managed dedicated to strategies
     /// Has to be between 0 and `BASE_PARAMS`
     uint256 public debtRatio;
 
-    /// @notice An ordered array of strategies representing the withdrawal stack.
-    /// @dev The stack is processed in descending order, meaning the last index will be withdrawn from first.
+    /// @notice Unpaid loss from the protocol
+    uint256 public protocolLoss;
+
+    /// @notice The amount of locked profit at the end of the last harvest
+    uint256 public maxLockedProfit;
+
+    /// @notice Ordered array of strategies representing the withdrawal stack
+    /// @dev The stack is processed in descending order, meaning the last index will be withdrawn from first
     /// @dev Strategies that are untrusted, duplicated, or have no balance are filtered out when encountered at
-    /// withdrawal time, not validated upfront, meaning the stack may not reflect the "true" set used for withdrawals.
+    /// withdrawal time, meaning the stack may not reflect the "true" set used for withdrawals
     IStrategy4626[] public withdrawalStack;
 
     /// @notice List of the current strategies
     IStrategy4626[] public strategyList;
 
-    /// @notice Unpaid loss from the protocol
-    uint256 public protocolLoss;
-
-    /// @notice A timestamp representing when the most recent harvest occurred.
-    uint64 public lastHarvest;
-
-    /// @notice The amount of locked profit at the end of the last harvest.
-    uint256 public maxLockedProfit;
-
     // ================================ Mappings ===================================
 
-    /// The struct `StrategyParams` is defined in the interface `IPoolManager`
     /// @notice Mapping between the address of a strategy contract and its corresponding details
     mapping(IStrategy4626 => StrategyParams) public strategies;
 
     // =============================== Events ======================================
 
-    event ProtocolFeeUpdated(address indexed user, uint256 protocolFee);
-    event StrategistFeeUpdated(address indexed user, uint256 strategistFee);
-    event Harvest(address indexed user, IStrategy4626[] strategies);
-    event WithdrawalStackSet(address indexed user, IStrategy4626[] replacedWithdrawalStack);
     event FeesClaimed(address indexed user, uint256 rvTokenAmount);
+    event FiledUint64(uint64 param, bytes32 what);
+    event Harvest(address indexed user, IStrategy4626[] strategies);
+    event Recovered(address indexed token, address indexed to, uint256 amount);
     event StrategyAdded(address indexed strategy, uint256 debtRatio);
-    event StrategyRevoked(address indexed strategy);
-    event UpdatedDebtRatio(address indexed strategy, uint256 debtRatio);
     event StrategyReported(
         address indexed strategy,
         uint256 gain,
@@ -110,14 +107,21 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
         uint256 debtPayment,
         uint256 totalDebt
     );
-    event HarvestDelayUpdated(address indexed sender, uint256 newHarvestDelay);
-    event HarvestDelayUpdateScheduled(address indexed sender, uint256 newHarvestDelay);
+    event StrategyRevoked(address indexed strategy);
+    event SurplusManagerUpdated(address indexed _surplusManager);
+    event UpdatedDebtRatio(address indexed strategy, uint256 debtRatio);
+    event WithdrawalStackSet(address indexed user, IStrategy4626[] replacedWithdrawalStack);
 
     // =============================== Errors ======================================
 
+    error InvalidParameter();
+    error InvalidParameterType();
+    error InvalidStrategy();
+    error InvalidToken();
     error NotGovernor();
     error NotGovernorOrGuardian();
     error NotStrategy();
+    error TooHighDeposit();
     error StrategyDoesNotExist();
     error WrongStrategyToken();
     error StrategyAlreadyAdded();
@@ -126,15 +130,13 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
     error StrategyDebtUnpaid();
     error RevokeStrategyImpossible();
     error StratgyLowOnCash();
-    error ProtocolFeeTooHigh();
     error WithdrawalStackTooDeep();
     error LossShouldbe0();
     error SlippageProtection();
     error IncompatibleLengths();
     error WithdrawLimit();
-    error WrongHarvestDelay();
+    error ZeroAddress();
 
-    /// TODO need to count number of slot used
     uint256[50] private __gapBaseSavingsRate;
 
     /// @custom:oz-upgrades-unsafe-allow constructor

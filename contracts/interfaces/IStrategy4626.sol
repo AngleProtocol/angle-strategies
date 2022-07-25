@@ -14,7 +14,7 @@ interface IStrategy4626 is IERC4626Upgradeable {
 
     function setEmergencyExit() external;
 
-    function isVault() external;
+    function isVault() external view returns (bool);
 
     function report(uint256 _vaultCallerDebtOutstanding) external;
 }

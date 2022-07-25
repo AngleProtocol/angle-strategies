@@ -4,39 +4,38 @@ pragma solidity 0.8.12;
 import "./BaseSavingsRate.sol";
 import "./SavingsRateStorage.sol";
 
-/// @title Angle Vault
+/// @title SavingsRateNoBoost
 /// @author Angle Protocol
-/// @notice Yield aggregator vault which can connect multiple ERC4626 strategies
-/// @notice Integrate boosting mecanism on the yield
+/// @notice Contract for yield aggregator vaults which can connect to multiple ERC4626 strategies
+/// @notice In this implementation there's no boost given to owners of the shares of the contract
 contract SavingsRateNoBoost is BaseSavingsRate {
     using SafeERC20 for IERC20;
     using Address for address;
     using MathUpgradeable for uint256;
 
+    /// @notice Initializes the `SavingsRateNoBoost` contract
     function initialize(
         ICoreBorrow _coreBorrow,
         IERC20MetadataUpgradeable _token,
+        address _surplusManager,
         string memory suffixName
     ) external {
-        _initialize(_coreBorrow, _token, suffixName);
+        _initialize(_coreBorrow, _token, _surplusManager, suffixName);
     }
 
-    // ============================== View functions ===================================
+    // ============================== View functions ===============================
 
-    /// @notice Calculates the total amount of underlying tokens the Vault holds.
-    /// @return totalUnderlyingHeld The total amount of underlying tokens the Vault holds.
-    /// @dev Need to be cautious on when to use `totalAssets()` and `totalDebt + getBalance()`. As when investing the money
-    /// it is better to use the full balance. But we shouldn't count the rewards twice (in the rewards and in the shares)
+    /// @inheritdoc ERC4626Upgradeable
     function totalAssets() public view override returns (uint256 totalUnderlyingHeld) {
         totalUnderlyingHeld = totalDebt + getBalance() - lockedProfit();
     }
 
-    /// @notice Returns this `vault`'s directly available reserve of collateral (not including what has been lent)
+    /// @inheritdoc BaseSavingsRate
     function managedAssets() public view override returns (uint256) {
         return totalDebt + getBalance();
     }
 
-    // ====================== External permissionless functions =============================
+    // ====================== External permissionless functions ====================
 
     /** @dev See {IERC4262-withdraw} */
     function withdraw(
@@ -49,6 +48,7 @@ contract SavingsRateNoBoost is BaseSavingsRate {
 
         uint256 assetsTrueCost = assets + loss;
         uint256 shares = _convertToShares(assetsTrueCost, MathUpgradeable.Rounding.Up);
+        // TODO must revert if cannot withdraw exactly
         if (shares > balanceOf(owner)) revert WithdrawLimit();
         _withdraw(_msgSender(), receiver, owner, assets, shares);
 
@@ -61,6 +61,7 @@ contract SavingsRateNoBoost is BaseSavingsRate {
         address receiver,
         address owner
     ) public virtual override returns (uint256) {
+        // TODO must revert if cannot withdraw exactly
         require(shares <= balanceOf(owner), "ERC4626: redeem more than max");
         uint256 assets = _convertToAssets(shares, MathUpgradeable.Rounding.Down);
         uint256 loss;
@@ -77,12 +78,11 @@ contract SavingsRateNoBoost is BaseSavingsRate {
         return freedAssets - loss;
     }
 
-    /// @notice To deposit directly rewards onto the contract
+    /// @notice To deposit directly rewards onto the contract and have them given to users
     /// @dev You can just transfer the token without calling this function as it will be counted in the `totalAssets` via getBalnce()
     function notifyRewardAmount(uint256 amount) external override {
         SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(asset()), msg.sender, address(this), amount);
-        // Update max unlocked profit based on any remaining locked profit plus new profit.
-        maxLockedProfit = (lockedProfit() + amount);
+        _handleUserGain(amount);
     }
 
     // ===================== Internal functions ==========================
@@ -90,11 +90,9 @@ contract SavingsRateNoBoost is BaseSavingsRate {
     /// @notice Propagates a user side gain
     /// @param gain Gain to propagate
     function _handleUserGain(uint256 gain) internal override {
-        // loss is directly removed from the totalHoldings
-        // Update max unlocked profit based on any remaining locked profit plus new profit.
         maxLockedProfit = (lockedProfit() + gain);
-
         totalDebt += gain;
+        lastGain = uint64(block.timestamp);
     }
 
     /// @notice Propagates a user side loss

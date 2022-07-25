@@ -9,7 +9,6 @@ import "./IAccessControlAngle.sol";
 /// @dev Interface for the `GenericLender` contract, the base interface for contracts interacting
 /// with lending and yield farming platforms
 interface IGenericLender is IAccessControlAngle {
-
     /// @notice Name of the lender on which funds are invested
     function lenderName() external view returns (string memory);
 
@@ -22,7 +21,7 @@ interface IGenericLender is IAccessControlAngle {
     /// @notice Returns an estimation of the current Annual Percentage Rate on the lender
     function apr() external view returns (uint256);
 
-    /// @notice Returns an estimation of the current Annual Percentage Rate weighted by the assets under 
+    /// @notice Returns an estimation of the current Annual Percentage Rate weighted by the assets under
     /// management of the lender
     function weightedApr() external view returns (uint256);
 

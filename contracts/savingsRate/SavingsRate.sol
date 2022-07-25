@@ -16,12 +16,13 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     function initialize(
         ICoreBorrow _coreBorrow,
         IERC20MetadataUpgradeable _token,
+        address _surplusManager,
         string memory suffixName,
         IVotingEscrow _votingEscrow,
         IVotingEscrowBoost _veBoostProxy,
         uint256 tokenlessProduction_
     ) external {
-        _initialize(_coreBorrow, _token, suffixName);
+        _initialize(_coreBorrow, _token, _surplusManager, suffixName);
         votingEscrow = _votingEscrow;
         veBoostProxy = _veBoostProxy;
         tokenlessProduction = tokenlessProduction_;
@@ -29,15 +30,12 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
 
     // ============================== View functions ===================================
 
-    /// @notice Calculates the total amount of underlying tokens the Vault holds.
-    /// @return totalUnderlyingHeld The total amount of underlying tokens the Vault holds.
-    /// @dev Need to be cautious on when to use `totalAssets()` and `totalDebt + getBalance()`. As when investing the money
-    /// it is better to use the full balance. But we shouldn't count the rewards twice (in the rewards and in the shares)
+    /// @inheritdoc ERC4626Upgradeable
     function totalAssets() public view override returns (uint256 totalUnderlyingHeld) {
         totalUnderlyingHeld = totalDebt + getBalance() - claimableRewards;
     }
 
-    /// @notice Returns this `vault`'s directly available reserve of collateral (not including what has been lent)
+    /// @inheritdoc BaseSavingsRate
     function managedAssets() public view override returns (uint256) {
         return totalAssets() + claimableRewards;
     }
@@ -50,6 +48,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         address receiver,
         address owner
     ) public virtual override returns (uint256) {
+        // TODO revert when needed
         uint256 ownerReward = _claim(owner);
         uint256 loss;
         (assets, loss) = _beforeWithdraw(assets);
@@ -75,6 +74,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         address receiver,
         address owner
     ) public virtual override returns (uint256) {
+        // TODO revert when needed
         uint256 ownerTotalShares = balanceOf(owner);
         require(shares <= ownerTotalShares, "ERC4626: redeem more than max");
 
@@ -150,7 +150,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     /// Therefore after the tx passed for all users governance should call `governanceKick`
     function setTokenlessProduction(uint256 tokenlessProduction_) external onlyGovernor {
         // A fee percentage over 100% doesn't make sense.
-        if (tokenlessProduction_ >= BASE_PARAMS) revert ProtocolFeeTooHigh();
+        if (tokenlessProduction_ >= BASE_PARAMS) revert InvalidParameter();
         // Update the fee percentage.
         tokenlessProduction = tokenlessProduction_;
 
@@ -192,38 +192,23 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     /// @param from Address to claim for
     /// @return Transferred amount to `from`
     function _claim(address from) internal returns (uint256) {
-        _updateAccumulator(from);
-        return _updateRewardBalance(from);
-    }
-
-    /// @notice Claims rewards earned by a user
-    /// @param from Address to claim rewards from
-    /// @return amount `from`reward balance at the end of the call
-    /// @dev Function will revert if not enough funds are sitting idle on the contract
-    function _updateRewardBalance(address from) internal returns (uint256 amount) {
-        uint256 unlockedProfit = claimableRewards - lockedProfit();
-        amount = (unlockedProfit * rewardsAccumulatorOf[from]) / (rewardsAccumulator - claimedRewardsAccumulator);
-        claimedRewardsAccumulator += rewardsAccumulatorOf[from];
-        rewardsAccumulatorOf[from] = 0;
+        uint256 globalRewardsAccumulator = rewardsAccumulator + (block.timestamp - lastTime) * workingSupply;
+        rewardsAccumulator = globalRewardsAccumulator;
+        lastTime = block.timestamp;
+        // This will be 0 on the first deposit since the balance is initialized later
+        uint256 userRewardsAccumulator = (block.timestamp - lastTimeOf[from]) * workingBalances[from];
         lastTimeOf[from] = block.timestamp;
+        uint256 unlockedProfit = claimableRewards - lockedProfit();
+        uint256 amount = (unlockedProfit * userRewardsAccumulator) /
+            (globalRewardsAccumulator - claimedRewardsAccumulator);
+        claimedRewardsAccumulator += userRewardsAccumulator;
         claimableRewards -= amount;
         uint256 currentRewardBalance = rewardBalances[from];
         rewardBalances[from] = currentRewardBalance + amount;
         return currentRewardBalance + amount;
     }
 
-    /// @notice Updates global and `from` accumulator and rewards share
-    /// @param from Address balance changed
-    function _updateAccumulator(address from) internal {
-        rewardsAccumulator += (block.timestamp - lastTime) * workingSupply;
-        lastTime = block.timestamp;
-
-        // This will be 0 on the first deposit since the balance is initialized later
-        rewardsAccumulatorOf[from] += (block.timestamp - lastTimeOf[from]) * workingBalances[from];
-        lastTimeOf[from] = block.timestamp;
-    }
-
-    /// @notice Helper to estimate claimble rewards for a specific user
+    /// @notice Helper to estimate claimable rewards for a specific user
     /// @param from Address to check rewards from
     /// @return amount `from` reward balance if it gets updated
     function _claimableRewardsOf(address from) internal view override returns (uint256 amount) {
