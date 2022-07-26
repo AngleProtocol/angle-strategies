@@ -30,11 +30,6 @@ contract SavingsRateNoBoost is BaseSavingsRate {
         totalUnderlyingHeld = totalDebt + getBalance() - lockedProfit();
     }
 
-    /// @inheritdoc BaseSavingsRate
-    function managedAssets() public view override returns (uint256) {
-        return totalDebt + getBalance();
-    }
-
     // ====================== External permissionless functions ====================
 
     /// @inheritdoc BaseSavingsRate
@@ -44,7 +39,7 @@ contract SavingsRateNoBoost is BaseSavingsRate {
     }
 
     // ============================ Internal functions =============================
-    
+
     /// @inheritdoc BaseSavingsRate
     /// @dev This function is useless in settings when there are no boosts
     function _claimableRewardsOf(address) internal pure override returns (uint256) {

@@ -41,6 +41,7 @@ contract BaseStrategy4626Storage is ERC4626Upgradeable {
     error SavingRateKnown();
     error SavingRateUnknown();
     error StrategyInUse();
+    error ZeroAddress();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}

@@ -9,13 +9,14 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     using SafeERC20 for IERC20;
 
     /// @notice Constructor of the `BaseStrategyERC4626`
-    function _initialize(ISavingsRate[] memory _savingsRate, ICoreBorrow coreBorrow_) internal initializer {
-        // TODO: verify zero address
-        coreBorrow = coreBorrow_;
-        savingsRateList = _savingsRate;
+    function _initialize(ISavingsRate[] memory _savingsRate, ICoreBorrow _coreBorrow) internal initializer {
+        if (address(_coreBorrow) == address(0)) revert ZeroAddress();
+        coreBorrow = _coreBorrow;
         for (uint256 i = 0; i < _savingsRate.length; i++) {
+            if (address(_savingsRate[i]) == address(0)) revert ZeroAddress();
             savingsRate[_savingsRate[i]] = true;
         }
+        savingsRateList = _savingsRate;
     }
 
     /// @notice Checks whether the `msg.sender` has the governor role or not
@@ -24,13 +25,13 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         _;
     }
 
-    /// @notice Checks whether the `msg.sender` has the governor role or not
+    /// @notice Checks whether the `msg.sender` has the governor role or the guardian role
     modifier onlyGovernorOrGuardian() {
         if (!coreBorrow.isGovernorOrGuardian(msg.sender)) revert NotGovernorOrGuardian();
         _;
     }
 
-    /// @notice Checks whether the `msg.sender` has the governor role or not
+    /// @notice Checks whether the `msg.sender` is a savings rate contract or not
     modifier onlySavingsRate() {
         if (!savingsRate[ISavingsRate(msg.sender)]) revert NotSavingsRate();
         _;

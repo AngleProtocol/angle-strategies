@@ -34,17 +34,12 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
 
     /// @inheritdoc ERC4626Upgradeable
     function totalAssets() public view override returns (uint256 totalUnderlyingHeld) {
-        totalUnderlyingHeld = totalDebt + getBalance() - claimableRewards;
-    }
-
-    /// @inheritdoc BaseSavingsRate
-    function managedAssets() public view override returns (uint256) {
-        return totalAssets() + claimableRewards;
+        totalUnderlyingHeld = managedAssets() - claimableRewards;
     }
 
     // ====================== External permissionless functions =============================
 
-    /** @dev See {IERC4262-withdraw} */
+    /// @inheritdoc ERC4626Upgradeable
     function withdraw(
         uint256 assets,
         address receiver,
@@ -146,17 +141,16 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
 
     // ============================== Governance functions ===================================
 
-    /// @notice Sets a new fee percentage.
-    /// @param tokenlessProduction_ The new tokenlessProduction, which efectively set the boost in `_updateLiquidityLimit`
+    /// @notice Sets a new `tokenLessProduction` parameter that dictates the boost for veANGLE holders
+    /// @param _tokenlessProduction New `tokenlessProduction` parameter
     /// @dev Not as easy --> we need to update everyones boost, if we lower the max boost then nobody is going to call it
     /// Therefore after the tx passed for all users governance should call `governanceKick`
-    function setTokenlessProduction(uint256 tokenlessProduction_) external onlyGovernor {
-        // A fee percentage over 100% doesn't make sense.
-        if (tokenlessProduction_ >= BASE_PARAMS) revert InvalidParameter();
-        // Update the fee percentage.
-        tokenlessProduction = tokenlessProduction_;
+    function setTokenlessProduction(uint256 _tokenlessProduction) external onlyGovernor {
+        // This parameter cannot be over 100%
+        if (_tokenlessProduction >= BASE_PARAMS) revert InvalidParameter();
+        tokenlessProduction = _tokenlessProduction;
 
-        emit TokenlessProductionUpdated(msg.sender, tokenlessProduction_);
+        emit TokenlessProductionUpdated(msg.sender, _tokenlessProduction);
     }
 
     /// @notice Update working balances when there is an update on the tokenless production parameters
@@ -172,12 +166,12 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         }
     }
 
-    // ===================== Internal functions ==========================
+    // =========================== Internal functions ==============================
 
     /// @notice Claims earned rewards
     /// @param from Address to claim for
-    /// @return Transferred amount to `from`
-    function _claim(address from) internal returns (uint256) {
+    /// @return currentRewardBalance Amount of rewards that can now be claimed by the
+    function _claim(address from) internal returns (uint256 currentRewardBalance) {
         uint256 globalRewardsAccumulator = rewardsAccumulator + (block.timestamp - lastTime) * workingSupply;
         uint256 userRewardsAccumulator = (block.timestamp - lastTimeOf[from]) * workingBalances[from];
 
@@ -185,29 +179,35 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         lastTime = block.timestamp;
         lastTimeOf[from] = block.timestamp;
 
-        uint256 unlockedProfit = claimableRewards - lockedProfit();
-        uint256 amount = (unlockedProfit * userRewardsAccumulator) /
+        // Amount of profit unlocked is `claimableRewards - lockedProfit()`
+        uint256 amount = ((claimableRewards - lockedProfit()) * userRewardsAccumulator) /
             (globalRewardsAccumulator - claimedRewardsAccumulator);
-        uint256 currentRewardBalance = rewardBalances[from];
-        // TODO finish looking into how this works and if this works 
+        currentRewardBalance = rewardBalances[from] + amount;
+
         claimedRewardsAccumulator += userRewardsAccumulator;
         claimableRewards -= amount;
-        
-        rewardBalances[from] = currentRewardBalance + amount;
-        return currentRewardBalance + amount;
+        rewardBalances[from] = currentRewardBalance;
     }
 
+    /// @notice Propagates a user side gain
+    /// @param gain Gain to propagate
+    function _handleUserGain(uint256 gain) internal override {
+        maxLockedProfit = (lockedProfit() + gain);
+        totalDebt += gain;
+        lastGain = uint64(block.timestamp);
+        claimableRewards += gain;
+    }
 
     /// @notice Helper to estimate claimable rewards for a specific user
     /// @param from Address to check rewards from
     /// @return amount `from` reward balance if it gets updated
-    function _claimableRewardsOf(address from) internal view override returns (uint256 amount) {
+    function _claimableRewardsOf(address from) internal view override returns (uint256) {
         uint256 globalRewardsAccumulator = rewardsAccumulator + (block.timestamp - lastTime) * workingSupply;
         // This will be 0 on the first deposit since the balance is initialized later
-        uint256 userRewardsAccumulator = 
-            (block.timestamp - lastTimeOf[from]) *
-            workingBalances[from];
-        amount = (claimableRewards - lockedProfit()) * userRewardsAccumulator / (globalRewardsAccumulator - claimedRewardsAccumulator);
+        uint256 userRewardsAccumulator = (block.timestamp - lastTimeOf[from]) * workingBalances[from];
+        uint256 amount =
+            ((claimableRewards - lockedProfit()) * userRewardsAccumulator) /
+            (globalRewardsAccumulator - claimedRewardsAccumulator);
         return rewardBalances[from] + amount;
     }
 
@@ -219,7 +219,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         uint256
     ) internal override {
         // TODO handle transfers so that it can integrate pretty well with everything -> rewards are still
-        // getting accumulated 
+        // getting accumulated
         // Of sending x% of token balance, then you're sending x% of reward balance as well
         if (to != address(0)) {
             _claim(to);
@@ -249,9 +249,6 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     /// @param totalShares Total vault shares
     /// @param votingTotal Total supply of ve tokens
     /// @dev To be called after totalSupply is updated
-    /// @dev We can add any other metric that seems suitable to adapt working balances
-    /// Here we only take into account the veANGLE balances, but we can also add a parameter on
-    /// locking period --> but this would break the ERC4626 interfaces --> NFT
     function _updateLiquidityLimit(
         address addr,
         uint256 userShares,

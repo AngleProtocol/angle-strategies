@@ -75,12 +75,14 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         return IERC20(asset()).balanceOf(address(this));
     }
 
-    function getSharePrice() external view returns(uint256) {
-        return previewRedeem(decimals());
+    /// @notice Returns this contract's managed assets
+    function managedAssets() public view virtual returns (uint256) {
+        return totalDebt + getBalance();
     }
 
-    /// @notice Returns this contract's managed assets
-    function managedAssets() public view virtual returns (uint256);
+    function getSharePrice() external view returns (uint256) {
+        return previewRedeem(decimals());
+    }
 
     /// @notice Provides an estimated Annual Percentage Rate for base depositors on this contract
     /// @dev This function is an estimation and is made for external use only
@@ -135,13 +137,13 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
 
     /// @inheritdoc ERC4626Upgradeable
     function previewDeposit(uint256 assets) public view virtual override returns (uint256) {
-        (uint256 shares,) = _previewDepositAndFees(assets);
+        (uint256 shares, ) = _previewDepositAndFees(assets);
         return shares;
     }
 
     /// @inheritdoc ERC4626Upgradeable
     function previewMint(uint256 shares) public view virtual override returns (uint256) {
-        (uint256 assets,) = _previewMintAndFees(shares);
+        (uint256 assets, ) = _previewMintAndFees(shares);
         return assets;
     }
 
@@ -167,15 +169,19 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         uint256 ownerReward = _claimableRewardsOf(owner);
         uint256 ownerShares = balanceOf(owner);
         if (ownerReward == 0 || ownerShares == 0) {
-            (uint256 shares,) = _computeWithdrawalFees(assets);
+            (uint256 shares, ) = _computeWithdrawalFees(assets);
             return shares;
-        }
-        else {
+        } else {
             // If there is a boost, let's say you brought 10 of assets, got 20 shares and then earned 1 of asset, then
             // to get back 2 of assets in this case where shares are not the same for everyone you need to burn:
             // 2 * 20 / (12)
             uint256 ownerAssets = _convertToAssets(ownerShares, MathUpgradeable.Rounding.Down);
-            return assets.mulDiv(ownerShares * BASE_PARAMS, (ownerReward + ownerAssets)*(BASE_PARAMS-withdrawFee), MathUpgradeable.Rounding.Up);
+            return
+                assets.mulDiv(
+                    ownerShares * BASE_PARAMS,
+                    (ownerReward + ownerAssets) * (BASE_PARAMS - withdrawFee),
+                    MathUpgradeable.Rounding.Up
+                );
         }
     }
 
@@ -186,16 +192,12 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         uint256 ownerReward = _claimableRewardsOf(owner);
         uint256 ownerShares = balanceOf(owner);
         if (ownerReward == 0 || ownerShares == 0) {
-            (uint256 assets,) = _computeRedemptionFees(shares);
+            (uint256 assets, ) = _computeRedemptionFees(shares);
             return assets;
         } else {
             uint256 ownerRewardShares = (ownerReward * shares) / ownerShares;
             uint256 assetsPlusFees = _convertToAssets(shares, MathUpgradeable.Rounding.Down) + ownerRewardShares;
-            return assetsPlusFees - assetsPlusFees.mulDiv(
-                    withdrawFee,
-                    BASE_PARAMS,
-                    MathUpgradeable.Rounding.Up
-            );
+            return assetsPlusFees - assetsPlusFees.mulDiv(withdrawFee, BASE_PARAMS, MathUpgradeable.Rounding.Up);
         }
     }
 
@@ -224,7 +226,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
 
     /// @inheritdoc ERC4626Upgradeable
     function deposit(uint256 assets, address receiver) public virtual override returns (uint256) {
-        if(assets > maxDeposit(receiver)) revert TooHighDeposit();
+        if (assets > maxDeposit(receiver)) revert TooHighDeposit();
         (uint256 shares, uint256 fees) = _previewDepositAndFees(assets);
         _deposit(_msgSender(), receiver, assets, shares);
         _handleProtocolGain(fees);
@@ -233,7 +235,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
 
     /// @inheritdoc ERC4626Upgradeable
     function mint(uint256 shares, address receiver) public virtual override returns (uint256) {
-        if(shares > maxMint(receiver)) revert TooHighDeposit();
+        if (shares > maxMint(receiver)) revert TooHighDeposit();
         (uint256 assets, uint256 fees) = _previewMintAndFees(shares);
         _deposit(_msgSender(), receiver, assets, shares);
         _handleProtocolGain(fees);
@@ -248,7 +250,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     ) public virtual override returns (uint256) {
         (, uint256 loss) = _beforeWithdraw(assets);
         // Function should withdraw if we cannot get enough assets
-        (uint256 shares, uint256 fees) = _computeWithdrawalFees(assets+loss);
+        (uint256 shares, uint256 fees) = _computeWithdrawalFees(assets + loss);
         _handleProtocolGain(fees);
         // Function reverts if there is not enough available in the contract
         _withdraw(_msgSender(), receiver, owner, assets, shares);
@@ -264,8 +266,8 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         (uint256 assets, uint256 fees) = _computeRedemptionFees(shares);
         (, uint256 loss) = _beforeWithdraw(assets);
         _handleProtocolGain(fees);
-        _withdraw(_msgSender(), receiver, owner, assets-loss-fees, shares);
-        return assets+loss-fees;
+        _withdraw(_msgSender(), receiver, owner, assets - loss - fees, shares);
+        return assets + loss - fees;
     }
 
     /// @notice Harvests a set of strategies, recognizing any profits or losses and adjusting
@@ -439,41 +441,29 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
 
     // ========================== Internal functions ===============================
 
-    function _previewDepositAndFees(uint256 assets) public view virtual returns(uint256 shares,uint256 fees) {
-        fees = assets.mulDiv(
-                depositFee,
-                BASE_PARAMS,
-                MathUpgradeable.Rounding.Up
-        );
-        shares = _convertToShares(assets-fees, MathUpgradeable.Rounding.Down);
+    /// @notice Computes the fees paid on deposit and the associated shares minted for a deposit of `assets`
+    function _previewDepositAndFees(uint256 assets) public view virtual returns (uint256 shares, uint256 fees) {
+        fees = assets.mulDiv(depositFee, BASE_PARAMS, MathUpgradeable.Rounding.Up);
+        shares = _convertToShares(assets - fees, MathUpgradeable.Rounding.Down);
     }
 
-    function _previewMintAndFees(uint256 shares) public view virtual returns(uint256 assets,uint256 fees) {
+    /// @notice Computes the fees paid on mint and the associated assets taken for a mint of `shares`
+    function _previewMintAndFees(uint256 shares) public view virtual returns (uint256 assets, uint256 fees) {
         assets = _convertToAssets(shares, MathUpgradeable.Rounding.Up);
-        fees = assets.mulDiv(
-                BASE_PARAMS,
-                BASE_PARAMS - depositFee,
-                MathUpgradeable.Rounding.Up
-        ) - assets;
+        fees = assets.mulDiv(BASE_PARAMS, BASE_PARAMS - depositFee, MathUpgradeable.Rounding.Up) - assets;
     }
 
-    function _computeWithdrawalFees(uint256 assets) internal view returns(uint256 shares, uint256 fees) {
-        uint256 assetsPlusFees = assets.mulDiv(
-                BASE_PARAMS,
-                BASE_PARAMS - withdrawFee,
-                MathUpgradeable.Rounding.Up
-        );
+    /// @notice Computes the fees paid and the shares burnt for a withdrawal of `assets`
+    function _computeWithdrawalFees(uint256 assets) internal view returns (uint256 shares, uint256 fees) {
+        uint256 assetsPlusFees = assets.mulDiv(BASE_PARAMS, BASE_PARAMS - withdrawFee, MathUpgradeable.Rounding.Up);
         shares = _convertToShares(assetsPlusFees, MathUpgradeable.Rounding.Up);
         fees = assetsPlusFees - assets;
     }
 
-    function _computeRedemptionFees(uint256 shares) internal view returns(uint256 assets, uint256 fees) {
+    /// @notice Computes the fees paid and the assets redeemed for a redemption of `shares`
+    function _computeRedemptionFees(uint256 shares) internal view returns (uint256 assets, uint256 fees) {
         assets = _convertToAssets(shares, MathUpgradeable.Rounding.Down);
-        fees = assets.mulDiv(
-                withdrawFee,
-                BASE_PARAMS,
-                MathUpgradeable.Rounding.Up
-        );
+        fees = assets.mulDiv(withdrawFee, BASE_PARAMS, MathUpgradeable.Rounding.Up);
     }
 
     /// @notice Tells a strategy how much it owes to this contract
