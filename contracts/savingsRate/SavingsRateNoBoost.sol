@@ -30,12 +30,50 @@ contract SavingsRateNoBoost is BaseSavingsRate {
         totalUnderlyingHeld = totalDebt + getBalance() - lockedProfit();
     }
 
-    // ====================== External permissionless functions ====================
+    function sharePrice() external view override returns (uint256) {
+        return previewRedeem(decimals());
+    }
 
-    /// @inheritdoc BaseSavingsRate
-    function notifyRewardAmount(uint256 amount) external override {
-        SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(asset()), msg.sender, address(this), amount);
-        _handleUserGain(amount);
+    /// @inheritdoc ERC4626Upgradeable
+    /// @dev Lighter implementation for the contract with no boost
+    function previewWithdraw(uint256 assets) public view override returns (uint256) {
+        (uint256 shares, ) = _computeWithdrawalFees(assets);
+        return shares;
+    }
+
+    /// @inheritdoc ERC4626Upgradeable
+    /// @dev Lighter implementation for this contract where no boost is given
+    function previewRedeem(uint256 shares) public view override returns (uint256) {
+        (uint256 assets, ) = _computeRedemptionFees(shares);
+        return assets;
+    }
+
+    /// @inheritdoc ERC4626Upgradeable
+    function withdraw(
+        uint256 assets,
+        address receiver,
+        address owner
+    ) public virtual override returns (uint256) {
+        (, uint256 loss) = _beforeWithdraw(assets);
+        // Function should withdraw if we cannot get enough assets
+        (uint256 shares, uint256 fees) = _computeWithdrawalFees(assets + loss);
+        _handleProtocolGain(fees);
+        // Function reverts if there is not enough available in the contract
+        _withdraw(_msgSender(), receiver, owner, assets, shares);
+        return shares;
+    }
+
+    /// @inheritdoc ERC4626Upgradeable
+    function redeem(
+        uint256 shares,
+        address receiver,
+        address owner
+    ) public virtual override returns (uint256) {
+        (uint256 assets, uint256 fees) = _computeRedemptionFees(shares);
+        (, uint256 loss) = _beforeWithdraw(assets);
+        _handleProtocolGain(fees);
+        _withdraw(_msgSender(), receiver, owner, assets - loss, shares);
+        return assets - loss;
     }
 
     // ============================ Internal functions =============================

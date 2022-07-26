@@ -34,7 +34,55 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
 
     /// @inheritdoc ERC4626Upgradeable
     function totalAssets() public view override returns (uint256 totalUnderlyingHeld) {
-        totalUnderlyingHeld = managedAssets() - claimableRewards;
+        totalUnderlyingHeld = managedAssets() - vestingProfit;
+    }
+
+    /// @inheritdoc BaseSavingsRate
+    function sharePrice() external view override returns (uint256) {
+        return previewRedeem(decimals());
+    }
+
+    /// @inheritdoc ERC4626Upgradeable
+    /// @dev In case the savings rate contract gives different yield to different addresses
+    /// (based on their veANGLE balance for instance), the output of this function depends on the `msg.sender`
+    function previewWithdraw(uint256 assets) public view override returns (uint256) {
+        return previewWithdraw(msg.sender, assets);
+    }
+
+    /// @inheritdoc ERC4626Upgradeable
+    /// @dev Like `previewWithdraw`, this function also depends on the `msg.sender`
+    function previewRedeem(uint256 shares) public view override returns (uint256) {
+        return previewRedeem(msg.sender, shares);
+    }
+
+    /// @notice Allows an on-chain or off-chain user to simulate the effects of their withdrawal
+    /// at the current block, given current on-chain conditions and for a chosen address
+    /// @dev This function is specific for implementations of savings rate contracts where a boost is given to
+    /// some addresses and not all users are equivalent
+    function previewWithdraw(address owner, uint256 assets) public view returns (uint256 shares) {
+        uint256 ownerReward = _claimableRewardsOf(owner);
+        // Function will revert if we cannot get enough assets
+        (, uint256 fees) = _computeWithdrawalFees(assets);
+        uint256 assetsTrueCost = assets + fees;
+        if (ownerReward < assetsTrueCost) {
+            shares = _convertToShares(assetsTrueCost - ownerReward, MathUpgradeable.Rounding.Up);
+        }
+    }
+
+    /// @notice Implementation of the `previewRedeem` function for a specific `owner`
+    /// @dev This function could return a number of assets greater than what a `redeem` call would give
+    /// in case the strategy faces a loss
+    function previewRedeem(address owner, uint256 shares) public view returns (uint256) {
+        uint256 ownerReward = _claimableRewardsOf(owner);
+        uint256 ownerShares = balanceOf(owner);
+        if (ownerReward == 0 || ownerShares == 0) {
+            (uint256 assets, ) = _computeRedemptionFees(shares);
+            return assets;
+        } else {
+            uint256 ownerRewardShares = (ownerReward * shares) / ownerShares;
+            uint256 assetsPlusFees = _convertToAssets(shares, MathUpgradeable.Rounding.Down) + ownerRewardShares;
+            return assetsPlusFees - assetsPlusFees.mulDiv(withdrawFee, BASE_PARAMS, MathUpgradeable.Rounding.Up);
+        }
     }
 
     // ====================== External permissionless functions =============================
@@ -45,68 +93,81 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         address receiver,
         address owner
     ) public virtual override returns (uint256) {
-        // TODO revert when needed
-        uint256 ownerReward = _claim(owner);
-        uint256 loss;
-        (assets, loss) = _beforeWithdraw(assets);
-
+        uint256 ownerReward = _checkpointRewards(owner);
+        (, uint256 loss) = _beforeWithdraw(assets);
+        // Function will revert if we cannot get enough assets
+        (, uint256 fees) = _computeWithdrawalFees(assets + loss);
+        uint256 assetsTrueCost = assets + loss + fees;
         uint256 shares;
-        uint256 assetsTrueCost = assets + loss;
         if (ownerReward < assetsTrueCost) {
             shares = _convertToShares(assetsTrueCost - ownerReward, MathUpgradeable.Rounding.Up);
-            if (shares > balanceOf(owner)) revert WithdrawLimit();
-            rewardBalances[owner] -= ownerReward;
+            delete rewardBalances[owner];
         } else {
             rewardBalances[owner] -= assets;
         }
-
+        _handleProtocolGain(fees);
+        // Function reverts if there is not enough available in the contract
         _withdraw(_msgSender(), receiver, owner, assets, shares);
-
+        // `vestingProfit` needs to be updated after `handleProtocolGain` otherwise too many shares would be minted
+        if (ownerReward < assetsTrueCost) {
+            vestingProfit -= ownerReward;
+        } else {
+            vestingProfit -= assets;
+        }
         return shares;
     }
 
-    /** @dev See {IERC4262-redeem} */
+    /// @inheritdoc ERC4626Upgradeable
     function redeem(
         uint256 shares,
         address receiver,
         address owner
     ) public virtual override returns (uint256) {
-        // TODO revert when needed
-        uint256 ownerTotalShares = balanceOf(owner);
-        require(shares <= ownerTotalShares, "ERC4626: redeem more than max");
-
-        uint256 ownerReward = _claim(owner);
-        uint256 ownerRewardShares = (ownerReward * shares) / ownerTotalShares;
-
-        uint256 assets = _convertToAssets(shares, MathUpgradeable.Rounding.Down);
-        uint256 loss;
-        uint256 freedAssets;
-        (freedAssets, loss) = _beforeWithdraw(assets + ownerRewardShares);
-        // if we didn't suceed to withdraw enough, we need to decrease the number of shares burnt
-        if (freedAssets < ownerRewardShares) {
-            shares = 0;
-            rewardBalances[owner] -= freedAssets;
-        } else if (freedAssets < assets + ownerRewardShares) {
-            assets = freedAssets - ownerRewardShares;
-            shares = _convertToShares(assets, MathUpgradeable.Rounding.Up);
-            rewardBalances[owner] -= ownerRewardShares;
-        } else {
-            rewardBalances[owner] -= ownerRewardShares;
-        }
-
-        // `assets-loss` will never revert here because it would revert on the slippage protection in `withdraw()`
-        _withdraw(_msgSender(), receiver, owner, freedAssets - loss, shares);
-
-        return freedAssets - loss;
+        // The owner accumulated 5 of assets in rewards
+        uint256 ownerReward = _checkpointRewards(owner);
+        // It has in total 100 shares
+        uint256 ownerShares = balanceOf(owner);
+        // In assets this means that if the owner wants the redeem 10 shares (that is to say 10% of its shares), we'll fetch
+        // 10% of its earned assets
+        uint256 ownerRewardShares = (ownerReward * shares) / ownerShares;
+        // Total amount claimable from 10 shares is then assuming that we had 100 shares and 100 of assets in the beginning
+        // 10.5
+        uint256 assetsPlusFees = _convertToAssets(shares, MathUpgradeable.Rounding.Down) + ownerRewardShares;
+        // In fact the owner will get less from that since fees are taken
+        uint256 fees =  assetsPlusFees.mulDiv(withdrawFee, BASE_PARAMS, MathUpgradeable.Rounding.Up);
+        // This is the real amount of assets that will need to be obtained
+        uint256 assets = assetsPlusFees - fees;
+        // But now: we need to make this available
+        (, uint256 loss) = _beforeWithdraw(assets);
+        // Once we're good on that we can do our accounting:
+        rewardBalances[owner] -= ownerRewardShares;
+        // Loss is at the expense of the user
+        _withdraw(_msgSender(), receiver, owner, assets - loss, shares);
+        vestingProfit -= ownerRewardShares;
+        return assets - loss;
     }
 
-    /// @notice Claims earned rewards and update working balances
+    /// @notice Checkpoints earned rewards and update working balances
     /// @return rewardBalance `msg.sender` reward balance at the end of the function
-    function checkpoint() external returns (uint256 rewardBalance) {
-        rewardBalance = _claim(msg.sender);
+    function checkpoint() external returns (uint256) {
+        return _checkpoint();
+    }
 
+    /// @notice Internal version of the checkpoint function
+    function _checkpoint() internal returns (uint256 rewardBalance) {
+        rewardBalance = _checkpointRewards(msg.sender);
         uint256 votingTotal = IERC20(address(votingEscrow)).totalSupply();
         _updateLiquidityLimit(msg.sender, balanceOf(msg.sender), totalSupply(), votingTotal);
+
+    }
+
+    /// @notice Claims rewards and mints corresponding shares
+    function checkpointAndRebalance() external returns(uint256 shares) {
+        uint256 rewardBalance = _checkpoint();
+        shares = _convertToShares(rewardBalance, MathUpgradeable.Rounding.Down);
+        _mint(msg.sender, shares);
+        delete rewardBalances[msg.sender];
+        vestingProfit -= rewardBalance;
     }
 
     /// @notice Helper to estimate claimble rewards for a specific user
@@ -114,12 +175,6 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     /// @return amount `from` reward balance if it gets updated
     function claimableRewardsOf(address from) external view returns (uint256) {
         return _claimableRewardsOf(from);
-    }
-
-    /// @notice To deposit directly rewards onto the contract
-    function notifyRewardAmount(uint256 amount) external override {
-        SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(asset()), msg.sender, address(this), amount);
-        _handleUserGain(amount);
     }
 
     /// @notice  Kick `addr` for abusing their boost
@@ -135,7 +190,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
 
         uint256 totalSupply = totalSupply();
         uint256 votingTotal = IERC20(address(votingEscrow)).totalSupply();
-        _claim(addr);
+        _checkpointRewards(addr);
         _updateLiquidityLimit(addr, balanceOf(addr), totalSupply, votingTotal);
     }
 
@@ -161,7 +216,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         uint256 votingTotal = IERC20(address(votingEscrow)).totalSupply();
 
         for (uint256 i = 0; i < addrs.length; i++) {
-            _claim(addrs[i]);
+            _checkpointRewards(addrs[i]);
             _updateLiquidityLimit(addrs[i], balanceOf(addrs[i]), totalSupply, votingTotal);
         }
     }
@@ -171,61 +226,81 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     /// @notice Claims earned rewards
     /// @param from Address to claim for
     /// @return currentRewardBalance Amount of rewards that can now be claimed by the
-    function _claim(address from) internal returns (uint256 currentRewardBalance) {
-        uint256 globalRewardsAccumulator = rewardsAccumulator + (block.timestamp - lastTime) * workingSupply;
-        uint256 userRewardsAccumulator = (block.timestamp - lastTimeOf[from]) * workingBalances[from];
+    function _checkpointRewards(address from) internal returns (uint256 currentRewardBalance) {
+        currentRewardBalance = rewardBalances[from];
+        if (from != address(0)) {
+            uint256 totalSupply = workingSupply;
+            uint256 userBalance = workingBalances[from];
+            uint256 _integral = integral;
+            uint256 _lastUpdate = Math.min(block.timestamp, periodFinish);
+            uint256 duration = _lastUpdate - lastUpdate;
 
-        rewardsAccumulator = globalRewardsAccumulator;
-        lastTime = block.timestamp;
-        lastTimeOf[from] = block.timestamp;
-
-        // Amount of profit unlocked is `claimableRewards - lockedProfit()`
-        uint256 amount = ((claimableRewards - lockedProfit()) * userRewardsAccumulator) /
-            (globalRewardsAccumulator - claimedRewardsAccumulator);
-        currentRewardBalance = rewardBalances[from] + amount;
-
-        claimedRewardsAccumulator += userRewardsAccumulator;
-        claimableRewards -= amount;
-        rewardBalances[from] = currentRewardBalance;
+            if (duration != 0) {
+                lastUpdate = uint64(_lastUpdate);
+                if (totalSupply != 0) {
+                    _integral += (duration * rewardRate * 10**18) / totalSupply;
+                    integral = _integral;
+                }
+            }
+            uint256 userIntegralFor = integralFor[from];
+            if (userIntegralFor < _integral) {
+                integralFor[from] = _integral;
+                currentRewardBalance += (userBalance * (_integral - userIntegralFor)) / 10**18;
+                rewardBalances[from] = currentRewardBalance;
+            }
+            lastTimeOf[from] = block.timestamp;
+        }
     }
 
     /// @notice Propagates a user side gain
     /// @param gain Gain to propagate
     function _handleUserGain(uint256 gain) internal override {
-        maxLockedProfit = (lockedProfit() + gain);
-        totalDebt += gain;
-        lastGain = uint64(block.timestamp);
-        claimableRewards += gain;
+        uint256 _periodFinish = periodFinish;
+        uint64 _vestingPeriod = vestingPeriod;
+        if (block.timestamp >= _periodFinish) {
+            rewardRate = gain / _vestingPeriod;
+        } else {
+            uint256 remaining = _periodFinish - block.timestamp;
+            uint256 leftover = remaining * rewardRate;
+            rewardRate = (gain + leftover) / _vestingPeriod;
+        }
+        lastUpdate = uint64(block.timestamp);
+        periodFinish = uint64(block.timestamp) + _vestingPeriod;
+        vestingProfit += gain;
     }
+
+    // No need for specific user handling in case of a loss: share price is decreasing for everyone
 
     /// @notice Helper to estimate claimable rewards for a specific user
     /// @param from Address to check rewards from
     /// @return amount `from` reward balance if it gets updated
     function _claimableRewardsOf(address from) internal view override returns (uint256) {
-        uint256 globalRewardsAccumulator = rewardsAccumulator + (block.timestamp - lastTime) * workingSupply;
-        // This will be 0 on the first deposit since the balance is initialized later
-        uint256 userRewardsAccumulator = (block.timestamp - lastTimeOf[from]) * workingBalances[from];
-        uint256 amount =
-            ((claimableRewards - lockedProfit()) * userRewardsAccumulator) /
-            (globalRewardsAccumulator - claimedRewardsAccumulator);
-        return rewardBalances[from] + amount;
+        uint256 totalSupply = workingSupply;
+        uint256 userBalance = workingBalances[from];
+        uint256 _integral = integral;
+        if (totalSupply != 0) {
+            uint256 _lastUpdate = Math.min(block.timestamp, periodFinish);
+            uint256 duration = _lastUpdate - lastUpdate;
+            _integral += (duration * rewardRate * 10**18) / totalSupply;
+        }
+        uint256 userIntegralFor = integralFor[from];
+        return (userBalance * (_integral - userIntegralFor)) / 10**18 + rewardBalances[from];
     }
 
-    /** @dev See {ERC20Upgradeable-_beforeTokenTransfer} */
-    /// @dev In the case of a burn the call has been already made
+    /// @inheritdoc ERC20Upgradeable
+    /// @dev In case of normal transfers, you are also transferring a portion of your rewards equivalent to the portion
+    /// of your shares balance
     function _beforeTokenTransfer(
         address from,
         address to,
-        uint256
+        uint256 amount
     ) internal override {
-        // TODO handle transfers so that it can integrate pretty well with everything -> rewards are still
-        // getting accumulated
-        // Of sending x% of token balance, then you're sending x% of reward balance as well
-        if (to != address(0)) {
-            _claim(to);
-            if (from != address(0)) {
-                _claim(from);
-            }
+        _checkpointRewards(to);
+        uint256 fromRewardBalance = _checkpointRewards(from);
+        if (from != address(0) && to != address(0)) {
+            uint256 proportion = (amount * fromRewardBalance) / balanceOf(from);
+            rewardBalances[from] -= proportion;
+            rewardBalances[to] += proportion;
         }
     }
 

@@ -24,6 +24,7 @@ struct StrategyParams {
 /// @title BaseSavingsRateStorage
 /// @author Angle Core Team
 /// @dev Variables, references, parameters and events needed in all `SavingsRate` contracts
+//solhint-disable-next-line
 contract BaseSavingsRateStorage is ERC4626Upgradeable {
     /// @notice Maximum number of elements allowed on the withdrawal stack
     /// @dev Needed to prevent denial of service attacks by queue operators
@@ -54,7 +55,7 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
     uint64 public vestingPeriod;
 
     /// @notice Timestamp representing for when the last gain occurred for users
-    uint64 public lastGain;
+    uint64 public lastUpdate;
 
     // =============================== References ==================================
 
@@ -70,14 +71,14 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
     uint256 public totalDebt;
 
     /// @notice Proportion of the funds managed dedicated to strategies
-    /// Has to be between 0 and `BASE_PARAMS`
+    /// @dev Has to be between 0 and `BASE_PARAMS`
     uint256 public debtRatio;
 
     /// @notice Unpaid loss from the protocol
     uint256 public protocolLoss;
 
-    /// @notice The amount of locked profit at the end of the last harvest
-    uint256 public maxLockedProfit;
+    /// @notice Amount of profit that needs to be vested
+    uint256 public vestingProfit;
 
     /// @notice Ordered array of strategies representing the withdrawal stack
     /// @dev The stack is processed in descending order, meaning the last index will be withdrawn from first
@@ -95,6 +96,8 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
 
     // =============================== Events ======================================
 
+    // TODO clean events and errors
+    
     event FeesClaimed(address indexed user, uint256 rvTokenAmount);
     event FiledUint64(uint64 param, bytes32 what);
     event Harvest(address indexed user, IStrategy4626[] strategies);

@@ -9,6 +9,8 @@ import "../interfaces/IVotingEscrow.sol";
 /// @author Angle Core Team
 /// @dev Specific storage contract for additional variables needed in the `SavingsRate` contract which need a boost
 contract SavingsRateStorage {
+
+    // TODO clean events and errors
     // =============================== References ==================================
 
     /// @notice Reference to the veANGLE contract
@@ -27,17 +29,11 @@ contract SavingsRateStorage {
 
     /// @notice Boosting params
     uint256 public workingSupply;
-
-    /// @notice Rewards (in asset) claimable by depositors
-    uint256 public claimableRewards;
     /// @notice Used to track rewards accumulated by all depositors of the contract
-    uint256 public rewardsAccumulator;
-    /// @notice Tracks rewards already claimed by all depositors
-    uint256 public claimedRewardsAccumulator;
-    /// @notice Last time rewards were claimed in the contract
-    uint256 public lastTime;
+    uint256 public integral;
     /// @notice Maps an address to the last time it claimed its rewards
     mapping(address => uint256) public lastTimeOf;
+    mapping(address => uint256) public integralFor;
 
     // ================================ Mappings ===================================
 
@@ -46,6 +42,10 @@ contract SavingsRateStorage {
 
     /// @notice Users claimable rewards balances
     mapping(address => uint256) public rewardBalances;
+
+    uint256 public rewardRate;
+
+    uint64 public periodFinish;
 
     // =============================== Events ======================================
 
