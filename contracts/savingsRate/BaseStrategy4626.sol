@@ -9,7 +9,7 @@ import "./BaseStrategy4626Storage.sol";
 // TODO: not sure of the flow with totalStrategyHoldings`: we could look at the immediately available balance and
 // have a totalInvestedAmount: in `_adjustPosition` we just need to change amountInvested or divested. This prevents us
 // from having to update on deposit and withdraw -> not sure though whether this solution is better
-abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
+abstract contract BaseStrategy4626 is IStrategy4626, BaseStrategy4626Storage  {
     using SafeERC20 for IERC20;
 
     /// @notice Initializes the `BaseStrategyERC4626` contract
@@ -61,19 +61,24 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         return totalAssets() > 0;
     }
 
+    /// @inheritdoc IStrategy4626
+    function isSavingsRate() external view returns(bool) {
+        return savingsRate[ISavingsRate(msg.sender)];
+    }
+
     /// @notice Returns the list of savings rate contracts which are plugged to the strategy
     function savingsRateActive() external view returns (ISavingsRate[] memory) {
         return savingsRateList;
     }
 
     /// @notice Computes the total amount of underlying tokens the SavingsRate holds
-    function totalAssets() public view virtual override returns (uint256) {
+    function totalAssets() public view virtual override(ERC4626Upgradeable, IERC4626Upgradeable) returns (uint256) {
         return totalStrategyHoldings;
     }
 
     // =========================== View virtual functions ==========================
 
-    /// @notice Estimates the APR provided by the strategy
+    /// @inheritdoc IStrategy4626
     function estimatedAPR() external view virtual returns (uint256);
 
     // =========================== External functions ==============================
@@ -86,7 +91,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         uint256 assets,
         address receiver,
         address owner
-    ) public virtual override returns (uint256 _loss) {
+    ) public virtual override(ERC4626Upgradeable, IERC4626Upgradeable) returns (uint256 _loss) {
         // Need to free at least `assets` from the strat
         (, _loss) = _liquidatePosition(assets);
         if (assets + _loss > maxWithdraw(owner)) revert TooHighWithdraw();
@@ -102,7 +107,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         uint256 shares,
         address receiver,
         address owner
-    ) public virtual override returns (uint256 _loss) {
+    ) public virtual override(ERC4626Upgradeable, IERC4626Upgradeable) returns (uint256 _loss) {
         if (shares > maxRedeem(owner)) revert TooHighWithdraw();
 
         uint256 assets = previewRedeem(shares);
@@ -159,21 +164,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
 
     // ============================ Internal Functions =============================
 
-    /// @notice Prepares a return of the strategy to one of the savings rate contract plugged to the strategy
-    /// @param _callerDebtOutstanding Amount of `asset` owed by the strategy to the savings rate contract:
-    /// it will be 0 if the Strategy is not past the configured debt limit,
-    /// otherwise its value will be how far past the debt limit the Strategy is.
-    /// @return profit Profit made by the strategy
-    /// @return loss Loss made by the strategy
-    /// @dev In the rare case the Strategy is in emergency shutdown, this will exit the Strategy's position.
-    /// @dev When `report()` is called, the Strategy reports to the corresponding savings rate contract,
-    /// so in some cases `harvest()` must be called in order to take in profits,
-    /// to borrow newly available funds from the vaults, or
-    /// otherwise adjust its position. In other cases `harvest()` must be
-    /// called to report to the vaults on the Strategy's position, especially if
-    /// any losses have occurred.
-    /// @dev The returned values must be taken cautiously as they are aggregated for all the savings rate contracts
-    /// which interact with this strategy
+    /// @inheritdoc IStrategy4626
     function report(uint256 _callerDebtOutstanding) public onlySavingsRate returns (uint256 profit, uint256 loss) {
         uint256 currentDebt = totalStrategyHoldings;
 

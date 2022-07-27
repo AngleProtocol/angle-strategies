@@ -39,7 +39,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
 
     /// @inheritdoc BaseSavingsRate
     function sharePrice() external view override returns (uint256) {
-        return previewRedeem(decimals());
+        return previewRedeem(10**decimals());
     }
 
     /// @inheritdoc ERC4626Upgradeable

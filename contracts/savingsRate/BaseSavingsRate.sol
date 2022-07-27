@@ -8,6 +8,15 @@ import "./BaseSavingsRateStorage.sol";
 /// @notice Base contract for yield aggregator vaults which can connect to multiple ERC4626 strategies
 /// @dev This base contract can be used for savings rate contracts that give a boost in yield to some addresses
 /// as well as for contracts that do not handle such boosts
+/* 
+TODO 
+- remove when done (just let here for the inspiration)
+ * Yearn: https://etherscan.io/address/0x5f18c75abdae578b483e5f43f12a39cf75b973a9#code
+ * Rari: https://github.com/Rari-Capital/vaults/blob/main/src/Vault.sol
+- do we add strategist fees as well?
+- do we add a rate limit
+
+*/
 abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     using SafeERC20 for IERC20;
     using Address for address;
@@ -106,6 +115,8 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     function maxWithdraw(address owner) public view override returns (uint256) {
         uint256 maxAsset = _convertToAssets(balanceOf(owner), MathUpgradeable.Rounding.Down) +
             _claimableRewardsOf(owner);
+        // TODO: we could iterate through the withdrawal queue and look at the maxWithdraw (or whatever you name it)
+        // of the associated strategies in it
         return Math.min(maxAsset, getBalance());
     }
 
@@ -186,12 +197,6 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     // TODO we may want to add the opportunity for whitelisting on harvest -> in order not to acknowledge loss or so
     // in some cases -> maybe at the strategy level in the mapping
     function harvest(IStrategy4626[] memory strategiesToHarvest) public {
-        // Warning: `totalAssets` could be manipulated by flashloan attacks.
-        // It may allow external users to transfer funds into strategy or remove funds
-        // from the strategy. Yet, as it does not impact the profit or loss and as attackers
-        // have no interest in making such txs to have a direct profit, we let it as is.
-        // The only issue is if the strategy is compromised; in this case governance
-        // should revoke the strategy
         uint256 _managedAssets = managedAssets();
         for (uint256 i = 0; i < strategiesToHarvest.length; i++) {
             if (strategies[strategiesToHarvest[i]].lastReport == 0) revert InvalidStrategy();
@@ -228,7 +233,8 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     function addStrategy(IStrategy4626 strategy, uint256 _debtRatio) external onlyGovernor {
         StrategyParams storage params = strategies[strategy];
         IERC20 asset = IERC20(asset());
-        if (params.lastReport != 0 || !strategy.isVault() || address(asset) != strategy.asset())
+        // Normally with the current implementation of strategy contracts, the two last conditions are redundant
+        if (params.lastReport != 0 || !strategy.isSavingsRate() || address(asset) != strategy.asset())
             revert InvalidStrategy();
 
         // Add strategy to approved strategies
@@ -412,6 +418,8 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
             // cf Rari uses balanceOfUnderlying -> probably tapping in another function could be the best way since anyway our strat
             // contracts do not have to be ERC4626
             // on our side as strats do not exactly have the right interfaces might not be an issue
+            // One reason though for which we may not want to use maxWithdraw like that -> we may want each strategy to have maxWithdraw
+            // that tells us how much we can withdraw and this gives us the real maxWithdraw 
             uint256 balanceThisHarvest = strategy.maxWithdraw(address(this));
 
             params.lastReport = block.timestamp;
