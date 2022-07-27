@@ -8,5 +8,6 @@ pragma solidity 0.8.12;
 interface IVotingEscrowBoost {
     /// @notice Get current veANGLE delegated balance for `user`
     /// @param user Address to check ve delegation for
+    //solhint-disable-next-line
     function adjusted_balance_of(address user) external view returns (uint256);
 }

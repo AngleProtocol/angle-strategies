@@ -5,7 +5,7 @@ import "./BaseSavingsRate.sol";
 import "./SavingsRateStorage.sol";
 
 /// @title SavingsRateNoBoost
-/// @author Angle Protocol
+/// @author Angle Core Team
 /// @notice Contract for yield aggregator vaults which can connect to multiple ERC4626 strategies
 /// @notice In this implementation there's no boost given to owners of the shares of the contract
 contract SavingsRateNoBoost is BaseSavingsRate {
@@ -57,6 +57,7 @@ contract SavingsRateNoBoost is BaseSavingsRate {
         (, uint256 loss) = _beforeWithdraw(assets);
         // Function should withdraw if we cannot get enough assets
         (uint256 shares, uint256 fees) = _computeWithdrawalFees(assets + loss);
+        /// TODO we may want to leave the opportunity for fees to stay in the protocol
         _handleProtocolGain(fees);
         // Function reverts if there is not enough available in the contract
         _withdraw(_msgSender(), receiver, owner, assets, shares);
@@ -72,6 +73,7 @@ contract SavingsRateNoBoost is BaseSavingsRate {
         (uint256 assets, uint256 fees) = _computeRedemptionFees(shares);
         (, uint256 loss) = _beforeWithdraw(assets);
         _handleProtocolGain(fees);
+        // Assets is always greater than loss
         _withdraw(_msgSender(), receiver, owner, assets - loss, shares);
         return assets - loss;
     }

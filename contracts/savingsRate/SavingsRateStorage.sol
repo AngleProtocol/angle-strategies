@@ -9,8 +9,6 @@ import "../interfaces/IVotingEscrow.sol";
 /// @author Angle Core Team
 /// @dev Specific storage contract for additional variables needed in the `SavingsRate` contract which need a boost
 contract SavingsRateStorage {
-
-    // TODO clean events and errors
     // =============================== References ==================================
 
     /// @notice Reference to the veANGLE contract
@@ -21,7 +19,7 @@ contract SavingsRateStorage {
 
     // =============================== Parameters ==================================
 
-    /// @dev Adapts the max boost achievable
+    /// @notice Adapts the max boost achievable
     /// If set to 40%, Maximum boost for veANGLE holders will be 2.5
     uint256 public tokenlessProduction;
 
@@ -31,21 +29,22 @@ contract SavingsRateStorage {
     uint256 public workingSupply;
     /// @notice Used to track rewards accumulated by all depositors of the contract
     uint256 public integral;
+    /// @notice Rate of distribution of rewards to share owners
+    uint256 public rewardRate;
+    /// @notice Time at which reward distribution should end
+    uint64 public periodFinish;
     /// @notice Maps an address to the last time it claimed its rewards
     mapping(address => uint256) public lastTimeOf;
+    /// @notice Used to compute rewards accumulated by a given user of the contract
     mapping(address => uint256) public integralFor;
 
     // ================================ Mappings ===================================
 
-    /// @notice Users shares balances taking into account the veBoost
-    mapping(address => uint256) public workingBalances;
-
     /// @notice Users claimable rewards balances
     mapping(address => uint256) public rewardBalances;
 
-    uint256 public rewardRate;
-
-    uint64 public periodFinish;
+    /// @notice Users shares balances taking into account the veBoost
+    mapping(address => uint256) public workingBalances;
 
     // =============================== Events ======================================
 

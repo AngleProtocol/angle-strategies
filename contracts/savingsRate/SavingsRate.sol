@@ -5,7 +5,7 @@ import "./BaseSavingsRate.sol";
 import "./SavingsRateStorage.sol";
 
 /// @title SavingsRate
-/// @author Angle Protocol
+/// @author Angle Core Team
 /// @notice Contract for yield aggregator vaults which can connect to multiple ERC4626 strategies
 /// @notice In this implementation, share price is not the same for all depositors as some may bet a boost
 /// on their rewards while others do not
@@ -134,7 +134,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         // 10.5
         uint256 assetsPlusFees = _convertToAssets(shares, MathUpgradeable.Rounding.Down) + ownerRewardShares;
         // In fact the owner will get less from that since fees are taken
-        uint256 fees =  assetsPlusFees.mulDiv(withdrawFee, BASE_PARAMS, MathUpgradeable.Rounding.Up);
+        uint256 fees = assetsPlusFees.mulDiv(withdrawFee, BASE_PARAMS, MathUpgradeable.Rounding.Up);
         // This is the real amount of assets that will need to be obtained
         uint256 assets = assetsPlusFees - fees;
         // But now: we need to make this available
@@ -158,11 +158,10 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         rewardBalance = _checkpointRewards(msg.sender);
         uint256 votingTotal = IERC20(address(votingEscrow)).totalSupply();
         _updateLiquidityLimit(msg.sender, balanceOf(msg.sender), totalSupply(), votingTotal);
-
     }
 
     /// @notice Claims rewards and mints corresponding shares
-    function checkpointAndRebalance() external returns(uint256 shares) {
+    function checkpointAndRebalance() external returns (uint256 shares) {
         uint256 rewardBalance = _checkpoint();
         shares = _convertToShares(rewardBalance, MathUpgradeable.Rounding.Down);
         _mint(msg.sender, shares);

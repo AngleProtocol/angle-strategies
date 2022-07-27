@@ -4,13 +4,10 @@ pragma solidity 0.8.12;
 import "./BaseSavingsRateStorage.sol";
 
 /// @title BaseSavingsRate
-/// @author Angle Protocol
+/// @author Angle Core Team
 /// @notice Base contract for yield aggregator vaults which can connect to multiple ERC4626 strategies
 /// @dev This base contract can be used for savings rate contracts that give a boost in yield to some addresses
 /// as well as for contracts that do not handle such boosts
-// TODO:
-// - make sure it works perfect for normal contract with no boost everywhere
-// - way to price the token easily for the strategy so that it can be easily integrated
 abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     using SafeERC20 for IERC20;
     using Address for address;
@@ -19,6 +16,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @notice Initializes the contract
     /// @param _coreBorrow Reference to the `CoreBorrow` contract
     /// @param _token Asset of the vault
+    /// @param _surplusManager Address responsible for handling the profits going to the protocol
     /// @param suffixName Suffix to add to the token name for the symbol and name of the vault
     function _initialize(
         ICoreBorrow _coreBorrow,
@@ -42,7 +40,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         _;
     }
 
-    /// @notice Checks whether the `msg.sender` has the governor or guarian role or not
+    /// @notice Checks whether the `msg.sender` has the governor or guardian role or not
     modifier onlyGovernorOrGuardian() {
         if (!coreBorrow.isGovernorOrGuardian(msg.sender)) revert NotGovernorOrGuardian();
         _;
@@ -74,6 +72,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         return totalDebt + getBalance();
     }
 
+    /// @notice Returns the price of a share of the contract
     function sharePrice() external view virtual returns (uint256);
 
     /// @notice Provides an estimated Annual Percentage Rate for base depositors on this contract
@@ -83,7 +82,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     function estimatedAPR() external view returns (uint256 apr) {
         uint256 currentlyVestingProfit = vestingProfit;
         if (currentlyVestingProfit != 0)
-            apr = (currentlyVestingProfit * 3600 * 24 * 365 * BASE_PARAMS) / (vestingPeriod * managedAssets());
+            apr = (currentlyVestingProfit * 3600 * 24 * 365 * BASE_PARAMS) / (vestingPeriod * totalAssets());
         else {
             uint256 protocolFee_ = protocolFee;
             IStrategy4626[] memory strategyListMem = strategyList;
@@ -184,6 +183,8 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @notice Harvests a set of strategies, recognizing any profits or losses and adjusting
     /// the strategies position.
     /// @param strategiesToHarvest List of strategies to harvest
+    // TODO we may want to add the opportunity for whitelisting on harvest -> in order not to acknowledge loss or so
+    // in some cases -> maybe at the strategy level in the mapping
     function harvest(IStrategy4626[] memory strategiesToHarvest) public {
         // Warning: `totalAssets` could be manipulated by flashloan attacks.
         // It may allow external users to transfer funds into strategy or remove funds
@@ -232,14 +233,13 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
 
         // Add strategy to approved strategies
         params.lastReport = block.timestamp;
-        params.totalStrategyDebt = 0;
         params.debtRatio = _debtRatio;
 
         // Update global parameters
         debtRatio += _debtRatio;
+        strategyList.push(strategy);
         emit StrategyAdded(address(strategy), debtRatio);
         emit UpdatedDebtRatio(address(strategy), debtRatio);
-        strategyList.push(strategy);
         asset.safeApprove(address(strategy), type(uint256).max);
     }
 
@@ -252,7 +252,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         StrategyParams storage params = strategies[strategy];
         if (params.lastReport == 0) revert InvalidStrategy();
         debtRatio = debtRatio + _debtRatio - params.debtRatio;
-        if (debtRatio > BASE_PARAMS) revert DebtRatioTooHigh();
+        if (debtRatio > BASE_PARAMS) revert InvalidParameter();
         params.debtRatio = _debtRatio;
         emit UpdatedDebtRatio(address(strategy), debtRatio);
     }
@@ -260,7 +260,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @notice Revokes a strategy
     /// @param strategy The address of the strategy to revoke
     /// @dev This should only be called after the following happened in order: the `strategy.debtRatio` has been set to 0,
-    /// `harvest` has been called enough times to recover all capital gain/losses.
+    /// `harvest` has been called to recover all capital gain/losses.
     function revokeStrategy(IStrategy4626 strategy) external onlyGovernorOrGuardian {
         StrategyParams storage params = strategies[strategy];
         if (params.lastReport == 0) revert InvalidStrategy();
@@ -304,13 +304,13 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @dev If any strategy is not recognized by the `vault` the tx will revert.
     function setWithdrawalStack(IStrategy4626[] calldata newStack) external onlyGovernorOrGuardian {
         // Ensure the new stack is not larger than the maximum stack size.
-        if (newStack.length > MAX_WITHDRAWAL_STACK_SIZE) revert WithdrawalStackTooDeep();
+        if (newStack.length > MAX_WITHDRAWAL_STACK_SIZE) revert InvalidParameter();
         for (uint256 i = 0; i < newStack.length; i++) {
             if (strategies[newStack[i]].lastReport > 0) revert InvalidStrategy();
         }
         // Replace the withdrawal stack.
         withdrawalStack = newStack;
-        emit WithdrawalStackSet(msg.sender, newStack);
+        emit WithdrawalStackSet(newStack);
     }
 
     /// @notice Sets the `surplusManager` address
@@ -394,40 +394,6 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         return (params.totalStrategyDebt - target);
     }
 
-    /// @notice Reports the gains or loss made by a strategy
-    /// @param strategiesToAdjust List of strategies to adjust their positions
-    /// @param managedAssets_ Total `asset` amount controlled by the contract
-    /// @dev This is the main contact point where this contract interacts with the strategies: it can either invest
-    /// or divest from a strategy
-    function _adjustStrategiesPositions(IStrategy4626[] memory strategiesToAdjust, uint256 managedAssets_) internal {
-        uint256 positiveChangedDebt;
-        uint256 negativeChangedDebt;
-        for (uint256 i = 0; i < strategiesToAdjust.length; i++) {
-            StrategyParams storage params = strategies[strategiesToAdjust[i]];
-            uint256 target = (managedAssets_ * params.debtRatio) / BASE_PARAMS;
-            if (target > params.totalStrategyDebt) {
-                // If the strategy has some credit left, tokens can be transferred to this strategy
-                uint256 available = Math.min(target - params.totalStrategyDebt, getBalance());
-                if (available > 0) {
-                    params.totalStrategyDebt = params.totalStrategyDebt + available;
-                    positiveChangedDebt += available;
-                    strategiesToAdjust[i].deposit(available, address(this));
-                }
-            } else {
-                uint256 available = Math.min(
-                    params.totalStrategyDebt - target,
-                    IERC20(asset()).balanceOf(address(strategiesToAdjust[i]))
-                );
-                if (available > 0) {
-                    params.totalStrategyDebt = params.totalStrategyDebt - available;
-                    negativeChangedDebt += available;
-                    strategiesToAdjust[i].withdraw(available, address(this), address(this));
-                }
-            }
-        }
-        totalDebt = totalDebt + positiveChangedDebt - negativeChangedDebt;
-    }
-
     /// @notice Accumulates profit/loss from strategies and distributes it to the vault's stakeholders
     /// @param activeStrategies Strategy list to consider
     /// @dev It accrues totalProfitLossAccrued, by looking at the difference between what can be
@@ -437,17 +403,22 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         // First looking at the profit or loss from the strategies
         int256 totalProfitLossAccrued;
         for (uint256 i = 0; i < activeStrategies.length; i++) {
-            // Get the strategy at the current index.
+            // Get the strategy at the current index
             IStrategy4626 strategy = activeStrategies[i];
             StrategyParams storage params = strategies[strategy];
             uint256 debtLastCheckpoint = params.totalStrategyDebt;
+            // TODO not sure this is the best way to track balances since this is an underestimate and probably like the funds
+            // may not be directly available (because of lock) but we may still fetch from them after some time
+            // cf Rari uses balanceOfUnderlying -> probably tapping in another function could be the best way since anyway our strat
+            // contracts do not have to be ERC4626
+            // on our side as strats do not exactly have the right interfaces might not be an issue
             uint256 balanceThisHarvest = strategy.maxWithdraw(address(this));
 
             params.lastReport = block.timestamp;
-            // Update the strategy's stored balance. Cast overflow is unrealistic.
+            // Update the strategy's stored balance: cast overflow is unrealistic here
             params.totalStrategyDebt = balanceThisHarvest;
 
-            // Update the total profit/loss accrued since last harvest.
+            // Update the total profit/loss accrued since last harvest
             // To overflow this would ask enormous debt amounts which are in base of asset
             totalProfitLossAccrued += int256(balanceThisHarvest) - int256(debtLastCheckpoint);
         }
@@ -471,6 +442,44 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
             _handleProtocolLoss(feesDebt);
             totalDebt -= uint256(-totalProfitLossAccrued);
         }
+    }
+
+    /// @notice Reports the gains or loss made by a strategy
+    /// @param strategiesToAdjust List of strategies to adjust their positions
+    /// @param managedAssets_ Total `asset` amount controlled by the contract
+    /// @dev This is the main contact point where this contract interacts with the strategies: it can either invest
+    /// or divest from a strategy
+    function _adjustStrategiesPositions(IStrategy4626[] memory strategiesToAdjust, uint256 managedAssets_) internal {
+        uint256 positiveChangedDebt;
+        uint256 negativeChangedDebt;
+        for (uint256 i = 0; i < strategiesToAdjust.length; i++) {
+            StrategyParams storage params = strategies[strategiesToAdjust[i]];
+            uint256 target = (managedAssets_ * params.debtRatio) / BASE_PARAMS;
+            if (target > params.totalStrategyDebt) {
+                // If the strategy has some credit left, tokens can be transferred to this strategy
+                uint256 available = Math.min(target - params.totalStrategyDebt, getBalance());
+                if (available > 0) {
+                    params.totalStrategyDebt = params.totalStrategyDebt + available;
+                    positiveChangedDebt += available;
+                    // Strategy will automatically reinvest upon deposit
+                    strategiesToAdjust[i].deposit(available, address(this));
+                }
+            } else {
+                uint256 available = Math.min(
+                    params.totalStrategyDebt - target,
+                    // TODO technically: if we stick to interfaces the best way to track this would be through maxWithdraw
+                    // which could in turn return the available balance -> but as strats do not exactly have the right interfaces
+                    // might not be an issue
+                    IERC20(asset()).balanceOf(address(strategiesToAdjust[i]))
+                );
+                if (available > 0) {
+                    params.totalStrategyDebt = params.totalStrategyDebt - available;
+                    negativeChangedDebt += available;
+                    strategiesToAdjust[i].withdraw(available, address(this), address(this));
+                }
+            }
+        }
+        totalDebt = totalDebt + positiveChangedDebt - negativeChangedDebt;
     }
 
     /// @notice Propagates a protocol gain by minting yield bearing tokens to the address in charge of the surplus

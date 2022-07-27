@@ -96,50 +96,30 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
 
     // =============================== Events ======================================
 
-    // TODO clean events and errors
-    
-    event FeesClaimed(address indexed user, uint256 rvTokenAmount);
     event FiledUint64(uint64 param, bytes32 what);
     event Harvest(address indexed user, IStrategy4626[] strategies);
     event Recovered(address indexed token, address indexed to, uint256 amount);
     event StrategyAdded(address indexed strategy, uint256 debtRatio);
-    event StrategyReported(
-        address indexed strategy,
-        uint256 gain,
-        uint256 loss,
-        uint256 debtPayment,
-        uint256 totalDebt
-    );
     event StrategyRevoked(address indexed strategy);
     event SurplusManagerUpdated(address indexed _surplusManager);
     event UpdatedDebtRatio(address indexed strategy, uint256 debtRatio);
-    event WithdrawalStackSet(address indexed user, IStrategy4626[] replacedWithdrawalStack);
+    event WithdrawalStackSet(IStrategy4626[] replacedWithdrawalStack);
 
     // =============================== Errors ======================================
 
+    error IncompatibleLengths();
     error InvalidParameter();
     error InvalidParameterType();
     error InvalidStrategy();
     error InvalidToken();
     error NotGovernor();
     error NotGovernorOrGuardian();
-    error NotStrategy();
-    error TooHighDeposit();
-    error WithdrawLimit();
-    error StrategyDoesNotExist();
-    error WrongStrategyToken();
-    error StrategyAlreadyAdded();
-    error DebtRatioTooHigh();
     error StrategyInUse();
-    error StrategyDebtUnpaid();
-    error RevokeStrategyImpossible();
-    error StratgyLowOnCash();
-    error WithdrawalStackTooDeep();
-    error LossShouldbe0();
     error SlippageProtection();
-    error IncompatibleLengths();
+    error TooHighDeposit();
     error ZeroAddress();
 
+    // TODO update this when good
     uint256[50] private __gapBaseSavingsRate;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
