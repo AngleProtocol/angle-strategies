@@ -10,12 +10,15 @@ import "./BaseSavingsRateStorage.sol";
 /// as well as for contracts that do not handle such boosts
 /* 
 TODO 
-- remove when done (just let here for the inspiration)
+- Inspiration:
  * Yearn: https://etherscan.io/address/0x5f18c75abdae578b483e5f43f12a39cf75b973a9#code
  * Rari: https://github.com/Rari-Capital/vaults/blob/main/src/Vault.sol
-- do we add strategist fees as well?
-- do we add a rate limit
-
+- do we add strategist fees as well? -> this fee is taken directly from the strategy, like the vault
+ mints to the strat and then the strategist can redeem the shares
+- do we add a rate limit -> way to make sure we don't invest too much in a strategy at a given time
+    => check Yearn _creditAvailable function to see the implementation for this
+- do we add a debtLimit -> make sure a strategy does not handle too much with respect to what we want
+    => check Yearn _creditAvailable function to see the implementation for this
 */
 abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     using SafeERC20 for IERC20;
