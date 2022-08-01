@@ -236,9 +236,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     function addStrategy(IStrategy4626 strategy, uint256 _debtRatio) external onlyGovernor {
         StrategyParams storage params = strategies[strategy];
         IERC20 asset = IERC20(asset());
-        // Normally with the current implementation of strategy contracts, the two last conditions are redundant
-        if (params.lastReport != 0 || !strategy.isSavingsRate() || address(asset) != strategy.asset())
-            revert InvalidStrategy();
+        if (params.lastReport != 0 || !strategy.isSavingsRate()) revert InvalidStrategy();
 
         // Add strategy to approved strategies
         params.lastReport = block.timestamp;
@@ -422,7 +420,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
             // contracts do not have to be ERC4626
             // on our side as strats do not exactly have the right interfaces might not be an issue
             // One reason though for which we may not want to use maxWithdraw like that -> we may want each strategy to have maxWithdraw
-            // that tells us how much we can withdraw and this gives us the real maxWithdraw 
+            // that tells us how much we can withdraw and this gives us the real maxWithdraw
             uint256 balanceThisHarvest = strategy.maxWithdraw(address(this));
 
             params.lastReport = block.timestamp;
@@ -539,13 +537,11 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @notice If a user needs to withdraw more than what is freely available on the contract
     /// we need to free funds from the strategies in the order given by the withdrawalStack
     /// @param value Amount needed to be withdrawn
-    /// @return Actual asset amount that can be withdrawn
     /// @return totalLoss Losses incurred when withdrawing from the strategies
     /// @dev Any loss incurred during the withdrawal will be fully at the expense of the caller
-    function _beforeWithdraw(uint256 value) internal returns (uint256, uint256) {
+    function _beforeWithdraw(uint256 value) internal returns (uint256 totalLoss) {
         uint256 vaultBalance = getBalance();
         if (value > vaultBalance) {
-            uint256 totalLoss;
             IStrategy4626[] memory withdrawalStackMemory = withdrawalStack;
 
             uint256 newTotalDebt = totalDebt;
@@ -597,15 +593,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
             if (totalLoss > (maxWithdrawalLoss * value) / BASE_PARAMS) revert SlippageProtection();
 
             totalDebt = newTotalDebt;
-
-            // NOTE: We have withdrawn everything possible out of the withdrawal queue
-            //      but we still don't have enough to fully pay them back, so adjust
-            //      to the total amount we've freed up through forced withdrawals
-            if (value > vaultBalance) {
-                value = vaultBalance;
-            }
-            return (value, totalLoss);
-        } else return (vaultBalance, 0);
+        }
     }
 
     /// @notice Changes allowance to an address for a token

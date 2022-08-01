@@ -93,8 +93,8 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         address receiver,
         address owner
     ) public virtual override returns (uint256) {
-        uint256 ownerReward = _checkpointRewards(owner);
-        (, uint256 loss) = _beforeWithdraw(assets);
+        uint256 ownerReward = _checkpointRewards(owner, 0, 0, 0);
+        uint256 loss = _beforeWithdraw(assets);
         // Function will revert if we cannot get enough assets
         (, uint256 fees) = _computeWithdrawalFees(assets + loss);
         uint256 assetsTrueCost = assets + loss + fees;
@@ -124,7 +124,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         address owner
     ) public virtual override returns (uint256) {
         // The owner accumulated 5 of assets in rewards
-        uint256 ownerReward = _checkpointRewards(owner);
+        uint256 ownerReward = _checkpointRewards(owner, 0, 0, 0);
         // It has in total 100 shares
         uint256 ownerShares = balanceOf(owner);
         // In assets this means that if the owner wants the redeem 10 shares (that is to say 10% of its shares), we'll fetch
@@ -138,7 +138,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         // This is the real amount of assets that will need to be obtained
         uint256 assets = assetsPlusFees - fees;
         // But now: we need to make this available
-        (, uint256 loss) = _beforeWithdraw(assets);
+        uint256 loss = _beforeWithdraw(assets);
         // Once we're good on that we can do our accounting:
         rewardBalances[owner] -= ownerRewardShares;
         // Loss is at the expense of the user
@@ -155,7 +155,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
 
     /// @notice Internal version of the checkpoint function
     function _checkpoint() internal returns (uint256 rewardBalance) {
-        rewardBalance = _checkpointRewards(msg.sender);
+        rewardBalance = _checkpointRewards(msg.sender, 0, 0, 0);
         uint256 votingTotal = IERC20(address(votingEscrow)).totalSupply();
         _updateLiquidityLimit(msg.sender, balanceOf(msg.sender), totalSupply(), votingTotal);
     }
@@ -189,7 +189,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
 
         uint256 totalSupply = totalSupply();
         uint256 votingTotal = IERC20(address(votingEscrow)).totalSupply();
-        _checkpointRewards(addr);
+        _checkpointRewards(addr, 0, 0, 0);
         _updateLiquidityLimit(addr, balanceOf(addr), totalSupply, votingTotal);
     }
 
@@ -213,9 +213,12 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     function governanceKick(address[] memory addrs) external onlyGovernor {
         uint256 totalSupply = totalSupply();
         uint256 votingTotal = IERC20(address(votingEscrow)).totalSupply();
+        uint256 _workingSupply = workingSupply;
+        uint256 _integral = integral;
+        uint256 _periodFinish = periodFinish;
 
         for (uint256 i = 0; i < addrs.length; i++) {
-            _checkpointRewards(addrs[i]);
+            _checkpointRewards(addrs[i], _workingSupply, _integral, _periodFinish);
             _updateLiquidityLimit(addrs[i], balanceOf(addrs[i]), totalSupply, votingTotal);
         }
     }
@@ -224,14 +227,26 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
 
     /// @notice Claims earned rewards
     /// @param from Address to claim for
+    /// @param totalSupply Working supply of the contract (if already computed)
+    /// @param _integral Integral for the rewards
+    /// @param _lastUpdate Value of the `periodFinish` variable
     /// @return currentRewardBalance Amount of rewards that can now be claimed by the
-    function _checkpointRewards(address from) internal returns (uint256 currentRewardBalance) {
-        currentRewardBalance = rewardBalances[from];
+    function _checkpointRewards(
+        address from,
+        uint256 totalSupply,
+        uint256 _integral,
+        uint256 _lastUpdate
+    ) internal returns (uint256 currentRewardBalance) {
         if (from != address(0)) {
-            uint256 totalSupply = workingSupply;
+            // If the parameter `_lastUpdate` is passed equal to 0, then the other uint256 parameters have not been computed
+            if (_lastUpdate == 0) {
+                totalSupply = workingSupply;
+                _integral = integral;
+                _lastUpdate = periodFinish;
+            }
+            currentRewardBalance = rewardBalances[from];
             uint256 userBalance = workingBalances[from];
-            uint256 _integral = integral;
-            uint256 _lastUpdate = Math.min(block.timestamp, periodFinish);
+            _lastUpdate = Math.min(block.timestamp, _lastUpdate);
             uint256 duration = _lastUpdate - lastUpdate;
 
             if (duration != 0) {
@@ -294,12 +309,18 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         address to,
         uint256 amount
     ) internal override {
-        _checkpointRewards(to);
-        uint256 fromRewardBalance = _checkpointRewards(from);
-        if (from != address(0) && to != address(0)) {
-            uint256 proportion = (amount * fromRewardBalance) / balanceOf(from);
-            rewardBalances[from] -= proportion;
-            rewardBalances[to] += proportion;
+        // In the other case, it's a burn transaction and reward checkpoints have already been performed
+        if (from == address(0) || to != address(0)) {
+            uint256 totalSupply = workingSupply;
+            uint256 _integral = integral;
+            uint256 _lastUpdate = periodFinish;
+            _checkpointRewards(to, totalSupply, _integral, _lastUpdate);
+            uint256 fromRewardBalance = _checkpointRewards(from, totalSupply, _integral, _lastUpdate);
+            if (from != address(0) && to != address(0)) {
+                uint256 proportion = (amount * fromRewardBalance) / balanceOf(from);
+                rewardBalances[from] -= proportion;
+                rewardBalances[to] += proportion;
+            }
         }
     }
 

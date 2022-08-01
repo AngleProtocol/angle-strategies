@@ -30,12 +30,19 @@ contract SavingsRateNoBoost is BaseSavingsRate {
         totalUnderlyingHeld = totalDebt + getBalance() - lockedProfit();
     }
 
+    /// @inheritdoc BaseSavingsRate
+    /// @dev This may not be the most up to date representation of a share price as the savings rate
+    /// could invest in strategies which experience losses or gains thus decreasing or increasing
+    /// the share price
     function sharePrice() external view override returns (uint256) {
         return previewRedeem(10**decimals());
     }
 
     /// @inheritdoc ERC4626Upgradeable
     /// @dev Lighter implementation for the contract with no boost
+    /// @dev This function potentially underestimates the amount of shares to be burnt in case a loss
+    /// is experienced in the withdrawal process
+    /// TODO Improve with the withdrawal queue
     function previewWithdraw(uint256 assets) public view override returns (uint256) {
         (uint256 shares, ) = _computeWithdrawalFees(assets);
         return shares;
@@ -43,6 +50,9 @@ contract SavingsRateNoBoost is BaseSavingsRate {
 
     /// @inheritdoc ERC4626Upgradeable
     /// @dev Lighter implementation for this contract where no boost is given
+    /// @dev This function potentially overestimates the amount of shares to be burnt in case a loss
+    /// is experienced in the withdrawal process
+    /// TODO Improve with the withdrawal queue
     function previewRedeem(uint256 shares) public view override returns (uint256) {
         (uint256 assets, ) = _computeRedemptionFees(shares);
         return assets;
@@ -54,12 +64,12 @@ contract SavingsRateNoBoost is BaseSavingsRate {
         address receiver,
         address owner
     ) public virtual override returns (uint256) {
-        (, uint256 loss) = _beforeWithdraw(assets);
+        uint256 loss = _beforeWithdraw(assets);
         // Function should withdraw if we cannot get enough assets
         (uint256 shares, uint256 fees) = _computeWithdrawalFees(assets + loss);
-        /// TODO we may want to leave the opportunity for fees to stay in the protocol
+        /// TODO we may want to leave the opportunity for fees to stay in the protocol -> cf Alchemix
         _handleProtocolGain(fees);
-        // Function reverts if there is not enough available in the contract
+        // Function reverts if there is not enough available in the contract like specified in the interface
         _withdraw(_msgSender(), receiver, owner, assets, shares);
         return shares;
     }
@@ -71,7 +81,7 @@ contract SavingsRateNoBoost is BaseSavingsRate {
         address owner
     ) public virtual override returns (uint256) {
         (uint256 assets, uint256 fees) = _computeRedemptionFees(shares);
-        (, uint256 loss) = _beforeWithdraw(assets);
+        uint256 loss = _beforeWithdraw(assets);
         _handleProtocolGain(fees);
         // Assets is always greater than loss
         _withdraw(_msgSender(), receiver, owner, assets - loss, shares);

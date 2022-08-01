@@ -6,10 +6,8 @@ import "./BaseStrategy4626Storage.sol";
 /// @title BaseStrategy4626
 /// @author Angle Core Team
 /// @notice Base contract for strategies meant to interact with Angle savings rate contracts
-// TODO: not sure of the flow with totalStrategyHoldings`: we could look at the immediately available balance and
-// have a totalInvestedAmount: in `_adjustPosition` we just need to change amountInvested or divested. This prevents us
-// from having to update on deposit and withdraw -> not sure though whether this solution is better
-abstract contract BaseStrategy4626 is IStrategy4626, BaseStrategy4626Storage  {
+// TODO: add manualWithdraw as a virtual
+abstract contract BaseStrategy4626 is IStrategy4626, BaseStrategy4626Storage {
     using SafeERC20 for IERC20;
 
     /// @notice Initializes the `BaseStrategyERC4626` contract
@@ -62,7 +60,7 @@ abstract contract BaseStrategy4626 is IStrategy4626, BaseStrategy4626Storage  {
     }
 
     /// @inheritdoc IStrategy4626
-    function isSavingsRate() external view returns(bool) {
+    function isSavingsRate() external view returns (bool) {
         return savingsRate[ISavingsRate(msg.sender)];
     }
 
@@ -115,7 +113,6 @@ abstract contract BaseStrategy4626 is IStrategy4626, BaseStrategy4626Storage  {
         (, _loss) = _liquidatePosition(assets);
 
         // Should send `assets - _loss`, but should acknowledge `assets` as withdrawn from the strat
-        // TODO: need to make sure that we always assets > loss after liquidatePosition
         _withdraw(_msgSender(), receiver, owner, assets - _loss, _loss, shares);
     }
 

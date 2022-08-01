@@ -6,4 +6,6 @@ import "@openzeppelin/contracts-upgradeable/interfaces/IERC4626Upgradeable.sol";
 /// @title ISavingsRate
 /// @author Angle Core Team
 /// @notice Interface for the `SavingsRate` contracts of the protocol
-interface ISavingsRate is IERC4626Upgradeable {}
+interface ISavingsRate is IERC4626Upgradeable {
+
+}

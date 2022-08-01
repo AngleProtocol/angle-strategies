@@ -9,7 +9,6 @@ import "@openzeppelin/contracts-upgradeable/interfaces/IERC4626Upgradeable.sol";
 /// @dev This interface only contains functions of the `Strategy4626` which are called by other contracts
 /// of this module
 interface IStrategy4626 is IERC4626Upgradeable {
-
     /// @notice Estimates the APR provided by the strategy
     function estimatedAPR() external view returns (uint256);
 
