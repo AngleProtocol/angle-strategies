@@ -19,6 +19,9 @@ TODO
     => check Yearn _creditAvailable function to see the implementation for this
 - do we add a debtLimit -> make sure a strategy does not handle too much with respect to what we want
     => check Yearn _creditAvailable function to see the implementation for this
+- be able to pause harvest for each strategy
+- harvest with parameter for each strat
+- improve maxWithdraw, maxRedeem, previewWithdraw/redeem with withdrawal queue
 */
 abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     using SafeERC20 for IERC20;

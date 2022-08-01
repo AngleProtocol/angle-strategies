@@ -6,7 +6,11 @@ import "./BaseStrategy4626Storage.sol";
 /// @title BaseStrategy4626
 /// @author Angle Core Team
 /// @notice Base contract for strategies meant to interact with Angle savings rate contracts
-// TODO: add manualWithdraw as a virtual
+/* TODO: 
+ - add manualWithdraw as a virtual
+ - add harvest with parameter
+ - change interfaces and add like a sharesValue(address owner) function which returns the value of the shares owned by someone
+*/
 abstract contract BaseStrategy4626 is IStrategy4626, BaseStrategy4626Storage {
     using SafeERC20 for IERC20;
 
