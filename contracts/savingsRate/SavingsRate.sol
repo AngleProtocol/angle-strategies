@@ -269,7 +269,11 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
     /// @notice Propagates a user side gain
     /// @param gain Gain to propagate
     function _handleUserGain(uint256 gain) internal override {
+        uint256 totalSupply = workingSupply;
+        uint256 _integral = integral;
         uint256 _periodFinish = periodFinish;
+        _checkpointRewards(address(this), totalSupply, _integral, _periodFinish);
+
         uint64 _vestingPeriod = vestingPeriod;
         if (block.timestamp >= _periodFinish) {
             rewardRate = gain / _vestingPeriod;
