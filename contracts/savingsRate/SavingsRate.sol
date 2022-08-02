@@ -241,8 +241,6 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
                 _lastUpdate = periodFinish;
             }
             uint256 _integral = integral;
-            currentRewardBalance = rewardBalances[from];
-            uint256 userBalance = workingBalances[from];
             _lastUpdate = Math.min(block.timestamp, _lastUpdate);
             uint256 duration = _lastUpdate - lastUpdate;
 
@@ -253,7 +251,9 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
                     integral = _integral;
                 }
             }
-            if(from==address(this)) {
+            if (from != address(this)) {
+                currentRewardBalance = rewardBalances[from];
+                uint256 userBalance = workingBalances[from];
                 uint256 userIntegralFor = integralFor[from];
                 if (userIntegralFor < _integral) {
                     integralFor[from] = _integral;
