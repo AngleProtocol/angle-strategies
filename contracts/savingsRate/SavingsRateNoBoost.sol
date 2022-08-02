@@ -40,22 +40,30 @@ contract SavingsRateNoBoost is BaseSavingsRate {
 
     /// @inheritdoc ERC4626Upgradeable
     /// @dev Lighter implementation for the contract with no boost
-    /// @dev This function potentially underestimates the amount of shares to be burnt in case a loss
-    /// is experienced in the withdrawal process
-    /// TODO Improve with the withdrawal queue
+    /// @dev Computes a lower bound on shares needed to be burnt to receive `assets`.
+    /// The more accurate `maxWithdraw(amount)` is on each strategies, the better the lower bound.
+    /// But `maxWithdraw(amount)` can be hard to estimate and will therefore overestimate shares needed
     function previewWithdraw(uint256 assets) public view override returns (uint256) {
+        uint256 withdrawableAssets = _estimateWithdrawableAssets(assets);
+        // In this case there won't be enough share to withdraw the full amount
+        if (assets > withdrawableAssets) return type(uint256).max;
+
         (uint256 shares, ) = _computeWithdrawalFees(assets);
         return shares;
     }
 
     /// @inheritdoc ERC4626Upgradeable
     /// @dev Lighter implementation for this contract where no boost is given
-    /// @dev This function potentially overestimates the amount of shares to be burnt in case a loss
-    /// is experienced in the withdrawal process
-    /// TODO Improve with the withdrawal queue
+    /// @dev Computes a lower bound on assets returned for `shares` burnt.
+    /// The more accurate `maxWithdraw(amount)` is on each strategies, the better the lower bound.
     function previewRedeem(uint256 shares) public view override returns (uint256) {
         (uint256 assets, ) = _computeRedemptionFees(shares);
-        return assets;
+
+        uint256 withdrawableAssets = _estimateWithdrawableAssets(assets);
+        // In this case there won't be enough assets to withdraw the full amount
+        // we are bounded by the withdrawable assets
+        if (assets > withdrawableAssets) return withdrawableAssets;
+        else return assets;
     }
 
     /// @inheritdoc ERC4626Upgradeable
@@ -63,7 +71,7 @@ contract SavingsRateNoBoost is BaseSavingsRate {
         uint256 assets,
         address receiver,
         address owner
-    ) public virtual override returns (uint256) {
+    ) public virtual override whenNotPaused returns (uint256) {
         uint256 loss = _beforeWithdraw(assets);
         // Function should withdraw if we cannot get enough assets
         (uint256 shares, uint256 fees) = _computeWithdrawalFees(assets + loss);
@@ -79,7 +87,7 @@ contract SavingsRateNoBoost is BaseSavingsRate {
         uint256 shares,
         address receiver,
         address owner
-    ) public virtual override returns (uint256) {
+    ) public virtual override whenNotPaused returns (uint256) {
         (uint256 assets, uint256 fees) = _computeRedemptionFees(shares);
         uint256 loss = _beforeWithdraw(assets);
         _handleProtocolGain(fees);

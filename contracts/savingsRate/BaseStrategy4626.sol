@@ -6,11 +6,6 @@ import "./BaseStrategy4626Storage.sol";
 /// @title BaseStrategy4626
 /// @author Angle Core Team
 /// @notice Base contract for strategies meant to interact with Angle savings rate contracts
-/* TODO: 
- - add manualWithdraw as a virtual
- - add harvest with parameter
- - change interfaces and add like a sharesValue(address owner) function which returns the value of the shares owned by someone
-*/
 abstract contract BaseStrategy4626 is IStrategy4626, BaseStrategy4626Storage {
     using SafeERC20 for IERC20;
 
@@ -78,12 +73,48 @@ abstract contract BaseStrategy4626 is IStrategy4626, BaseStrategy4626Storage {
         return totalStrategyHoldings;
     }
 
+    /// @notice Gives an estimate on owner value in the strategy
+    /// @dev The amount returned here is without taking into account updates on the strategy since last harvest
+    /// It can underrestimate/overestimate the owner asset balance if profits/losses has been made since then
+    function ownerRedeemableAssets(address owner) public view returns (uint256) {
+        return _convertToAssets(balanceOf(owner), MathUpgradeable.Rounding.Down);
+    }
+
     // =========================== View virtual functions ==========================
 
     /// @inheritdoc IStrategy4626
     function estimatedAPR() external view virtual returns (uint256);
 
     // =========================== External functions ==============================
+
+    /// @notice Overload `deposit` to allow for external parameters on call
+    function deposit(
+        uint256 assets,
+        address receiver,
+        bytes memory data
+    ) public returns (uint256) {
+        if (assets > maxDeposit(receiver)) revert TooHighDeposit();
+
+        uint256 shares = previewDeposit(assets);
+        _deposit(_msgSender(), receiver, assets, shares, data);
+
+        return shares;
+    }
+
+    /// @notice Overload `withdraw` to allow for external parameters
+    /// @return _loss Any realized losses
+    /// @dev Contrarily to what is stated in the base ERC4626 interface, this function just returns
+    /// a loss
+    function withdraw(
+        uint256 assets,
+        address receiver,
+        address owner,
+        bytes memory data
+    ) public returns (uint256 _loss) {
+        uint256 shares;
+        (_loss, shares) = _prepareWithdraw(assets, owner);
+        _withdraw(_msgSender(), receiver, owner, assets, _loss, shares, data);
+    }
 
     /// @inheritdoc ERC4626Upgradeable
     /// @return _loss Any realized losses
@@ -94,10 +125,8 @@ abstract contract BaseStrategy4626 is IStrategy4626, BaseStrategy4626Storage {
         address receiver,
         address owner
     ) public virtual override(ERC4626Upgradeable, IERC4626Upgradeable) returns (uint256 _loss) {
-        // Need to free at least `assets` from the strat
-        (, _loss) = _liquidatePosition(assets);
-        if (assets + _loss > maxWithdraw(owner)) revert TooHighWithdraw();
-        uint256 shares = previewWithdraw(assets + _loss);
+        uint256 shares;
+        (_loss, shares) = _prepareWithdraw(assets, owner);
         _withdraw(_msgSender(), receiver, owner, assets, _loss, shares);
     }
 
@@ -119,6 +148,10 @@ abstract contract BaseStrategy4626 is IStrategy4626, BaseStrategy4626Storage {
         // Should send `assets - _loss`, but should acknowledge `assets` as withdrawn from the strat
         _withdraw(_msgSender(), receiver, owner, assets - _loss, _loss, shares);
     }
+
+    /// @notice Withdraws a given amount from a strategy bypassing vaults
+    /// @param amount The amount to withdraw
+    function manualWithdraw(uint256 amount) external virtual onlyGovernorOrGuardian returns (uint256 _loss) {}
 
     // ================================ Setters ====================================
 
@@ -186,15 +219,79 @@ abstract contract BaseStrategy4626 is IStrategy4626, BaseStrategy4626Storage {
         totalStrategyHoldings += profit - loss;
     }
 
+    /// @notice Helper for the different `withdraw` functions
+    /// @return _loss Any realized losses
+    /// @return shares Number of shares needed to withdraw `assets`
+    function _prepareWithdraw(uint256 assets, address owner) internal returns (uint256 _loss, uint256 shares) {
+        // Need to free at least `assets` from the strat
+        (, _loss) = _liquidatePosition(assets);
+        if (assets + _loss > maxWithdraw(owner)) revert TooHighWithdraw();
+        shares = previewWithdraw(assets + _loss);
+        return (_loss, shares);
+    }
+
     /// @inheritdoc ERC4626Upgradeable
-    /// @dev This function is overriden from the base implementation to take into account updates in the `totalStrategyHoldings`
-    /// and only allow some addresses to deposit
+    /// @dev In addition to call the equivalent `_deposit()` function from the ERC4626
+    /// it will also `_adjustPosition()` without external parameters, to recalibrate the strategy
     function _deposit(
         address caller,
         address receiver,
         uint256 assets,
         uint256 shares
-    ) internal override onlySavingsRate {
+    ) internal override {
+        _depositERC4626(caller, receiver, assets, shares);
+        _adjustPosition();
+    }
+
+    /// @notice Similar to the above function except that `_adjustPosition()` has external parameters
+    function _deposit(
+        address caller,
+        address receiver,
+        uint256 assets,
+        uint256 shares,
+        bytes memory data
+    ) internal {
+        _depositERC4626(caller, receiver, assets, shares);
+        _adjustPosition(data);
+    }
+
+    /// @dev In addition to call the equivalent `_withdraw()` function from the ERC4626
+    /// it will also `_adjustPosition()` without external parameters, to recalibrate the strategy
+    /// @dev It consider losses, while this is not supported on the original interface
+    function _withdraw(
+        address caller,
+        address receiver,
+        address owner,
+        uint256 assets,
+        uint256 loss,
+        uint256 shares
+    ) internal {
+        _withdrawERC4626(caller, receiver, owner, assets, loss, shares);
+        _adjustPosition();
+    }
+
+    /// @notice Similar to the above function except that `_adjustPosition()` has external parameters
+    function _withdraw(
+        address caller,
+        address receiver,
+        address owner,
+        uint256 assets,
+        uint256 loss,
+        uint256 shares,
+        bytes memory data
+    ) internal {
+        _withdrawERC4626(caller, receiver, owner, assets, loss, shares);
+        _adjustPosition(data);
+    }
+
+    /// @dev This function theoretically override `_deposit()` from the base implementation to take into account updates in the `totalStrategyHoldings`
+    /// and only allow some addresses to deposit
+    function _depositERC4626(
+        address caller,
+        address receiver,
+        uint256 assets,
+        uint256 shares
+    ) internal onlySavingsRate {
         SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(asset()), caller, address(this), assets);
         _mint(receiver, shares);
         totalStrategyHoldings += assets;
@@ -203,7 +300,7 @@ abstract contract BaseStrategy4626 is IStrategy4626, BaseStrategy4626Storage {
 
     /// @notice Burns `shares` from `owner` after a request from `caller`, and sends `assets` to `receiver`
     /// while reporting a loss of `loss` from the strategy
-    function _withdraw(
+    function _withdrawERC4626(
         address caller,
         address receiver,
         address owner,
@@ -220,19 +317,9 @@ abstract contract BaseStrategy4626 is IStrategy4626, BaseStrategy4626Storage {
         emit Withdraw(caller, receiver, owner, assets, shares);
     }
 
-    /// @inheritdoc ERC20Upgradeable
-    function _afterTokenTransfer(
-        address from,
-        address,
-        uint256
-    ) internal override {
-        // mint, check if free returns are left, and re-invest them
-        // TODO should the strategy reinvest and adjust its position on burn (to==address(0)): like when the savings rate pulls
-        // back funds you may want to withdraw them
-        if (from == address(0)) _adjustPosition();
-    }
-
     // ========================== Internal virtual Functions =======================
+
+    /// @notice all Stratgies should override the maxWithdraw and maxRedeem functions
 
     /// @notice Performs any Strategy unwinding or other calls necessary to capture the
     /// "free return" this Strategy has generated since the last time its core
@@ -264,6 +351,10 @@ abstract contract BaseStrategy4626 is IStrategy4626, BaseStrategy4626Storage {
     /// was made is available for reinvestment. Also note that this number
     /// could be 0, and you should handle that scenario accordingly.
     function _adjustPosition() internal virtual;
+
+    /// @notice Same as _adjustPosition but with an external parameters
+    /// @dev It should only be reachable by whitelisted callers
+    function _adjustPosition(bytes memory data) internal virtual;
 
     /// @notice Liquidates up to `_amountNeeded` of `want` of this strategy's positions,
     /// irregardless of slippage. Any excess will be re-invested with `_adjustPosition()`.

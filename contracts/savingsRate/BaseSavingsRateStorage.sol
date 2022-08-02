@@ -34,6 +34,9 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
 
     // =============================== Parameters ==================================
 
+    /// @notice Whether the contract is paused or not
+    bool public paused;
+
     /// @notice The share of profit going to the protocol
     /// @dev Should be lower than `BASE_PARAMS`
     uint64 public protocolFee;
@@ -94,10 +97,14 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
     /// @notice Mapping between the address of a strategy contract and its corresponding details
     mapping(IStrategy4626 => StrategyParams) public strategies;
 
+    /// @notice Keeper Role whitelist
+    mapping(address => bool) public keepers;
+
     // =============================== Events ======================================
 
     event FiledUint64(uint64 param, bytes32 what);
     event Harvest(address indexed user, IStrategy4626[] strategies);
+    event KeeperFlipped(address indexed keeper, bool currentRole);
     event Recovered(address indexed token, address indexed to, uint256 amount);
     event StrategyAdded(address indexed strategy, uint256 debtRatio);
     event StrategyRevoked(address indexed strategy);
@@ -114,6 +121,8 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
     error InvalidToken();
     error NotGovernor();
     error NotGovernorOrGuardian();
+    error NotKeeper();
+    error Paused();
     error StrategyInUse();
     error SlippageProtection();
     error TooHighDeposit();

@@ -46,6 +46,7 @@ contract BaseStrategy4626Storage is ERC4626Upgradeable {
     error NotGovernorOrGuardian();
     error NotSavingsRate();
     error StrategyInUse();
+    error TooHighDeposit();
     error TooHighWithdraw();
     error ZeroAddress();
 

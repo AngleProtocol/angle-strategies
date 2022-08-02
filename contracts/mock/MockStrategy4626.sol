@@ -22,6 +22,8 @@ contract Strategy4626 is BaseStrategy4626 {
 
     function _adjustPosition() internal override {}
 
+    function _adjustPosition(bytes memory) internal override {}
+
     function _liquidatePosition(uint256) internal override returns (uint256 _liquidatedAmount, uint256 _loss) {
         count += 1;
         return (0, 0);

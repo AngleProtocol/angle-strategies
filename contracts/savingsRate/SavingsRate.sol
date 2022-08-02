@@ -57,32 +57,44 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
 
     /// @notice Allows an on-chain or off-chain user to simulate the effects of their withdrawal
     /// at the current block, given current on-chain conditions and for a chosen address
-    /// @dev This function is specific for implementations of savings rate contracts where a boost is given to
-    /// some addresses and not all users are equivalent
+    /// @dev Computes a lower bound on shares needed to be burnt to receive `assets`.
+    /// The more accurate `maxWithdraw(amount)` is on each strategies, the better the lower bound.
     function previewWithdraw(address owner, uint256 assets) public view returns (uint256 shares) {
         uint256 ownerReward = _claimableRewardsOf(owner);
         // Function will revert if we cannot get enough assets
         (, uint256 fees) = _computeWithdrawalFees(assets);
         uint256 assetsTrueCost = assets + fees;
+
+        // check if we can indeed withdraw this amount
+        uint256 withdrawableAssets = _estimateWithdrawableAssets(assets);
+        // In this case there won't be enough share to withdraw the full amount
+        if (assets > withdrawableAssets) return type(uint256).max;
+
         if (ownerReward < assetsTrueCost) {
             shares = _convertToShares(assetsTrueCost - ownerReward, MathUpgradeable.Rounding.Up);
         }
     }
 
     /// @notice Implementation of the `previewRedeem` function for a specific `owner`
-    /// @dev This function could return a number of assets greater than what a `redeem` call would give
-    /// in case the strategy faces a loss
-    function previewRedeem(address owner, uint256 shares) public view returns (uint256) {
+    /// @dev Computes a lower bound on assets returned for `shares` burnt.
+    /// The more accurate `maxWithdraw(amount)` is on each strategies, the better the lower bound.
+    function previewRedeem(address owner, uint256 shares) public view returns (uint256 assets) {
         uint256 ownerReward = _claimableRewardsOf(owner);
         uint256 ownerShares = balanceOf(owner);
         if (ownerReward == 0 || ownerShares == 0) {
-            (uint256 assets, ) = _computeRedemptionFees(shares);
+            (assets, ) = _computeRedemptionFees(shares);
             return assets;
         } else {
             uint256 ownerRewardShares = (ownerReward * shares) / ownerShares;
             uint256 assetsPlusFees = _convertToAssets(shares, MathUpgradeable.Rounding.Down) + ownerRewardShares;
-            return assetsPlusFees - assetsPlusFees.mulDiv(withdrawFee, BASE_PARAMS, MathUpgradeable.Rounding.Up);
+            assets = assetsPlusFees - assetsPlusFees.mulDiv(withdrawFee, BASE_PARAMS, MathUpgradeable.Rounding.Up);
         }
+
+        uint256 withdrawableAssets = _estimateWithdrawableAssets(assets);
+        // In this case there won't be enough assets to withdraw the full amount
+        // we are bounded by the withdrawable assets
+        if (assets > withdrawableAssets) return withdrawableAssets;
+        else assets;
     }
 
     // ====================== External permissionless functions =============================
@@ -92,7 +104,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         uint256 assets,
         address receiver,
         address owner
-    ) public virtual override returns (uint256) {
+    ) public virtual override whenNotPaused returns (uint256) {
         uint256 ownerReward = _checkpointRewards(owner, 0, 0);
         uint256 loss = _beforeWithdraw(assets);
         // Function will revert if we cannot get enough assets
@@ -122,7 +134,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         uint256 shares,
         address receiver,
         address owner
-    ) public virtual override returns (uint256) {
+    ) public virtual override whenNotPaused returns (uint256) {
         // The owner accumulated 5 of assets in rewards
         uint256 ownerReward = _checkpointRewards(owner, 0, 0);
         // It has in total 100 shares
@@ -141,6 +153,8 @@ contract SavingsRate is BaseSavingsRate, SavingsRateStorage {
         uint256 loss = _beforeWithdraw(assets);
         // Once we're good on that we can do our accounting:
         rewardBalances[owner] -= ownerRewardShares;
+
+        _handleProtocolGain(fees);
         // Loss is at the expense of the user
         _withdraw(_msgSender(), receiver, owner, assets - loss, shares);
         vestingProfit -= ownerRewardShares;

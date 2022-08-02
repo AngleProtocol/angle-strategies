@@ -15,6 +15,9 @@ interface IStrategy4626 is IERC4626Upgradeable {
     /// @notice Checks whether the `msg.sender` is an approved savings rate contract or not
     function isSavingsRate() external view returns (bool);
 
+    /// @notice Estimate redeemable assets from an owner
+    function ownerRedeemableAssets(address owner) external view returns (uint256);
+
     /// @notice Prepares a return of the strategy to one of the savings rate contract plugged to the strategy
     /// @param _callerDebtOutstanding Amount of `asset` owed by the strategy to the savings rate contract:
     /// it will be 0 if the Strategy is not past the configured debt limit,
@@ -31,4 +34,18 @@ interface IStrategy4626 is IERC4626Upgradeable {
     /// @dev The returned values must be taken cautiously as they are aggregated for all the savings rate contracts
     /// which interact with this strategy
     function report(uint256 _callerDebtOutstanding) external returns (uint256, uint256);
+
+    /// @notice Added function to the interface to have the possibility to feed external parameters
+    function deposit(
+        uint256 assets,
+        address receiver,
+        bytes memory data
+    ) external returns (uint256 shares);
+
+    function withdraw(
+        uint256 assets,
+        address receiver,
+        address owner,
+        bytes memory data
+    ) external returns (uint256 _loss);
 }

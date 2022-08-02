@@ -20,8 +20,6 @@ TODO
 - do we add a debtLimit -> make sure a strategy does not handle too much with respect to what we want
     => check Yearn _creditAvailable function to see the implementation for this
 - be able to pause harvest for each strategy
-- harvest with parameter for each strat
-- improve maxWithdraw, maxRedeem, previewWithdraw/redeem with withdrawal queue
 */
 abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     using SafeERC20 for IERC20;
@@ -47,6 +45,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         __ERC4626_init_unchained(_token);
         coreBorrow = _coreBorrow;
         surplusManager = _surplusManager;
+        paused = false;
     }
 
     /// @notice Checks whether the `msg.sender` has the governor role or not
@@ -58,6 +57,18 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @notice Checks whether the `msg.sender` has the governor or guardian role or not
     modifier onlyGovernorOrGuardian() {
         if (!coreBorrow.isGovernorOrGuardian(msg.sender)) revert NotGovernorOrGuardian();
+        _;
+    }
+
+    /// @notice Checks whether the `msg.sender` has the governor or guardian role or not
+    modifier onlyKeepers() {
+        if (!keepers[msg.sender]) revert NotKeeper();
+        _;
+    }
+
+    /// @notice Checks whether the contract is paused
+    modifier whenNotPaused() {
+        if (paused) revert Paused();
         _;
     }
 
@@ -121,9 +132,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     function maxWithdraw(address owner) public view override returns (uint256) {
         uint256 maxAsset = _convertToAssets(balanceOf(owner), MathUpgradeable.Rounding.Down) +
             _claimableRewardsOf(owner);
-        // TODO: we could iterate through the withdrawal queue and look at the maxWithdraw (or whatever you name it)
-        // of the associated strategies in it
-        return Math.min(maxAsset, getBalance());
+        return Math.min(maxAsset, _estimateWithdrawableAssets(maxAsset));
     }
 
     /// @inheritdoc ERC4626Upgradeable
@@ -131,7 +140,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// redeem
     function maxRedeem(address owner) public view virtual override returns (uint256) {
         uint256 shares = balanceOf(owner);
-        uint256 contractBalance = getBalance();
+        uint256 contractBalance = _estimateWithdrawableAssets(type(uint256).max);
         uint256 controlledAssets = _convertToAssets(shares, MathUpgradeable.Rounding.Down) + _claimableRewardsOf(owner);
         // If there is enough asset in the contract for the rewards plus the asset value of the shares,
         // then the `owner` can withdraw all its shares
@@ -202,14 +211,10 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @param strategiesToHarvest List of strategies to harvest
     // TODO we may want to add the opportunity for whitelisting on harvest -> in order not to acknowledge loss or so
     // in some cases -> maybe at the strategy level in the mapping
-    function harvest(IStrategy4626[] memory strategiesToHarvest) public {
+    function harvest(IStrategy4626[] memory strategiesToHarvest) public whenNotPaused {
         uint256 _managedAssets = managedAssets();
-        for (uint256 i = 0; i < strategiesToHarvest.length; i++) {
-            if (strategies[strategiesToHarvest[i]].lastReport == 0) revert InvalidStrategy();
-            strategiesToHarvest[i].report(_debtOutstanding(strategiesToHarvest[i], _managedAssets));
-        }
-        _checkpointPnL(strategiesToHarvest);
-        _adjustStrategiesPositions(strategiesToHarvest, _managedAssets);
+        _report(strategiesToHarvest, _managedAssets);
+        _adjustStrategiesPositions(strategiesToHarvest, _managedAssets, new bytes[](0));
     }
 
     /// @notice Updates the profit and loss made on all the strategies
@@ -224,6 +229,21 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     function notifyRewardAmount(uint256 amount) external {
         SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(asset()), msg.sender, address(this), amount);
         _handleUserGain(amount);
+    }
+
+    // ============================= Keeper functions ==============================
+
+    /// @notice Similar to the permisionless `harvest`, except that you can add external parameters
+    /// It can be used for folding strategies to give an hint on the optimal solution
+    /// @param strategiesToHarvest List of strategies to harvest
+    /// @param datas List of datas needed for each strategies
+    function harvest(IStrategy4626[] memory strategiesToHarvest, bytes[] memory datas) public onlyKeepers {
+        if (datas.length != strategiesToHarvest.length) revert IncompatibleLengths();
+        uint256 _managedAssets = managedAssets();
+        _report(strategiesToHarvest, _managedAssets);
+        // not that easy because when depositing and withdrawing (which are the actions triggering the adjust position on the strategy)
+        // we cannot feed data to it
+        _adjustStrategiesPositions(strategiesToHarvest, _managedAssets, datas);
     }
 
     // =========================== Governance functions ============================
@@ -251,6 +271,14 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         emit StrategyAdded(address(strategy), debtRatio);
         emit UpdatedDebtRatio(address(strategy), debtRatio);
         asset.safeApprove(address(strategy), type(uint256).max);
+    }
+
+    /// @notice Toggle keeper in the whitelist
+    /// @param keeper Address of the keeper to flip
+    function addKeeper(address keeper) external onlyGovernor {
+        bool currentRole = keepers[keeper];
+        keepers[keeper] = !currentRole;
+        emit KeeperFlipped(address(keeper), !currentRole);
     }
 
     /// @notice Modifies the funds a strategy has access to
@@ -330,6 +358,11 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         emit SurplusManagerUpdated(_surplusManager);
     }
 
+    /// @notice Pauses external permissionless functions of the contract
+    function togglePause() external onlyGovernorOrGuardian {
+        paused = !paused;
+    }
+
     /// @notice Changes allowance of a set of tokens to addresses
     /// @param tokens Tokens to change allowance for
     /// @param spenders Addresses to approve
@@ -404,6 +437,22 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         return (params.totalStrategyDebt - target);
     }
 
+    /// @notice Gives a lower bound on withdrawable assets on the saving rate
+    /// @param assets Assets needed
+    function _estimateWithdrawableAssets(uint256 assets) internal view returns (uint256 withdrawableAssets) {
+        withdrawableAssets = getBalance();
+        if (assets > withdrawableAssets) {
+            IStrategy4626[] memory withdrawalStackMemory = withdrawalStack;
+
+            // When withdrawing the vault will go through strategies in the withdrawal stack
+            // We can have a lower bound on the withdrawable assets by adding all lower bounds
+            // on withdrawable assets from each strategies
+            for (uint256 i = 0; i < withdrawalStackMemory.length; i++) {
+                withdrawableAssets += withdrawalStackMemory[i].maxWithdraw(address(this));
+            }
+        }
+    }
+
     /// @notice Accumulates profit/loss from strategies and distributes it to the vault's stakeholders
     /// @param activeStrategies Strategy list to consider
     /// @dev It accrues totalProfitLossAccrued, by looking at the difference between what can be
@@ -417,14 +466,9 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
             IStrategy4626 strategy = activeStrategies[i];
             StrategyParams storage params = strategies[strategy];
             uint256 debtLastCheckpoint = params.totalStrategyDebt;
-            // TODO not sure this is the best way to track balances since this is an underestimate and probably like the funds
-            // may not be directly available (because of lock) but we may still fetch from them after some time
-            // cf Rari uses balanceOfUnderlying -> probably tapping in another function could be the best way since anyway our strat
-            // contracts do not have to be ERC4626
-            // on our side as strats do not exactly have the right interfaces might not be an issue
-            // One reason though for which we may not want to use maxWithdraw like that -> we may want each strategy to have maxWithdraw
-            // that tells us how much we can withdraw and this gives us the real maxWithdraw
-            uint256 balanceThisHarvest = strategy.maxWithdraw(address(this));
+
+            // This view function can be tricked by faking a
+            uint256 balanceThisHarvest = strategy.ownerRedeemableAssets(address(this));
 
             params.lastReport = block.timestamp;
             // Update the strategy's stored balance: cast overflow is unrealistic here
@@ -456,14 +500,30 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         }
     }
 
+    /// @notice Report a set of strategies, recognizing any profits or losses
+    /// @param strategiesToHarvest List of strategies to harvest
+    /// @param strategiesToHarvest List of strategies to harvest
+    function _report(IStrategy4626[] memory strategiesToHarvest, uint256 _managedAssets) internal {
+        for (uint256 i = 0; i < strategiesToHarvest.length; i++) {
+            if (strategies[strategiesToHarvest[i]].lastReport == 0) revert InvalidStrategy();
+            strategiesToHarvest[i].report(_debtOutstanding(strategiesToHarvest[i], _managedAssets));
+        }
+        _checkpointPnL(strategiesToHarvest);
+    }
+
     /// @notice Reports the gains or loss made by a strategy
     /// @param strategiesToAdjust List of strategies to adjust their positions
     /// @param managedAssets_ Total `asset` amount controlled by the contract
     /// @dev This is the main contact point where this contract interacts with the strategies: it can either invest
     /// or divest from a strategy
-    function _adjustStrategiesPositions(IStrategy4626[] memory strategiesToAdjust, uint256 managedAssets_) internal {
+    function _adjustStrategiesPositions(
+        IStrategy4626[] memory strategiesToAdjust,
+        uint256 managedAssets_,
+        bytes[] memory datas
+    ) internal {
         uint256 positiveChangedDebt;
         uint256 negativeChangedDebt;
+        bool isData = (datas.length == strategiesToAdjust.length);
         for (uint256 i = 0; i < strategiesToAdjust.length; i++) {
             StrategyParams storage params = strategies[strategiesToAdjust[i]];
             uint256 target = (managedAssets_ * params.debtRatio) / BASE_PARAMS;
@@ -474,20 +534,21 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
                     params.totalStrategyDebt = params.totalStrategyDebt + available;
                     positiveChangedDebt += available;
                     // Strategy will automatically reinvest upon deposit
-                    strategiesToAdjust[i].deposit(available, address(this));
+                    if (!isData) strategiesToAdjust[i].deposit(available, address(this));
+                    else strategiesToAdjust[i].deposit(available, address(this), datas[i]);
                 }
             } else {
                 uint256 available = Math.min(
                     params.totalStrategyDebt - target,
-                    // TODO technically: if we stick to interfaces the best way to track this would be through maxWithdraw
-                    // which could in turn return the available balance -> but as strats do not exactly have the right interfaces
-                    // might not be an issue
+                    // The report already occured and maximum assets has been freed for the adjustPosition to occur
                     IERC20(asset()).balanceOf(address(strategiesToAdjust[i]))
                 );
                 if (available > 0) {
                     params.totalStrategyDebt = params.totalStrategyDebt - available;
                     negativeChangedDebt += available;
-                    strategiesToAdjust[i].withdraw(available, address(this), address(this));
+                    // Strategy will automatically rebalance upon withdraw
+                    if (!isData) strategiesToAdjust[i].withdraw(available, address(this), address(this));
+                    else strategiesToAdjust[i].withdraw(available, address(this), address(this), datas[i]);
                 }
             }
         }
@@ -502,7 +563,6 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
             protocolLoss -= gain;
         } else {
             // If we accrued any fees, mint an equivalent amount of yield bearing tokens
-            // TODO not sure it works when there's a boost
             _mint(surplusManager, _convertToShares(gain - currentLossVariable, MathUpgradeable.Rounding.Down));
             protocolLoss = 0;
         }
