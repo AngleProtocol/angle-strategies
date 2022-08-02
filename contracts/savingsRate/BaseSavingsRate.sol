@@ -267,6 +267,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
 
         // Update global parameters
         debtRatio += _debtRatio;
+        if (debtRatio > BASE_PARAMS) revert InvalidParameter();
         strategyList.push(strategy);
         emit StrategyAdded(address(strategy), debtRatio);
         emit UpdatedDebtRatio(address(strategy), debtRatio);

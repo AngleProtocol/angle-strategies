@@ -8,7 +8,7 @@ import "../interfaces/IVotingEscrow.sol";
 /// @title SavingsRateStorage
 /// @author Angle Core Team
 /// @dev Specific storage contract for additional variables needed in the `SavingsRate` contract which need a boost
-contract SavingsRateStorage {
+contract SavingsRateBoostStorage {
     // =============================== References ==================================
 
     /// @notice Reference to the veANGLE contract
