@@ -4,107 +4,94 @@ pragma solidity 0.8.12;
 import "./BaseSavingsRate.sol";
 import "./SavingsRateStorage.sol";
 
-/// @title Angle Vault
-/// @author Angle Protocol
-/// @notice Yield aggregator vault which can connect multiple ERC4626 strategies
-/// @notice Integrate boosting mecanism on the yield
+/// @title SavingsRateNoBoost
+/// @author Angle Core Team
+/// @notice Contract for yield aggregator vaults which can connect to multiple ERC4626 strategies
+/// @notice In this implementation there's no boost given to owners of the shares of the contract
 contract SavingsRateNoBoost is BaseSavingsRate {
     using SafeERC20 for IERC20;
     using Address for address;
     using MathUpgradeable for uint256;
 
+    /// @notice Initializes the `SavingsRateNoBoost` contract
     function initialize(
         ICoreBorrow _coreBorrow,
         IERC20MetadataUpgradeable _token,
+        address _surplusManager,
         string memory suffixName
     ) external {
-        _initialize(_coreBorrow, _token, suffixName);
+        _initialize(_coreBorrow, _token, _surplusManager, suffixName);
     }
 
-    // ============================== View functions ===================================
+    // ============================== View functions ===============================
 
-    /// @notice Calculates the total amount of underlying tokens the Vault holds.
-    /// @return totalUnderlyingHeld The total amount of underlying tokens the Vault holds.
-    /// @dev Need to be cautious on when to use `totalAssets()` and `totalDebt + getBalance()`. As when investing the money
-    /// it is better to use the full balance. But we shouldn't count the rewards twice (in the rewards and in the shares)
+    /// @inheritdoc ERC4626Upgradeable
     function totalAssets() public view override returns (uint256 totalUnderlyingHeld) {
         totalUnderlyingHeld = totalDebt + getBalance() - lockedProfit();
     }
 
-    /// @notice Returns this `vault`'s directly available reserve of collateral (not including what has been lent)
-    function managedAssets() public view override returns (uint256) {
-        return totalDebt + getBalance();
+    /// @inheritdoc BaseSavingsRate
+    /// @dev This may not be the most up to date representation of a share price as the savings rate
+    /// could invest in strategies which experience losses or gains thus decreasing or increasing
+    /// the share price
+    function sharePrice() external view override returns (uint256) {
+        return previewRedeem(10**decimals());
     }
 
-    // ====================== External permissionless functions =============================
+    /// @inheritdoc ERC4626Upgradeable
+    /// @dev Lighter implementation for the contract with no boost
+    /// @dev This function potentially underestimates the amount of shares to be burnt in case a loss
+    /// is experienced in the withdrawal process
+    /// TODO Improve with the withdrawal queue
+    function previewWithdraw(uint256 assets) public view override returns (uint256) {
+        (uint256 shares, ) = _computeWithdrawalFees(assets);
+        return shares;
+    }
 
-    /** @dev See {IERC4262-withdraw} */
+    /// @inheritdoc ERC4626Upgradeable
+    /// @dev Lighter implementation for this contract where no boost is given
+    /// @dev This function potentially overestimates the amount of shares to be burnt in case a loss
+    /// is experienced in the withdrawal process
+    /// TODO Improve with the withdrawal queue
+    function previewRedeem(uint256 shares) public view override returns (uint256) {
+        (uint256 assets, ) = _computeRedemptionFees(shares);
+        return assets;
+    }
+
+    /// @inheritdoc ERC4626Upgradeable
     function withdraw(
         uint256 assets,
         address receiver,
         address owner
     ) public virtual override returns (uint256) {
-        uint256 loss;
-        (assets, loss) = _beforeWithdraw(assets);
-
-        uint256 assetsTrueCost = assets + loss;
-        uint256 shares = _convertToShares(assetsTrueCost, MathUpgradeable.Rounding.Up);
-        if (shares > balanceOf(owner)) revert WithdrawLimit();
+        uint256 loss = _beforeWithdraw(assets);
+        // Function should withdraw if we cannot get enough assets
+        (uint256 shares, uint256 fees) = _computeWithdrawalFees(assets + loss);
+        /// TODO we may want to leave the opportunity for fees to stay in the protocol -> cf Alchemix
+        _handleProtocolGain(fees);
+        // Function reverts if there is not enough available in the contract like specified in the interface
         _withdraw(_msgSender(), receiver, owner, assets, shares);
-
         return shares;
     }
 
-    /** @dev See {IERC4262-redeem} */
+    /// @inheritdoc ERC4626Upgradeable
     function redeem(
         uint256 shares,
         address receiver,
         address owner
     ) public virtual override returns (uint256) {
-        require(shares <= balanceOf(owner), "ERC4626: redeem more than max");
-        uint256 assets = _convertToAssets(shares, MathUpgradeable.Rounding.Down);
-        uint256 loss;
-        uint256 freedAssets;
-        (freedAssets, loss) = _beforeWithdraw(assets);
-        // if we didn't suceed to withdraw enough, we need to decrease the number of shares burnt
-        if (freedAssets < assets) {
-            shares = _convertToShares(freedAssets, MathUpgradeable.Rounding.Up);
-        }
-
-        // `assets-loss` will never revert here because it would revert on the slippage protection in `withdraw()`
-        _withdraw(_msgSender(), receiver, owner, freedAssets - loss, shares);
-
-        return freedAssets - loss;
+        (uint256 assets, uint256 fees) = _computeRedemptionFees(shares);
+        uint256 loss = _beforeWithdraw(assets);
+        _handleProtocolGain(fees);
+        // Assets is always greater than loss
+        _withdraw(_msgSender(), receiver, owner, assets - loss, shares);
+        return assets - loss;
     }
 
-    /// @notice To deposit directly rewards onto the contract
-    /// @dev You can just transfer the token without calling this function as it will be counted in the `totalAssets` via getBalnce()
-    function notifyRewardAmount(uint256 amount) external override {
-        SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(asset()), msg.sender, address(this), amount);
-        // Update max unlocked profit based on any remaining locked profit plus new profit.
-        maxLockedProfit = (lockedProfit() + amount);
-    }
+    // ============================ Internal functions =============================
 
-    // ===================== Internal functions ==========================
-
-    /// @notice Propagates a user side gain
-    /// @param gain Gain to propagate
-    function _handleUserGain(uint256 gain) internal override {
-        // loss is directly removed from the totalHoldings
-        // Update max unlocked profit based on any remaining locked profit plus new profit.
-        maxLockedProfit = (lockedProfit() + gain);
-
-        totalDebt += gain;
-    }
-
-    /// @notice Propagates a user side loss
-    /// @param loss Loss to propagate
-    function _handleUserLoss(uint256 loss) internal override {
-        // Decrease newTotalDebt, this impacts the `totalAssets()` call --> loss directly implied when withdrawing
-        totalDebt -= loss;
-    }
-
-    /// @notice Useless when there is no boost
+    /// @inheritdoc BaseSavingsRate
+    /// @dev This function is useless in settings when there are no boosts
     function _claimableRewardsOf(address) internal pure override returns (uint256) {
         return 0;
     }

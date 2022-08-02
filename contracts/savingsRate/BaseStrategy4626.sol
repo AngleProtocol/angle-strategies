@@ -3,18 +3,35 @@ pragma solidity 0.8.12;
 
 import "./BaseStrategy4626Storage.sol";
 
-/// @title Angle Base Strategy ERC4626
-/// @author Angle Protocol
-abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
+/// @title BaseStrategy4626
+/// @author Angle Core Team
+/// @notice Base contract for strategies meant to interact with Angle savings rate contracts
+/* TODO: 
+ - add manualWithdraw as a virtual
+ - add harvest with parameter
+ - change interfaces and add like a sharesValue(address owner) function which returns the value of the shares owned by someone
+*/
+abstract contract BaseStrategy4626 is IStrategy4626, BaseStrategy4626Storage {
     using SafeERC20 for IERC20;
 
-    /// @notice Constructor of the `BaseStrategyERC4626`
-    function _initialize(ISavingsRate[] memory _savingsRate, ICoreBorrow coreBorrow_) internal initializer {
-        coreBorrow = coreBorrow_;
-        savingsRateList = _savingsRate;
+    /// @notice Initializes the `BaseStrategyERC4626` contract
+    /// @param _savingsRate List of associated savings rate contracts
+    /// @param _coreBorrow `CoreBorrow` address for access control
+    /// @param _asset Asset controlled by the strategy
+    function _initialize(
+        ISavingsRate[] memory _savingsRate,
+        ICoreBorrow _coreBorrow,
+        address _asset
+    ) internal initializer {
+        __ERC4626_init(IERC20MetadataUpgradeable(_asset));
+        if (address(_coreBorrow) == address(0)) revert ZeroAddress();
+        coreBorrow = _coreBorrow;
         for (uint256 i = 0; i < _savingsRate.length; i++) {
+            if (_savingsRate[i].asset() != _asset) revert InvalidSavingsRate();
             savingsRate[_savingsRate[i]] = true;
+            emit SavingsRateActivated(address(_savingsRate[i]));
         }
+        savingsRateList = _savingsRate;
     }
 
     /// @notice Checks whether the `msg.sender` has the governor role or not
@@ -23,13 +40,13 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         _;
     }
 
-    /// @notice Checks whether the `msg.sender` has the governor role or not
+    /// @notice Checks whether the `msg.sender` has the governor role or the guardian role
     modifier onlyGovernorOrGuardian() {
         if (!coreBorrow.isGovernorOrGuardian(msg.sender)) revert NotGovernorOrGuardian();
         _;
     }
 
-    /// @notice Checks whether the `msg.sender` has the governor role or not
+    /// @notice Checks whether the `msg.sender` is a savings rate contract or not
     modifier onlySavingsRate() {
         if (!savingsRate[ISavingsRate(msg.sender)]) revert NotSavingsRate();
         _;
@@ -43,89 +60,67 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /// events can be tracked externally by indexing agents.
     /// @return True if the strategy is actively managing a position.
     function isActive() public view returns (bool) {
-        return estimatedTotalAssets() > 0;
+        return totalAssets() > 0;
     }
 
-    /// @notice Revert if the caller is not a whitelisted savingsRate
+    /// @inheritdoc IStrategy4626
+    function isSavingsRate() external view returns (bool) {
+        return savingsRate[ISavingsRate(msg.sender)];
+    }
+
+    /// @notice Returns the list of savings rate contracts which are plugged to the strategy
     function savingsRateActive() external view returns (ISavingsRate[] memory) {
         return savingsRateList;
     }
 
-    /// @notice Revert if the caller is not a whitelisted savingsRate
-    function isSavingsRate() public view onlySavingsRate {}
-
-    /// @notice Computes the total amount of underlying tokens the SavingsRate holds.
-    /// @return totalUnderlyingHeld The total amount of underlying tokens the SavingsRate holds.
-    /// @dev Important to not take into account lockedProfit otherwise there could be attacks on
-    /// the savingsRate. Someone could artificially make a strategy have large profit, to deposit and withdraw
-    /// and earn free money.
-    /// @dev Need to be cautious on when to use `totalAssets()` and totalStrategyHoldings. As when investing the money
-    /// it is better to use the full balance.
-    function totalAssets() public view override returns (uint256 totalUnderlyingHeld) {
-        totalUnderlyingHeld = totalStrategyHoldings;
+    /// @notice Computes the total amount of underlying tokens the SavingsRate holds
+    function totalAssets() public view virtual override(ERC4626Upgradeable, IERC4626Upgradeable) returns (uint256) {
+        return totalStrategyHoldings;
     }
 
-    // ============================ View virtual functions =================================
+    // =========================== View virtual functions ==========================
 
-    /// @notice Provides an accurate estimate for the total amount of assets
-    /// (principle + return) that this Strategy is currently managing,
-    /// denominated in terms of `want` tokens.
-    /// This total should be "realizable" e.g. the total value that could
-    /// *actually* be obtained from this Strategy if it were to divest its
-    /// entire position based on current on-chain conditions.
-    /// @return The estimated total assets in this Strategy.
-    /// @dev Care must be taken in using this function, since it relies on external
-    /// systems, which could be manipulated by the attacker to give an inflated
-    /// (or reduced) value produced by this function, based on current on-chain
-    /// conditions (e.g. this function is possible to influence through
-    /// flashloan attacks, oracle manipulations, or other DeFi attack
-    /// mechanisms).
-    function estimatedTotalAssets() public view virtual returns (uint256);
-
+    /// @inheritdoc IStrategy4626
     function estimatedAPR() external view virtual returns (uint256);
 
-    // ============================ External functions =================================
+    // =========================== External functions ==============================
 
-    /** @dev See {IERC4262-withdraw} */
+    /// @inheritdoc ERC4626Upgradeable
     /// @return _loss Any realized losses
+    /// @dev Contrarily to what is stated in the base ERC4626 interface, this function just returns
+    /// a loss
     function withdraw(
         uint256 assets,
         address receiver,
         address owner
-    ) public override returns (uint256 _loss) {
-        uint256 amountFreed;
-        // Liquidate as much as possible `want` (up to `assets`)
-        (amountFreed, _loss) = _liquidatePosition(assets);
-
-        require(assets + _loss <= maxWithdraw(owner), "ERC20TokenizedVault: withdraw more than max");
-
+    ) public virtual override(ERC4626Upgradeable, IERC4626Upgradeable) returns (uint256 _loss) {
+        // Need to free at least `assets` from the strat
+        (, _loss) = _liquidatePosition(assets);
+        if (assets + _loss > maxWithdraw(owner)) revert TooHighWithdraw();
         uint256 shares = previewWithdraw(assets + _loss);
         _withdraw(_msgSender(), receiver, owner, assets, _loss, shares);
-
-        return shares;
     }
 
-    /** @dev See {IERC4262-redeem} */
-    /// @dev Currently not used by savingsRates
+    /// @inheritdoc ERC4626Upgradeable
+    /// @dev Currently not used by `SavingsRate` contracts but still need the implementation to take losses into account
+    /// @dev Contrarily to what is stated in the base ERC4626 interface, this function just returns
+    /// a loss
     function redeem(
         uint256 shares,
         address receiver,
         address owner
-    ) public virtual override returns (uint256 _loss) {
-        require(shares <= maxRedeem(owner), "ERC20TokenizedVault: redeem more than max");
+    ) public virtual override(ERC4626Upgradeable, IERC4626Upgradeable) returns (uint256 _loss) {
+        if (shares > maxRedeem(owner)) revert TooHighWithdraw();
 
         uint256 assets = previewRedeem(shares);
-        uint256 amountFreed;
-        // Liquidate as much as possible `want` (up to `assets`)
-        (amountFreed, _loss) = _liquidatePosition(assets);
+        // We need to free up to `assets`
+        (, _loss) = _liquidatePosition(assets);
 
         // Should send `assets - _loss`, but should acknowledge `assets` as withdrawn from the strat
         _withdraw(_msgSender(), receiver, owner, assets - _loss, _loss, shares);
-
-        return assets - _loss;
     }
 
-    // ============================ Setters =============================
+    // ================================ Setters ====================================
 
     /// @notice Activates emergency exit. Once activated, the Strategy will exit its
     /// position upon the next harvest, letting capital sitting idle for all related vaults to
@@ -142,7 +137,7 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
     /// @dev This may only be called by the governance or guardians as not any users
     /// should be able to use the strategy
     function addSavingsRate(ISavingsRate saving_) external onlyGovernorOrGuardian {
-        if (savingsRate[saving_]) revert SavingRateKnown();
+        if (savingsRate[saving_] || saving_.asset() != asset()) revert InvalidSavingsRate();
         savingsRate[saving_] = true;
         savingsRateList.push(saving_);
         emit SavingsRateActivated(address(saving_));
@@ -150,53 +145,28 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
 
     /// @notice Revokes a strategy
     /// @param saving_ The saving rate to revoke
-    /// @dev This should only be called after all funds has been removed from the strategy by the saving rate.
+    /// @dev This should only be called after all funds has been removed from the strategy by the savings rate
+    /// contract
     function revokeSavingsRate(ISavingsRate saving_) external onlyGovernorOrGuardian {
-        if (!savingsRate[saving_]) revert SavingRateUnknown();
-        if (balanceOf(address(saving_)) != 0) revert StrategyInUse();
+        if (!savingsRate[saving_] || balanceOf(address(saving_)) != 0) revert InvalidSavingsRate();
 
         ISavingsRate[] memory savingsRateMem = savingsRateList;
-        uint256 strategyListLength = savingsRateMem.length;
-        // It has already been checked whether the strategy was a valid strategy
-        for (uint256 i = 0; i < strategyListLength - 1; i++) {
+        uint256 savingsRateListLength = savingsRateMem.length;
+        for (uint256 i = 0; i < savingsRateListLength - 1; i++) {
             if (savingsRateMem[i] == saving_) {
-                savingsRateList[i] = savingsRateList[strategyListLength - 1];
+                savingsRateList[i] = savingsRateList[savingsRateListLength - 1];
                 break;
             }
         }
-
         savingsRateList.pop();
-
         delete savingsRate[saving_];
-
         emit SavingsRateRevoked(address(saving_));
     }
 
     // ============================ Internal Functions =============================
 
-    /// @notice PrepareReturn the Strategy, recognizing any profits or losses
-    /// @param _vaultCallerDebtOutstanding will be 0 if the Strategy is not past the configured
-    /// debt limit, otherwise its value will be how far past the debt limit
-    /// the Strategy is.
-    /// @dev In the rare case the Strategy is in emergency shutdown, this will exit
-    /// the Strategy's position.
-    /// @dev  When `_report()` is called, the Strategy reports to the vaults,
-    /// so in some cases `harvest()` must be called in order to take in profits,
-    /// to borrow newly available funds from the vaults, or
-    /// otherwise adjust its position. In other cases `harvest()` must be
-    /// called to report to the vaults on the Strategy's position, especially if
-    /// any losses have occurred.
-    /// @dev Currently the only vault that will adjust its position is the one from which
-    /// the harvest happened, the others one will need to harvest to adjust their positions
-    /// @dev Called by any harvest with no limitations, vesting should limit manipulation, but lets be cautious
-    /// TODO 2 options here: we can withdraw enough for all vaults connected to the strategies to recover the debtOutstanding
-    /// or we can just free funds only for the vault caller.
-    /// Option 2 is more gas efficient if harvest in different strategies are not made to be called in a raw
-    function _report(uint256 _vaultCallerDebtOutstanding)
-        public
-        onlySavingsRate
-        returns (uint256 profit, uint256 loss)
-    {
+    /// @inheritdoc IStrategy4626
+    function report(uint256 _callerDebtOutstanding) public onlySavingsRate returns (uint256 profit, uint256 loss) {
         uint256 currentDebt = totalStrategyHoldings;
 
         if (emergencyExit) {
@@ -209,40 +179,30 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
             }
         } else {
             // Free up returns for savingsRate to pull
-            (profit, loss) = _prepareReturn(_vaultCallerDebtOutstanding);
+            (profit, loss) = _prepareReturn(_callerDebtOutstanding);
         }
-        emit Harvested(profit, loss, _vaultCallerDebtOutstanding, msg.sender);
+        emit Harvested(profit, loss, _callerDebtOutstanding, msg.sender);
         // It won't revert as long as there are enough funds to cover for the losses
         totalStrategyHoldings += profit - loss;
     }
 
-    /**
-     * @dev Deposit/mint common workflow
-     */
-    /// @dev can't use the _afterTokenDeposit because we don't have access to 'assets' but only 'shares'
+    /// @inheritdoc ERC4626Upgradeable
+    /// @dev This function is overriden from the base implementation to take into account updates in the `totalStrategyHoldings`
+    /// and only allow some addresses to deposit
     function _deposit(
         address caller,
         address receiver,
         uint256 assets,
         uint256 shares
     ) internal override onlySavingsRate {
-        // If _asset is ERC777, `transferFrom` can trigger a reenterancy BEFORE the transfer happens through the
-        // `tokensToSend` hook. On the other hand, the `tokenReceived` hook, that is triggered after the transfer,
-        // calls the savingsRate, which is assumed not malicious.
-        //
-        // Conclusion: we need to do the transfer before we mint so that any reentrancy would happen before the
-        // assets are transfered and before the shares are minted, which is a valid state.
-        // slither-disable-next-line reentrancy-no-eth
         SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(asset()), caller, address(this), assets);
         _mint(receiver, shares);
         totalStrategyHoldings += assets;
-
         emit Deposit(caller, receiver, assets, shares);
     }
 
-    /**
-     * @dev Withdraw/redeem common workflow
-     */
+    /// @notice Burns `shares` from `owner` after a request from `caller`, and sends `assets` to `receiver`
+    /// while reporting a loss of `loss` from the strategy
     function _withdraw(
         address caller,
         address receiver,
@@ -254,31 +214,25 @@ abstract contract BaseStrategy4626 is BaseStrategy4626Storage {
         if (caller != owner) {
             _spendAllowance(owner, caller, shares);
         }
-
-        // If _asset is ERC777, `transfer` can trigger trigger a reentrancy AFTER the transfer happens through the
-        // `tokensReceived` hook. On the other hand, the `tokensToSend` hook, that is triggered before the transfer,
-        // calls the savingsRate, which is assumed not malicious.
-        //
-        // Conclusion: we need to do the transfer after the burn so that any reentrancy would happen after the
-        // shares are burned and after the assets are transfered, which is a valid state.
         _burn(owner, shares);
+        totalStrategyHoldings -= (assets + loss);
         SafeERC20Upgradeable.safeTransfer(IERC20Upgradeable(asset()), receiver, assets);
-        totalStrategyHoldings -= assets + loss;
-
         emit Withdraw(caller, receiver, owner, assets, shares);
     }
 
-    /** @dev See {ERC20Upgradeable-_afterTokenTransfer} */
+    /// @inheritdoc ERC20Upgradeable
     function _afterTokenTransfer(
         address from,
         address,
         uint256
     ) internal override {
         // mint, check if free returns are left, and re-invest them
+        // TODO should the strategy reinvest and adjust its position on burn (to==address(0)): like when the savings rate pulls
+        // back funds you may want to withdraw them
         if (from == address(0)) _adjustPosition();
     }
 
-    // ============================ Internal virtual Functions =============================
+    // ========================== Internal virtual Functions =======================
 
     /// @notice Performs any Strategy unwinding or other calls necessary to capture the
     /// "free return" this Strategy has generated since the last time its core

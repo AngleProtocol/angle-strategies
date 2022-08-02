@@ -231,7 +231,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     /// could be 0, and you should handle that scenario accordingly.
     function _adjustPosition() internal virtual;
 
-    /// @notice same as _adjustPosition but with an initial parameters
+    /// @notice Same as _adjustPosition but with an initial parameter
     function _adjustPosition(uint256) internal virtual;
 
     /// @notice Liquidates up to `_amountNeeded` of `want` of this strategy's positions,

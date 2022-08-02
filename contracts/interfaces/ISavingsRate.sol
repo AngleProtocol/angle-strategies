@@ -3,14 +3,9 @@ pragma solidity 0.8.12;
 
 import "@openzeppelin/contracts-upgradeable/interfaces/IERC4626Upgradeable.sol";
 
-/// @title IStrategyERC4626
+/// @title ISavingsRate
 /// @author Angle Core Team
-/// @notice Interface for the `Strategy4626` contract
-/// @dev Strategies invested in supports the ERC4626 interfaces and has some added features
+/// @notice Interface for the `SavingsRate` contracts of the protocol
 interface ISavingsRate is IERC4626Upgradeable {
-    function estimatedAPR() external view returns (uint256);
 
-    function isVault() external;
-
-    function report() external;
 }

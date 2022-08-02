@@ -32,7 +32,7 @@ library FlashMintLib {
 
     bytes32 public constant CALLBACK_SUCCESS = keccak256("ERC3156FlashBorrower.onFlashLoan");
 
-    uint16 private constant _referral = 0; // TODO: get our own referral code
+    uint16 private constant _referral = 0;
 
     uint256 private constant _RAY = 10**27;
 
