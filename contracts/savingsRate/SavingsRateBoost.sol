@@ -104,7 +104,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateBoostStorage {
         uint256 assets,
         address receiver,
         address owner
-    ) public virtual override whenNotPaused returns (uint256) {
+    ) public virtual override returns (uint256) {
         uint256 ownerReward = _checkpointRewards(owner, 0, 0);
         uint256 loss = _beforeWithdraw(assets);
         // Function will revert if we cannot get enough assets
@@ -134,7 +134,7 @@ contract SavingsRate is BaseSavingsRate, SavingsRateBoostStorage {
         uint256 shares,
         address receiver,
         address owner
-    ) public virtual override whenNotPaused returns (uint256) {
+    ) public virtual override returns (uint256) {
         // The owner accumulated 5 of assets in rewards
         uint256 ownerReward = _checkpointRewards(owner, 0, 0);
         // It has in total 100 shares

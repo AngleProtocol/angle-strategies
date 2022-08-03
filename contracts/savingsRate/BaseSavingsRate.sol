@@ -501,7 +501,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @param strategiesToHarvest List of strategies to harvest
     function _report(IStrategy4626[] memory strategiesToHarvest, uint256 _managedAssets) internal {
         for (uint256 i = 0; i < strategiesToHarvest.length; i++) {
-            StrategyParams storage params = strategies[strategiesToHarvest[i]];
+            StrategyParams memory params = strategies[strategiesToHarvest[i]];
             if (params.lastReport == 0 || params.paused) revert InvalidStrategy();
             strategiesToHarvest[i].report(_debtOutstanding(strategiesToHarvest[i], _managedAssets));
         }

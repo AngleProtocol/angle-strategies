@@ -70,7 +70,7 @@ contract SavingsRate is BaseSavingsRate {
         uint256 assets,
         address receiver,
         address owner
-    ) public virtual override whenNotPaused returns (uint256) {
+    ) public virtual override returns (uint256) {
         uint256 loss = _beforeWithdraw(assets);
         // Function should withdraw if we cannot get enough assets
         (uint256 shares, uint256 fees) = _computeWithdrawalFees(assets + loss);
@@ -86,7 +86,7 @@ contract SavingsRate is BaseSavingsRate {
         uint256 shares,
         address receiver,
         address owner
-    ) public virtual override whenNotPaused returns (uint256) {
+    ) public virtual override returns (uint256) {
         (uint256 assets, uint256 fees) = _computeRedemptionFees(shares);
         uint256 loss = _beforeWithdraw(assets);
         _handleProtocolGain(fees);
