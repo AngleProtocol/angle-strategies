@@ -45,7 +45,6 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
         __ERC4626_init_unchained(_token);
         coreBorrow = _coreBorrow;
         surplusManager = _surplusManager;
-        paused = false;
     }
 
     /// @notice Checks whether the `msg.sender` has the governor role or not
@@ -63,12 +62,6 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @notice Checks whether the `msg.sender` has the governor or guardian role or not
     modifier onlyKeepers() {
         if (!keepers[msg.sender]) revert NotKeeper();
-        _;
-    }
-
-    /// @notice Checks whether the contract is paused
-    modifier whenNotPaused() {
-        if (paused) revert Paused();
         _;
     }
 
@@ -140,8 +133,8 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// redeem
     function maxRedeem(address owner) public view virtual override returns (uint256) {
         uint256 shares = balanceOf(owner);
-        uint256 contractBalance = _estimateWithdrawableAssets(type(uint256).max);
         uint256 controlledAssets = _convertToAssets(shares, MathUpgradeable.Rounding.Down) + _claimableRewardsOf(owner);
+        uint256 contractBalance = _estimateWithdrawableAssets(controlledAssets);
         // If there is enough asset in the contract for the rewards plus the asset value of the shares,
         // then the `owner` can withdraw all its shares
         if (contractBalance > controlledAssets) return shares;
@@ -211,7 +204,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @param strategiesToHarvest List of strategies to harvest
     // TODO we may want to add the opportunity for whitelisting on harvest -> in order not to acknowledge loss or so
     // in some cases -> maybe at the strategy level in the mapping
-    function harvest(IStrategy4626[] memory strategiesToHarvest) public whenNotPaused {
+    function harvest(IStrategy4626[] memory strategiesToHarvest) public {
         uint256 _managedAssets = managedAssets();
         _report(strategiesToHarvest, _managedAssets);
         _adjustStrategiesPositions(strategiesToHarvest, _managedAssets, new bytes[](0));
@@ -236,14 +229,14 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @notice Similar to the permisionless `harvest`, except that you can add external parameters
     /// It can be used for folding strategies to give an hint on the optimal solution
     /// @param strategiesToHarvest List of strategies to harvest
-    /// @param datas List of datas needed for each strategies
-    function harvest(IStrategy4626[] memory strategiesToHarvest, bytes[] memory datas) public onlyKeepers {
-        if (datas.length != strategiesToHarvest.length) revert IncompatibleLengths();
+    /// @param strategiesData List of data needed for each strategies
+    function harvest(IStrategy4626[] memory strategiesToHarvest, bytes[] memory strategiesData) public onlyKeepers {
+        if (strategiesData.length != strategiesToHarvest.length) revert IncompatibleLengths();
         uint256 _managedAssets = managedAssets();
         _report(strategiesToHarvest, _managedAssets);
         // not that easy because when depositing and withdrawing (which are the actions triggering the adjust position on the strategy)
         // we cannot feed data to it
-        _adjustStrategiesPositions(strategiesToHarvest, _managedAssets, datas);
+        _adjustStrategiesPositions(strategiesToHarvest, _managedAssets, strategiesData);
     }
 
     // =========================== Governance functions ============================
@@ -276,7 +269,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
 
     /// @notice Toggle keeper in the whitelist
     /// @param keeper Address of the keeper to flip
-    function addKeeper(address keeper) external onlyGovernor {
+    function toggleKeeper(address keeper) external onlyGovernor {
         bool currentRole = keepers[keeper];
         keepers[keeper] = !currentRole;
         emit KeeperFlipped(address(keeper), !currentRole);
@@ -360,8 +353,10 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     }
 
     /// @notice Pauses external permissionless functions of the contract
-    function togglePause() external onlyGovernorOrGuardian {
-        paused = !paused;
+    function togglePause(IStrategy4626 strategy) external onlyGovernorOrGuardian {
+        StrategyParams storage params = strategies[strategy];
+        if (params.lastReport > 0) revert InvalidStrategy();
+        params.paused = !params.paused;
     }
 
     /// @notice Changes allowance of a set of tokens to addresses
@@ -506,7 +501,8 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @param strategiesToHarvest List of strategies to harvest
     function _report(IStrategy4626[] memory strategiesToHarvest, uint256 _managedAssets) internal {
         for (uint256 i = 0; i < strategiesToHarvest.length; i++) {
-            if (strategies[strategiesToHarvest[i]].lastReport == 0) revert InvalidStrategy();
+            StrategyParams storage params = strategies[strategiesToHarvest[i]];
+            if (params.lastReport == 0 || params.paused) revert InvalidStrategy();
             strategiesToHarvest[i].report(_debtOutstanding(strategiesToHarvest[i], _managedAssets));
         }
         _checkpointPnL(strategiesToHarvest);
@@ -515,16 +511,17 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @notice Reports the gains or loss made by a strategy
     /// @param strategiesToAdjust List of strategies to adjust their positions
     /// @param managedAssets_ Total `asset` amount controlled by the contract
+    /// @param strategiesData List of data needed for each strategies
     /// @dev This is the main contact point where this contract interacts with the strategies: it can either invest
     /// or divest from a strategy
     function _adjustStrategiesPositions(
         IStrategy4626[] memory strategiesToAdjust,
         uint256 managedAssets_,
-        bytes[] memory datas
+        bytes[] memory strategiesData
     ) internal {
         uint256 positiveChangedDebt;
         uint256 negativeChangedDebt;
-        bool isData = (datas.length == strategiesToAdjust.length);
+        bool isData = (strategiesData.length == strategiesToAdjust.length);
         for (uint256 i = 0; i < strategiesToAdjust.length; i++) {
             StrategyParams storage params = strategies[strategiesToAdjust[i]];
             uint256 target = (managedAssets_ * params.debtRatio) / BASE_PARAMS;
@@ -536,7 +533,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
                     positiveChangedDebt += available;
                     // Strategy will automatically reinvest upon deposit
                     if (!isData) strategiesToAdjust[i].deposit(available, address(this));
-                    else strategiesToAdjust[i].deposit(available, address(this), datas[i]);
+                    else strategiesToAdjust[i].deposit(available, address(this), strategiesData[i]);
                 }
             } else {
                 uint256 available = Math.min(
@@ -549,7 +546,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
                     negativeChangedDebt += available;
                     // Strategy will automatically rebalance upon withdraw
                     if (!isData) strategiesToAdjust[i].withdraw(available, address(this), address(this));
-                    else strategiesToAdjust[i].withdraw(available, address(this), address(this), datas[i]);
+                    else strategiesToAdjust[i].withdraw(available, address(this), address(this), strategiesData[i]);
                 }
             }
         }

@@ -15,6 +15,8 @@ struct StrategyParams {
     // Timestamp of last report made by this strategy
     // It is also used to check if a strategy has been initialized
     uint256 lastReport;
+    // Check if the strategy is harvestable
+    bool paused;
     // Total amount the strategy is expected to have
     uint256 totalStrategyDebt;
     // The share of the total assets controlled by the savings rate contract that the `strategy` can access to.
@@ -33,9 +35,6 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
     uint256 internal constant BASE_PARAMS = 10**9;
 
     // =============================== Parameters ==================================
-
-    /// @notice Whether the contract is paused or not
-    bool public paused;
 
     /// @notice The share of profit going to the protocol
     /// @dev Should be lower than `BASE_PARAMS`
