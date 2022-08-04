@@ -15,11 +15,6 @@ TODO
  * Rari: https://github.com/Rari-Capital/vaults/blob/main/src/Vault.sol
 - do we add strategist fees as well? -> this fee is taken directly from the strategy, like the vault
  mints to the strat and then the strategist can redeem the shares
-- do we add a rate limit -> way to make sure we don't invest too much in a strategy at a given time
-    => check Yearn _creditAvailable function to see the implementation for this
-- do we add a debtLimit -> make sure a strategy does not handle too much with respect to what we want
-    => check Yearn _creditAvailable function to see the implementation for this
-- be able to pause harvest for each strategy
 */
 abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     using SafeERC20 for IERC20;
