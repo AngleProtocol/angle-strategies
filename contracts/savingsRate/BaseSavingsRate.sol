@@ -489,7 +489,7 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
                 BASE_PARAMS,
                 MathUpgradeable.Rounding.Down
             );
-            _handleProtocolLoss(feesDebt);
+            _handlesavingRateLoss(feesDebt);
             totalDebt -= uint256(-totalProfitLossAccrued);
         }
     }
@@ -554,13 +554,13 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @notice Propagates a protocol gain by minting yield bearing tokens to the address in charge of the surplus
     /// @param gain Gain to propagate
     function _handleProtocolGain(uint256 gain) internal {
-        uint256 currentLossVariable = protocolLoss;
+        uint256 currentLossVariable = savingRateLoss;
         if (currentLossVariable >= gain) {
-            protocolLoss -= gain;
+            savingRateLoss -= gain;
         } else {
             // If we accrued any fees, mint an equivalent amount of yield bearing tokens
             _mint(surplusManager, _convertToShares(gain - currentLossVariable, MathUpgradeable.Rounding.Down));
-            protocolLoss = 0;
+            savingRateLoss = 0;
         }
     }
 
@@ -568,14 +568,14 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
     /// @param loss Loss to propagate
     /// @dev This functions burns the yield bearing tokens owned by the governance if it is not enough to support
     /// the bad debt
-    function _handleProtocolLoss(uint256 loss) internal {
+    function _handlesavingRateLoss(uint256 loss) internal {
         address surplusOwner = surplusManager;
         uint256 surplusOwnerSharesBalance = balanceOf(surplusOwner);
         uint256 claimableProtocolRewards = _convertToAssets(surplusOwnerSharesBalance, MathUpgradeable.Rounding.Down);
         if (claimableProtocolRewards > loss) {
             _burn(surplusOwner, _convertToShares(loss, MathUpgradeable.Rounding.Up));
         } else {
-            protocolLoss += loss - claimableProtocolRewards;
+            savingRateLoss += loss - claimableProtocolRewards;
             _burn(surplusOwner, surplusOwnerSharesBalance);
         }
     }

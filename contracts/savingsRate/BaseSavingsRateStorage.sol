@@ -77,7 +77,7 @@ contract BaseSavingsRateStorage is ERC4626Upgradeable {
     uint256 public debtRatio;
 
     /// @notice Unpaid loss from the protocol
-    uint256 public protocolLoss;
+    uint256 public savingRateLoss;
 
     /// @notice Amount of profit that needs to be vested
     uint256 public vestingProfit;
