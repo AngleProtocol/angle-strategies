@@ -439,6 +439,9 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
             // We can have a lower bound on the withdrawable assets by adding all lower bounds
             // on withdrawable assets from each strategies
             for (uint256 i = 0; i < withdrawalStackMemory.length; i++) {
+                // If the strategy is paused, then nothing can be withdrawn from it
+                if (strategies[withdrawalStackMemory[i]].paused) continue;
+
                 withdrawableAssets += withdrawalStackMemory[i].maxWithdraw(address(this));
             }
         }
@@ -619,13 +622,14 @@ abstract contract BaseSavingsRate is BaseSavingsRateStorage {
                 uint256 amountNeeded = value - vaultBalance;
 
                 StrategyParams storage params = strategies[strategy];
+
                 // NOTE: Don't withdraw more than the debt so that strategy can still
                 //      continue to work based on the profits it has
                 // NOTE: This means that user will lose out on any profits that each
                 //      Strategy in the queue would return on next harvest, benefiting others
                 amountNeeded = Math.min(amountNeeded, params.totalStrategyDebt);
-                // Nothing to withdraw from this Strategy, try the next one
-                if (amountNeeded == 0) continue;
+                // Nothing to withdraw from this Strategy or the strategy is paused, try the next one
+                if (amountNeeded == 0 || params.paused) continue;
 
                 uint256 loss = strategy.withdraw(amountNeeded, address(this), address(this));
 
