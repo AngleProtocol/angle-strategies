@@ -245,8 +245,8 @@ contract Marketplace is ReentrancyGuard {
             // Reusing the minAmountOut variable for the stack size
             minAmountOut = market.params.oracle.latestAnswer();
             market.status.oracleValue = minAmountOut;
-            emit OracleValueUpdated(marketId, minAmountOut);
-            emit OrderUpdated(marketId, onBehalfOf, amount, firstIndex, buyOrSell);
+            // emit OracleValueUpdated(marketId, minAmountOut);
+            // emit OrderUpdated(marketId, onBehalfOf, amount, firstIndex, buyOrSell);
             return (false, 0, firstIndex);
         } else if (market.status.buyOrSell == buyOrSell) {
             // If the order is placed in the same direction as the current state of the market, we just add the order
@@ -257,7 +257,7 @@ contract Marketplace is ReentrancyGuard {
             if (minAmountOut == 1) {
                 amount += market.status.orders[orderId].amount;
                 market.status.orders[orderId].amount = amount;
-                emit OrderUpdated(marketId, onBehalfOf, amount, orderId, buyOrSell);
+                // emit OrderUpdated(marketId, onBehalfOf, amount, orderId, buyOrSell);
                 return (false, 0, orderId);
             } else {
                 if (msg.sender == market.params.privilegedAddress) {
@@ -284,7 +284,7 @@ contract Marketplace is ReentrancyGuard {
                         });
                     market.status.lastIndex = orderId + 1;
                 }
-                emit OrderUpdated(marketId, onBehalfOf, amount, orderId, buyOrSell);
+                // emit OrderUpdated(marketId, onBehalfOf, amount, orderId, buyOrSell);
                 return (false, 0, orderId);
             }
         } else {
@@ -303,22 +303,23 @@ contract Marketplace is ReentrancyGuard {
             // Order memory orderProcessed;
             orderFilling.leftoverAmount = orderFilling.totalAmountToGet;
             for (uint256 i = market.status.firstIndex; i < market.status.lastIndex; i++) {
-                Order memory orderProcessed = market.status.orders[i];
-                if (orderProcessed.amount > orderFilling.leftoverAmount) {
+                orderFilling.lastOrder = market.status.orders[i];
+                // Order memory orderProcessed = 
+                if (orderFilling.lastOrder.amount > orderFilling.leftoverAmount) {
                     if (minAmountOut > orderFilling.totalAmountToGet) revert TooSmallAmountOut();
                     // In this case order is filled and we're good
                     // Reusing the amount variable
-                    amount = orderProcessed.amount - orderFilling.leftoverAmount;
+                    amount = orderFilling.lastOrder.amount - orderFilling.leftoverAmount;
                     market.status.orders[i].amount = amount;
                     market.status.firstIndex = uint64(i);
                     tokenToReceive.safeTransfer(onBehalfOf, orderFilling.totalAmountToGet);
-                    tokenToSend.safeTransfer(orderProcessed.owner, amount);
-                    emit OrderUpdated(marketId, orderProcessed.owner, amount, i, 1 - buyOrSell);
+                    tokenToSend.safeTransfer(orderFilling.lastOrder.owner, amount);
+                    // emit OrderUpdated(marketId, orderFilling.lastOrder.owner, amount, i, 1 - buyOrSell);
                     return (true, orderFilling.totalAmountToGet, type(uint256).max);
                 } else {
-                    orderFilling.leftoverAmount -= orderProcessed.amount;
-                    tokenToSend.safeTransfer(orderProcessed.owner, orderProcessed.amount);
-                    emit OrderUpdated(marketId, orderProcessed.owner, 0, i, 1 - buyOrSell);
+                    orderFilling.leftoverAmount -= orderFilling.lastOrder.amount;
+                    tokenToSend.safeTransfer(orderFilling.lastOrder.owner, orderFilling.lastOrder.amount);
+                    // emit OrderUpdated(marketId, orderFilling.lastOrder.owner, 0, i, 1 - buyOrSell);
                 }
             }
             // This is the amount of the order we've filled
@@ -355,7 +356,7 @@ contract Marketplace is ReentrancyGuard {
                 owner: onBehalfOf
             });
             
-            emit OrderUpdated(marketId, onBehalfOf,orderFilling.totalAmountToGet, indexId, buyOrSell);
+            // emit OrderUpdated(marketId, onBehalfOf,orderFilling.totalAmountToGet, indexId, buyOrSell);
             tokenToSend.safeTransfer(onBehalfOf, amount);
             return (false, amount, indexId);
         }
