@@ -64,7 +64,6 @@
     "@openzeppelin/contracts-upgradeable": "4.7.0",
     "@openzeppelin/hardhat-upgrades": "1.14.0",
     "@openzeppelin/test-helpers": "0.5.15",
-    "@rari-capital/solmate": "6.3.0",
     "@typechain/ethers-v5": "9.0.0",
     "@typechain/hardhat": "5.0.0",
     "@types/chai": "^4.2.21",
