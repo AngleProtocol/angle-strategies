@@ -13,13 +13,10 @@ import "../interfaces/IOracle.sol";
 /*
 Inspiration: https://github.com/OlympusDAO/olympus-contracts/blob/main/contracts/BondDepository.sol
 // TODO 
-- transfer order, withdraw order
 - view functions to get the addressable market size as well as the registry
 - max order handling -> difference between first index and last index
-- bytes32 or uint256 for the marketId
-- withdraw delay
-- slippage protection for people placing orders to that they are sure that they're makers or takers: minAmountOut
-- reset delay
+- check if possible or not to drain funds from other markets
+// TODO specify that oracle contract -> safeguards should be placed there
 */
 contract Marketplace is ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -31,18 +28,27 @@ contract Marketplace is ReentrancyGuard {
     struct Order {
         // Amount of tokens brought for the order
         uint256 amount;
+        // Time at which the order was created
+        uint256 updateTimestamp;
         // Owner of the order which can amend it or remove it
         address owner;
+    }
+
+    struct OrderFillingData {
+        uint256 marketPrice;
+        uint256 totalAmountToGet;
+        uint256 leftoverAmount;
+        Order lastOrder;
     }
 
     /// @notice Parameters of a given market: all these parameters are mutable
     struct MarketParams {
         // Oracle contract used to price the tokens
         IOracle oracle;
-        // Owner of the market
-        address owner;
-        // = 1 if orders can be posted permissionlessly in the market, 0 otherwise
-        uint64 permissionless;
+        // Privileged address of the market which will be able to be matched first
+        address privilegedAddress;
+        // Timeline to withdraw an order after it's been posted
+        uint64 withdrawDeadline;
         // Max number of orders that can be processed in the market
         uint64 maxOrders;
         // Per second increase of the discount if there are more sell orders than buy orders
@@ -64,6 +70,7 @@ contract Marketplace is ReentrancyGuard {
         uint64 lastIndex;
         uint64 buyOrSell;
         uint64 inversionTimestamp;
+        uint256 oracleValue;
         Order[] orders;
     }
 
@@ -75,37 +82,34 @@ contract Marketplace is ReentrancyGuard {
     }
 
     mapping(bytes32 => Market) public markets;
-
-    mapping(bytes32 => mapping(uint256 => Order)) public orders;
     mapping(bytes32 => mapping(address => uint8)) public approvedParticipants;
+    // Nonces for the different market creator
+    mapping(address => uint256) public nonces;
 
     mapping(IERC20 => uint256) public tokenMetadata;
-
-    // TODO do we keep something like that or not
-    uint256 public marketIdCount;
 
     error InvalidTokens();
     error InvalidMarket();
     error InvalidParam();
     error NotApproved();
+    error NotAllowed();
     error NoOpenOrder();
-    error NotOwner();
+    error TooEarly();
     error TooManyOpenOrders();
     error TooSmallOrder();
     error TooSmallAmountOut();
 
-    event MarketCreated(address indexed quoteToken, address indexed baseToken, address indexed owner, address sender);
+    event MarketCreated(
+        address indexed quoteToken,
+        address indexed baseToken,
+        address indexed sender,
+        uint256 senderNonce,
+        bytes32 marketId
+    );
+    event OracleValueUpdated(bytes32 marketId, uint256 oracleValue);
     event OrderUpdated(bytes32 marketId, address indexed creator, uint256 amount, uint256 orderId, uint64 buyOrSell);
-    event SetMarketUintParam(bytes32 marketId, uint256 param, bytes32 what);
-    event SetMarketAddressParam(bytes32 marketId, address indexed param, bytes32 what);
-    event ToggledApprovedMarketParticipant(bytes32 marketId, address indexed participant, uint8 newStatus);
 
     constructor() {}
-
-    modifier onlyOwner(bytes32 marketId) {
-        if (markets[marketId].params.owner != msg.sender) revert NotOwner();
-        _;
-    }
 
     function getOpenOrders(bytes32 marketId) external view returns (Order[] memory, uint64) {
         Market memory market = markets[marketId];
@@ -116,11 +120,19 @@ contract Marketplace is ReentrancyGuard {
         return (openOrders, market.status.buyOrSell);
     }
 
-    /// Whether it's true and whether this order is a buy or sell order
-    function hasOpenOrder(bytes32 marketId, address owner) external view returns (bool, uint256, uint64) {
+    /// Whether it's true, the orderId and whether this order is a buy or sell order
+    function hasOpenOrder(bytes32 marketId, address owner)
+        external
+        view
+        returns (
+            bool,
+            uint64,
+            uint64
+        )
+    {
         Market memory market = markets[marketId];
-        (bool openOrder, uint256 orderId) = _hasOpenOrder(market, owner);
-        return (openOrder, orderId, market.status.buyOrSell);
+        (uint256 openOrder, uint64 orderId) = _hasOpenOrder(market, owner);
+        return (openOrder == 1, orderId, market.status.buyOrSell);
     }
 
     function getBuyOrderAmount(bytes32 marketId) external view returns (uint256 amount) {
@@ -151,12 +163,12 @@ contract Marketplace is ReentrancyGuard {
     function _hasOpenOrder(Market memory market, address owner)
         internal
         pure
-        returns (bool openOrder, uint256 orderId)
+        returns (uint256 openOrder, uint64 orderId)
     {
         for (uint256 i = market.status.firstIndex; i < market.status.lastIndex; i++) {
             if (market.status.orders[i].owner == owner) {
-                orderId = i;
-                openOrder = true;
+                orderId = uint64(i);
+                openOrder = 1;
                 break;
             }
         }
@@ -168,8 +180,9 @@ contract Marketplace is ReentrancyGuard {
         MarketParams memory params
     ) external returns (bytes32 marketId) {
         if (quoteToken == address(0) || baseToken == address(0) || quoteToken == baseToken) revert InvalidTokens();
-        // TODO nonce
-        marketId = keccak256(abi.encodePacked(address(quoteToken), address(baseToken), params.owner, msg.sender));
+        uint256 senderNonce = nonces[msg.sender];
+        marketId = keccak256(abi.encodePacked(address(quoteToken), address(baseToken), msg.sender, senderNonce));
+        nonces[msg.sender] += 1;
         Market storage market = markets[marketId];
         if (address(market.quoteToken) != address(0)) revert InvalidMarket();
         market.quoteToken = IERC20(quoteToken);
@@ -179,7 +192,7 @@ contract Marketplace is ReentrancyGuard {
             tokenMetadata[IERC20(quoteToken)] = 10**(IERC20Metadata(quoteToken).decimals());
         if (tokenMetadata[IERC20(baseToken)] == 0)
             tokenMetadata[IERC20(baseToken)] = 10**(IERC20Metadata(baseToken).decimals());
-        emit MarketCreated(quoteToken, baseToken, params.owner, msg.sender);
+        emit MarketCreated(quoteToken, baseToken, msg.sender, senderNonce, marketId);
     }
 
     function placeOrder(
@@ -198,8 +211,6 @@ contract Marketplace is ReentrancyGuard {
         )
     {
         Market storage market = markets[marketId];
-        if (address(market.quoteToken) != address(0)) revert InvalidMarket();
-        if (market.params.permissionless == 0 && approvedParticipants[marketId][msg.sender] == 0) revert NotApproved();
         IERC20 tokenToSend;
         IERC20 tokenToReceive;
         if (buyOrSell == 1) {
@@ -211,110 +222,206 @@ contract Marketplace is ReentrancyGuard {
             tokenToReceive = market.quoteToken;
             if (amount < market.params.minSellOrder) revert TooSmallOrder();
         }
+        // If the market is invalid, then the `tokenToSend` address is null and this function should revert
         tokenToSend.safeTransferFrom(msg.sender, address(this), amount);
         // If there are no open orders
         if (market.status.inversionTimestamp == 0) {
+            uint64 firstIndex;
+            if (msg.sender == market.params.privilegedAddress) {
+                firstIndex = 0;
+            } else {
+                firstIndex = 1;
+                market.status.orders.push(Order({ amount: 0, updateTimestamp: 0, owner: address(0) }));
+            }
             market.status.inversionTimestamp = uint64(block.timestamp);
             market.status.buyOrSell = buyOrSell;
-            market.status.orders[0] = Order({ amount: amount, owner: onBehalfOf });
-            market.status.lastIndex = 1;
-            emit OrderUpdated(marketId, onBehalfOf, amount, 0, buyOrSell);
-            return (false, 0, 0);
-        }
-        // If the order is placed in the same direction as the current state of the market, we just add the order
-        if (market.status.buyOrSell == buyOrSell) {
+            market.status.orders[firstIndex] = Order({
+                amount: amount,
+                updateTimestamp: block.timestamp,
+                owner: onBehalfOf
+            });
+            market.status.lastIndex = firstIndex + 1;
+            market.status.firstIndex = firstIndex;
+            // Reusing the minAmountOut variable for the stack size
+            minAmountOut = market.params.oracle.latestAnswer();
+            market.status.oracleValue = minAmountOut;
+            emit OracleValueUpdated(marketId, minAmountOut);
+            emit OrderUpdated(marketId, onBehalfOf, amount, firstIndex, buyOrSell);
+            return (false, 0, firstIndex);
+        } else if (market.status.buyOrSell == buyOrSell) {
+            // If the order is placed in the same direction as the current state of the market, we just add the order
             if (minAmountOut > 0) revert TooSmallAmountOut();
-            (bool openOrder, uint256 orderId) = _hasOpenOrder(market, onBehalfOf);
-            if (openOrder) {
-                uint256 newOrderAmount = market.status.orders[orderId].amount + amount;
-                market.status.orders[orderId].amount = newOrderAmount;
-                emit OrderUpdated(marketId, onBehalfOf, newOrderAmount, orderId, buyOrSell);
+            uint64 orderId;
+            // Reusing the `minAmountOut` variable in this case
+            (minAmountOut, orderId) = _hasOpenOrder(market, onBehalfOf);
+            if (minAmountOut == 1) {
+                amount += market.status.orders[orderId].amount;
+                market.status.orders[orderId].amount = amount;
+                emit OrderUpdated(marketId, onBehalfOf, amount, orderId, buyOrSell);
                 return (false, 0, orderId);
             } else {
-                uint64 lastIndex = market.status.lastIndex;
-                if (lastIndex + 1 - market.status.firstIndex == market.params.maxOrders) revert TooManyOpenOrders();
-                market.status.orders[lastIndex] = Order({ amount: amount, owner: onBehalfOf });
-                market.status.lastIndex = lastIndex + 1;
-                emit OrderUpdated(marketId, onBehalfOf, amount, lastIndex, buyOrSell);
-                return (false, 0, lastIndex);
+                if (msg.sender == market.params.privilegedAddress) {
+                    orderId = market.status.firstIndex - 1;
+                    if (market.status.lastIndex - orderId == market.params.maxOrders) revert TooManyOpenOrders();
+                    market.status.orders[orderId] = Order({
+                        amount: amount,
+                        updateTimestamp: block.timestamp,
+                        owner: onBehalfOf
+                    });
+                    market.status.firstIndex = orderId;
+                } else {
+                    orderId = market.status.lastIndex;
+                    if (orderId + 1 - market.status.firstIndex == market.params.maxOrders) revert TooManyOpenOrders();
+                    if (market.status.orders.length == orderId)
+                        market.status.orders.push(
+                            Order({ amount: amount, updateTimestamp: block.timestamp, owner: onBehalfOf })
+                        );
+                    else
+                        market.status.orders[orderId] = Order({
+                            amount: amount,
+                            updateTimestamp: block.timestamp,
+                            owner: onBehalfOf
+                        });
+                    market.status.lastIndex = orderId + 1;
+                }
+                emit OrderUpdated(marketId, onBehalfOf, amount, orderId, buyOrSell);
+                return (false, 0, orderId);
             }
         } else {
-            uint256 marketPrice = _computeMarketPrice(market);
-            uint256 amountToGet;
+            OrderFillingData memory orderFilling;
+            orderFilling.marketPrice = _computeMarketPrice(market);
             // If we're buying as oracle returns value of baseToken denominated in
             if (buyOrSell == 1)
-                amountToGet =
+                orderFilling.totalAmountToGet =
                     (amount * tokenMetadata[tokenToReceive] * BASE_ORACLE) /
-                    (marketPrice * tokenMetadata[tokenToSend]);
+                    (orderFilling.marketPrice * tokenMetadata[tokenToSend]);
             else
-                amountToGet =
-                    (amount * tokenMetadata[tokenToReceive] * marketPrice) /
+                orderFilling.totalAmountToGet =
+                    (amount * tokenMetadata[tokenToReceive] * orderFilling.marketPrice) /
                     (BASE_ORACLE * tokenMetadata[tokenToSend]);
             // Look if we're filling the orders
-            uint64 firstIndex = market.status.firstIndex;
-            Order memory orderProcessed;
-            uint256 leftoverAmount = amountToGet;
-            for (uint256 i = firstIndex; i < market.status.lastIndex; i++) {
-                orderProcessed = market.status.orders[i];
-                if (orderProcessed.amount > leftoverAmount) {
-                    if (minAmountOut > amountToGet) revert TooSmallAmountOut();
+            // Order memory orderProcessed;
+            orderFilling.leftoverAmount = orderFilling.totalAmountToGet;
+            for (uint256 i = market.status.firstIndex; i < market.status.lastIndex; i++) {
+                Order memory orderProcessed = market.status.orders[i];
+                if (orderProcessed.amount > orderFilling.leftoverAmount) {
+                    if (minAmountOut > orderFilling.totalAmountToGet) revert TooSmallAmountOut();
                     // In this case order is filled and we're good
-                    uint256 orderAmount = orderProcessed.amount - leftoverAmount;
-                    market.status.orders[i].amount = orderAmount;
+                    // Reusing the amount variable
+                    amount = orderProcessed.amount - orderFilling.leftoverAmount;
+                    market.status.orders[i].amount = amount;
                     market.status.firstIndex = uint64(i);
-                    tokenToReceive.safeTransfer(onBehalfOf, amountToGet);
-                    tokenToSend.safeTransfer(orderProcessed.owner, orderAmount);
-                    emit OrderUpdated(marketId, orderProcessed.owner, orderAmount, i, 1 - buyOrSell);
-                    return (true, amountToGet, type(uint256).max);
+                    tokenToReceive.safeTransfer(onBehalfOf, orderFilling.totalAmountToGet);
+                    tokenToSend.safeTransfer(orderProcessed.owner, amount);
+                    emit OrderUpdated(marketId, orderProcessed.owner, amount, i, 1 - buyOrSell);
+                    return (true, orderFilling.totalAmountToGet, type(uint256).max);
                 } else {
-                    leftoverAmount -= orderProcessed.amount;
+                    orderFilling.leftoverAmount -= orderProcessed.amount;
                     tokenToSend.safeTransfer(orderProcessed.owner, orderProcessed.amount);
                     emit OrderUpdated(marketId, orderProcessed.owner, 0, i, 1 - buyOrSell);
                 }
             }
-            uint256 amountToSend = amountToGet - leftoverAmount;
-            if (minAmountOut > amountToSend) revert TooSmallAmountOut();
+            // This is the amount of the order we've filled
+            amount = orderFilling.totalAmountToGet - orderFilling.leftoverAmount;
+            if (minAmountOut > amount) revert TooSmallAmountOut();
             // If we leave the for loop, then this means that we have finished processing all the orders and that an inversion took place
             market.status.inversionTimestamp = uint64(block.timestamp);
+            {
+                uint256 oracleValue = market.params.oracle.latestAnswer();
+                market.status.oracleValue = oracleValue;
+                emit OracleValueUpdated(marketId, oracleValue);
+            }
+
             // New status is that of the person
             market.status.buyOrSell = buyOrSell;
-            market.status.firstIndex = 0;
-            market.status.lastIndex = 1;
-            // We're reusing the amountToGet variable to compute the amount that needs to be left in the order
+            
+            uint64 indexId = msg.sender == market.params.privilegedAddress ? 0 : 1;
+            market.status.firstIndex = indexId;
+            market.status.lastIndex = indexId + 1;
+
+            // We're reusing the totalAmountToGet variable to compute the amount that needs to be left in the order
             // If we're buying, then we need to convert here an amount of base tokens to quoteTokens
             if (buyOrSell == 1)
-                amountToGet =
-                    (amountToSend * tokenMetadata[tokenToSend] * marketPrice) /
+                orderFilling.totalAmountToGet =
+                    (orderFilling.leftoverAmount * tokenMetadata[tokenToSend] * orderFilling.marketPrice) /
                     (BASE_ORACLE * tokenMetadata[tokenToReceive]);
             else
-                amountToGet =
-                    (amountToSend * tokenMetadata[tokenToSend] * BASE_ORACLE) /
-                    (marketPrice * tokenMetadata[tokenToReceive]);
-            market.status.orders[0] = Order({ amount: amountToGet, owner: onBehalfOf });
-            emit OrderUpdated(marketId, onBehalfOf, amountToGet, 0, buyOrSell);
-            tokenToSend.safeTransfer(onBehalfOf, amountToSend);
-            return (false, amountToSend, 0);
+                orderFilling.totalAmountToGet =
+                    (orderFilling.leftoverAmount * tokenMetadata[tokenToSend] * BASE_ORACLE) /
+                    (orderFilling.marketPrice * tokenMetadata[tokenToReceive]);
+            market.status.orders[indexId] = Order({
+                amount: orderFilling.totalAmountToGet,
+                updateTimestamp: block.timestamp,
+                owner: onBehalfOf
+            });
+            
+            emit OrderUpdated(marketId, onBehalfOf,orderFilling.totalAmountToGet, indexId, buyOrSell);
+            tokenToSend.safeTransfer(onBehalfOf, amount);
+            return (false, amount, indexId);
         }
     }
 
     function transferOrder(bytes32 marketId, address to) external {
         Market storage market = markets[marketId];
-        (bool openOrder,uint256 orderId) = _hasOpenOrder(market, msg.sender);
-        if(!openOrder) revert NoOpenOrder();
+        (uint256 openOrder, uint64 orderId) = _hasOpenOrder(market, msg.sender);
+        if (openOrder == 0) revert NoOpenOrder();
+        // Privileged address cannot transfer order
+        if (market.status.orders[orderId].owner == market.params.privilegedAddress) revert NotAllowed();
         market.status.orders[orderId].owner = to;
         emit OrderUpdated(marketId, to, market.status.orders[orderId].amount, orderId, market.status.buyOrSell);
     }
 
-    function withdrawOrder(bytes32 marketId, address to) external {
-
+    function removeOrder(bytes32 marketId, address to) external nonReentrant {
+        Market storage market = markets[marketId];
+        (uint256 openOrder, uint64 orderId) = _hasOpenOrder(market, msg.sender);
+        if (block.timestamp - market.status.orders[orderId].updateTimestamp < market.params.withdrawDeadline)
+            revert TooEarly();
+        if (openOrder == 0) revert NoOpenOrder();
+        // If there is an open order the last index is necessarily greater than 1
+        if (market.status.orders[orderId].owner == market.params.privilegedAddress) {
+            market.status.firstIndex += 1;
+        } else {
+            uint64 lastIndex = market.status.lastIndex - 1;
+            // Need to loop in order not to break the first arrived first served logic
+            for (uint256 i = orderId; i < lastIndex - 1; i++) {
+                market.status.orders[i] = market.status.orders[i + 1];
+            }
+            market.status.lastIndex = lastIndex;
+        }
+        uint256 amount = market.status.orders[orderId].amount;
+        if (market.status.buyOrSell == 1) {
+            market.quoteToken.safeTransfer(to, amount);
+        } else {
+            market.baseToken.safeTransfer(to, amount);
+        }
+        emit OrderUpdated(marketId, msg.sender, 0, orderId, market.status.buyOrSell);
     }
 
-    function increaseOrder(bytes32 marketId, uint256 amount) external {
-
+    function increaseOrder(bytes32 marketId, uint256 amount) external nonReentrant {
+        Market storage market = markets[marketId];
+        (uint256 openOrder, uint64 orderId) = _hasOpenOrder(market, msg.sender);
+        if (openOrder == 0) revert NoOpenOrder();
+        uint64 buyOrSell = market.status.buyOrSell;
+        if (buyOrSell == 1) market.quoteToken.safeTransferFrom(msg.sender, address(this), amount);
+        else market.baseToken.safeTransferFrom(msg.sender, address(this), amount);
+        uint256 orderAmount = market.status.orders[orderId].amount + amount;
+        emit OrderUpdated(marketId, msg.sender, orderAmount, orderId, buyOrSell);
     }
 
-    function reduceOrder(bytes32 marketId, uint256 amount) external {
-
+    function reduceOrder(bytes32 marketId, uint256 amount) external nonReentrant {
+        Market storage market = markets[marketId];
+        (uint256 openOrder, uint64 orderId) = _hasOpenOrder(market, msg.sender);
+        if (openOrder == 0) revert NoOpenOrder();
+        uint256 orderAmount = market.status.orders[orderId].amount - amount;
+        uint64 buyOrSell = market.status.buyOrSell;
+        if (
+            (buyOrSell == 1 && (orderAmount < market.params.minBuyOrder)) ||
+            (buyOrSell == 0 && (orderAmount < market.params.minSellOrder))
+        ) revert TooSmallOrder();
+        market.status.orders[orderId].amount = orderAmount;
+        if (buyOrSell == 1) market.quoteToken.safeTransfer(msg.sender, amount);
+        else market.baseToken.safeTransfer(msg.sender, amount);
+        emit OrderUpdated(marketId, msg.sender, orderAmount, orderId, buyOrSell);
     }
 
     function computeMarketPrice(bytes32 marketId) external view returns (uint256) {
@@ -326,7 +433,7 @@ contract Marketplace is ReentrancyGuard {
         uint256 elapsed = market.status.inversionTimestamp == 0
             ? 0
             : block.timestamp - market.status.inversionTimestamp;
-        marketPrice = market.params.oracle.latestAnswer();
+        marketPrice = market.status.oracleValue;
         if (market.status.buyOrSell == 1) {
             uint256 premium = elapsed * market.params.premiumIncreaseRate;
             premium = premium > market.params.maxPremium ? market.params.maxPremium : premium;
@@ -338,65 +445,24 @@ contract Marketplace is ReentrancyGuard {
         }
     }
 
-    function setMarketUintParam(
-        bytes32 marketId,
-        uint256 param,
-        bytes32 what
-    ) external {
+    function resetMarketPrice(bytes32 marketId) external {
         Market storage market = markets[marketId];
-        if (market.params.owner != msg.sender) revert NotOwner();
-        if (what == "PR") market.params.permissionless = uint64(param);
-        else if (what == "MO") market.params.maxOrders = uint64(param);
-        else if (what == "DIR") market.params.discountIncreaseRate = uint64(param);
-        else if (what == "PIR") market.params.premiumIncreaseRate = uint64(param);
-        else if (what == "MD") market.params.maxDiscount = uint64(param);
-        else if (what == "MP") market.params.maxPremium = uint64(param);
-        else if (what == "MBO") market.params.minBuyOrder = param;
-        else if (what == "MSO") market.params.minSellOrder = param;
-        else revert InvalidParam();
-        emit SetMarketUintParam(marketId, param, what);
-    }
-
-    function setMarketAddressParam(
-        bytes32 marketId,
-        address param,
-        bytes32 what
-    ) external {
-        Market storage market = markets[marketId];
-        if (market.params.owner != msg.sender) revert NotOwner();
-        if (what == "OW") market.params.owner = param;
-        else if (what == "OR") market.params.oracle = IOracle(param);
-        else revert InvalidParam();
-        emit SetMarketAddressParam(marketId, param, what);
-    }
-
-    function _removeOrder(Market storage market, address dest, uint256 orderId) internal {
-        // If there is an open order the last index is necessarily greater than 1
-        uint64 lastIndex = market.status.lastIndex-1;
-        uint256 amount = market.status.orders[orderId].amount;
-        // Need to loop in order not to break the first arrived first served logic
-        for(uint256 i = orderId; i< lastIndex-1; i++) {
-            market.status.orders[i] = market.status.orders[i+1];
-        }
-        market.status.lastIndex = lastIndex;
-        if (market.status.buyOrSell == 1) {
-            market.quoteToken.safeTransfer(dest, amount);
-        } else {
-            market.baseToken.safeTransfer(dest, amount);
+        uint256 currentMarketPrice = _computeMarketPrice(market);
+        uint256 oracleValue = market.params.oracle.latestAnswer();
+        uint256 buyOrSell = market.status.buyOrSell;
+        if (
+            (buyOrSell == 1 && oracleValue > currentMarketPrice) || (buyOrSell == 0 && oracleValue < currentMarketPrice)
+        ) {
+            market.status.oracleValue = oracleValue;
+            emit OracleValueUpdated(marketId, oracleValue);
         }
     }
 
-    function toggleApprovedMarketParticipant(bytes32 marketId, address participant) external {
+    function transferPrivilegedOwnership(bytes32 marketId, address to) external {
         Market storage market = markets[marketId];
-        if (market.params.owner != msg.sender) revert NotOwner();
-        uint8 approvalStatus = approvedParticipants[marketId][participant];
-        approvedParticipants[marketId][participant] = 1 - approvalStatus;
-        if (approvalStatus == 1) {
-            (bool openOrder, uint256 orderId) = _hasOpenOrder(market, participant);
-            if (openOrder) {
-                _removeOrder(market, participant, orderId);
-            }
-        }
-        emit ToggledApprovedMarketParticipant(marketId, participant, 1 - approvalStatus);
+        // You cannot have open order when transferring ownership
+        (uint256 openOrder, ) = _hasOpenOrder(market, msg.sender);
+        if (market.params.privilegedAddress != msg.sender || openOrder == 1) revert NotAllowed();
+        market.params.privilegedAddress = to;
     }
 }
