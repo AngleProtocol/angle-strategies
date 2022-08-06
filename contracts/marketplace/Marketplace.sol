@@ -10,9 +10,11 @@ import "../interfaces/IOracle.sol";
 
 /// @title Marketplace
 /// @author Angle Core Team
+/// @notice A permissionless contract for token exchanges using an oracle and variable discounts
 /*
 Inspiration: https://github.com/OlympusDAO/olympus-contracts/blob/main/contracts/BondDepository.sol
 // TODO 
+- make it compatible with events
 - view functions to get the addressable market size as well as the registry
 - max order handling -> difference between first index and last index
 - check if possible or not to drain funds from other markets
@@ -25,6 +27,9 @@ contract Marketplace is ReentrancyGuard {
     uint256 public constant BASE_PARAMS = 10**9;
     uint256 public constant BASE_ORACLE = 10**18;
 
+    // ================================ Structs ====================================
+
+    /// @notice Order data
     struct Order {
         // Amount of tokens brought for the order
         uint256 amount;
@@ -34,16 +39,12 @@ contract Marketplace is ReentrancyGuard {
         address owner;
     }
 
-    struct OrderFillingData {
-        uint256 marketPrice;
-        uint256 totalAmountToGet;
-        uint256 leftoverAmount;
-        Order lastOrder;
-    }
-
-    /// @notice Parameters of a given market: all these parameters are mutable
+    /// @notice Parameters of a given market: all these parameters are immutable except for the `privilegedAddress` one
     struct MarketParams {
-        // Oracle contract used to price the tokens
+        // Oracle contract used to price the base tokens in value of quote tokens: if 1 ETH = 2000 EUR, then
+        // oracle = 2000 * BASE_ORACLE
+        // This should be an external trusted contract and if this oracle came to fail, then the whole associated market
+        // could fail, as such it's important to place the right safeguards in the corresponding oracle contract
         IOracle oracle;
         // Privileged address of the market which will be able to be matched first
         address privilegedAddress;
@@ -65,39 +66,59 @@ contract Marketplace is ReentrancyGuard {
         uint256 minSellOrder;
     }
 
+    /// @notice Current market status indicators
     struct MarketStatus {
-        uint64 firstIndex;
-        uint64 lastIndex;
-        uint64 buyOrSell;
-        uint64 inversionTimestamp;
-        uint256 oracleValue;
+        // Current orders waiting to be filled: elements are never erased from this list, and so current live
+        // orders are stored in the [firstIndex,lastIndex[ interval
         Order[] orders;
+        // Current oracle value (potentially discounted or increased with a premium)
+        uint256 oracleValue;
+        // Index in the orders list of the first valid order
+        uint64 firstIndex;
+        // First non valid index in the orders list
+        uint64 lastIndex;
+        // Whether orders are buy orders or sell orders: both cannot coexist at the same time
+        // = 1 if orders are buy orders, 0 otherwise
+        uint64 buyOrSell;
+        // Timestamp at which the market start getting more buy than sell orders (or conversely)
+        uint64 inversionTimestamp;
     }
 
+    /// @notice All the data about a market
     struct Market {
+        // In a ETH/agEUR pair, quote token is agEUR
         IERC20 quoteToken;
+        // In a ETH/agEUR pair, base token is ETH
         IERC20 baseToken;
+        // Market parameters
         MarketParams params;
+        // Market status indicators
         MarketStatus status;
     }
 
+    // =============================== Mappings ====================================
+
+    /// @notice Maps a `marketId` to its associated parameters and data
     mapping(bytes32 => Market) public markets;
-    mapping(bytes32 => mapping(address => uint8)) public approvedParticipants;
-    // Nonces for the different market creator
+
+    /// @notice Nonces for the different market creator
     mapping(address => uint256) public nonces;
 
+    /// @notice Maps a token to 10**(token decimals): we store it here in a mapping to avoid calling token contracts
+    /// everytime we interact with a token
     mapping(IERC20 => uint256) public tokenMetadata;
 
-    error InvalidTokens();
-    error InvalidMarket();
-    error InvalidParam();
-    error NotApproved();
+    // ================================ Errors =====================================
+
+    error InvalidParameters();
     error NotAllowed();
     error NoOpenOrder();
     error TooEarly();
     error TooManyOpenOrders();
     error TooSmallOrder();
     error TooSmallAmountOut();
+
+    // ================================ Events =====================================
 
     event MarketCreated(
         address indexed quoteToken,
@@ -109,8 +130,18 @@ contract Marketplace is ReentrancyGuard {
     event OracleValueUpdated(bytes32 marketId, uint256 oracleValue);
     event OrderUpdated(bytes32 marketId, address indexed creator, uint256 amount, uint256 orderId, uint64 buyOrSell);
 
+    /// @notice Constructor of the contract
+    /// @dev This is a completely permissionless immutable contract so there's no parameter needed
+    /// when deploying it
     constructor() {}
 
+    // ============================== View functions ===============================
+
+    /// @notice Returns the list of all the open orders of a market and whether these orders are buy or sell
+    /// orders
+    /// @return Order list
+    /// @return 1 if the orders are buy orders, 0 otherwise
+    /// @dev There can only be buy orders or sell orders, but never both at the same time
     function getOpenOrders(bytes32 marketId) external view returns (Order[] memory, uint64) {
         Market memory market = markets[marketId];
         Order[] memory openOrders = new Order[](market.status.lastIndex - market.status.firstIndex);
@@ -121,6 +152,13 @@ contract Marketplace is ReentrancyGuard {
     }
 
     /// Whether it's true, the orderId and whether this order is a buy or sell order
+    /// @notice Checks whether `owner` has an open order on `marketId`
+    /// @return Whether the `owner` address has an open order or not
+    /// @return In case the address has an open order, the ID of the order, that is to say the index
+    /// in the list of orders associated to the market of the order. If there's no open order, value returned
+    /// will be `type(uint64).max`
+    /// @return 1 if the order is a buy order, 0 if it's a sell
+    /// @dev An address can only have one open order in a market
     function hasOpenOrder(bytes32 marketId, address owner)
         external
         view
@@ -135,6 +173,8 @@ contract Marketplace is ReentrancyGuard {
         return (openOrder, orderId, market.status.buyOrSell);
     }
 
+    /// @notice Gets the sum of the amounts of all the buy orders in the market
+    /// @dev Amount returned will be 0 if there's no buy orders in the market
     function getBuyOrderAmount(bytes32 marketId) external view returns (uint256 amount) {
         Market memory market = markets[marketId];
         if (market.status.buyOrSell == 1) {
@@ -142,6 +182,8 @@ contract Marketplace is ReentrancyGuard {
         }
     }
 
+    /// @notice Gets the sum of the amounts of all the sell orders in the market
+    /// @dev Amount returned will be 0 if there's no sell orders in the market
     function getSellOrderAmount(bytes32 marketId) external view returns (uint256 amount) {
         Market memory market = markets[marketId];
         if (market.status.buyOrSell == 0) {
@@ -149,52 +191,37 @@ contract Marketplace is ReentrancyGuard {
         }
     }
 
-    function getOrderAmount(bytes32 marketId) external view returns (uint256 amount) {
+    /// @notice Gets the sum of all the orders in the market and if these orders are buy orders or sell orders
+    function getOrderAmount(bytes32 marketId) external view returns (uint256 amount, uint64 buyOrSell) {
         Market memory market = markets[marketId];
         amount = _getOrderAmount(market);
+        buyOrSell = market.status.buyOrSell;
     }
 
-    function _getOrderAmount(Market memory market) internal pure returns (uint256 amount) {
-        for (uint256 i = market.status.firstIndex; i < market.status.lastIndex; i++) {
-            amount += market.status.orders[i].amount;
-        }
+    /// @notice Computes the current price in the market `marketId`
+    /// @dev This takes into account of the oracle value as well as the discount/premium on this price
+    /// based on the imbalance between buy and sell orders
+    function computeMarketPrice(bytes32 marketId) external view returns (uint256) {
+        Market memory market = markets[marketId];
+        return _computeMarketPrice(market);
     }
 
-    function _hasOpenOrder(Market memory market, address owner)
-        internal
-        pure
-        returns (bool openOrder, uint64 orderId)
-    {
-        for (uint256 i = market.status.firstIndex; i < market.status.lastIndex; i++) {
-            if (market.status.orders[i].owner == owner) {
-                orderId = uint64(i);
-                openOrder = true;
-                break;
-            }
-        }
-    }
+    // ============================ Market Interaction =============================
 
-    function createMarket(
-        address quoteToken,
-        address baseToken,
-        MarketParams memory params
-    ) external returns (bytes32 marketId) {
-        if (quoteToken == address(0) || baseToken == address(0) || quoteToken == baseToken) revert InvalidTokens();
-        uint256 senderNonce = nonces[msg.sender];
-        marketId = keccak256(abi.encodePacked(address(quoteToken), address(baseToken), msg.sender, senderNonce));
-        nonces[msg.sender] += 1;
-        Market storage market = markets[marketId];
-        if (address(market.quoteToken) != address(0)) revert InvalidMarket();
-        market.quoteToken = IERC20(quoteToken);
-        market.baseToken = IERC20(baseToken);
-        market.params = params;
-        if (tokenMetadata[IERC20(quoteToken)] == 0)
-            tokenMetadata[IERC20(quoteToken)] = 10**(IERC20Metadata(quoteToken).decimals());
-        if (tokenMetadata[IERC20(baseToken)] == 0)
-            tokenMetadata[IERC20(baseToken)] = 10**(IERC20Metadata(baseToken).decimals());
-        emit MarketCreated(quoteToken, baseToken, msg.sender, senderNonce, marketId);
-    }
-
+    /// @notice Places on order on a market and either executes it or places it on the waiting list
+    /// @param marketId Id of the market on which the order should be placed
+    /// @param buyOrSell Should be 1 if for a buy order, 0 for a sell order
+    /// @param amount Amount of tokens to bring to acquire the desired token: for instance if the market is ETH/USDC
+    /// and I place a buy order, then if `amount = 10**6`, I am bringing 1 USDC to buy ETH
+    /// @param onBehalfOf For who this order is placed: this is the address which will receive the token bought through this contract
+    /// @param minAmountOut For taker orders (orders that execute other orders), this serves as a slippage protection. For instance,
+    /// if the market is ETH/USDC and there are pending orders to sell ETH, and I am making an order to buy ETH, then if `minAmountOut = 10**18`,
+    /// then the function will revert if I get less than 1 ETH from my order
+    /// @return Whether the order was fully executed: if I bring 1 USDC, but given current market conditions I can only buy ETH using 0.5 USDC
+    /// then it's considered that the order is not fully executed
+    /// @return Amount of tokens obtained from the order execution
+    /// @return Id of the order in the contract if my order has not been fully executed and still pending in the contract
+    /// TODO add more comments to explain how the function works
     function placeOrder(
         bytes32 marketId,
         uint64 buyOrSell,
@@ -302,7 +329,7 @@ contract Marketplace is ReentrancyGuard {
             uint256 leftoverAmount = totalAmountToGet;
             for (uint256 i = market.status.firstIndex; i < market.status.lastIndex; i++) {
                 lastOrder = market.status.orders[i];
-                // Order memory orderProcessed = 
+                // Order memory orderProcessed =
                 if (lastOrder.amount > leftoverAmount) {
                     if (minAmountOut > totalAmountToGet) revert TooSmallAmountOut();
                     // In this case order is filled and we're good
@@ -333,7 +360,7 @@ contract Marketplace is ReentrancyGuard {
 
             // New status is that of the person
             market.status.buyOrSell = buyOrSell;
-            
+
             uint64 indexId = msg.sender == market.params.privilegedAddress ? 0 : 1;
             market.status.firstIndex = indexId;
             market.status.lastIndex = indexId + 1;
@@ -353,7 +380,7 @@ contract Marketplace is ReentrancyGuard {
                 updateTimestamp: block.timestamp,
                 owner: onBehalfOf
             });
-            
+
             // emit OrderUpdated(marketId, onBehalfOf,totalAmountToGet, indexId, buyOrSell);
             tokenToSend.safeTransfer(onBehalfOf, amount);
             return (false, amount, indexId);
@@ -423,25 +450,26 @@ contract Marketplace is ReentrancyGuard {
         emit OrderUpdated(marketId, msg.sender, orderAmount, orderId, buyOrSell);
     }
 
-    function computeMarketPrice(bytes32 marketId) external view returns (uint256) {
-        Market memory market = markets[marketId];
-        return _computeMarketPrice(market);
-    }
+    // ============================ Market Management ==============================
 
-    function _computeMarketPrice(Market memory market) internal view returns (uint256 marketPrice) {
-        uint256 elapsed = market.status.inversionTimestamp == 0
-            ? 0
-            : block.timestamp - market.status.inversionTimestamp;
-        marketPrice = market.status.oracleValue;
-        if (market.status.buyOrSell == 1) {
-            uint256 premium = elapsed * market.params.premiumIncreaseRate;
-            premium = premium > market.params.maxPremium ? market.params.maxPremium : premium;
-            marketPrice = (marketPrice * (BASE_PARAMS + premium)) / BASE_PARAMS;
-        } else {
-            uint256 discount = elapsed * market.params.discountIncreaseRate;
-            discount = discount > market.params.maxDiscount ? market.params.maxDiscount : discount;
-            marketPrice = (marketPrice * (BASE_PARAMS - discount)) / BASE_PARAMS;
-        }
+    function createMarket(
+        address quoteToken,
+        address baseToken,
+        MarketParams memory params
+    ) external returns (bytes32 marketId) {
+        if (quoteToken == address(0) || baseToken == address(0) || quoteToken == baseToken) revert InvalidParameters();
+        uint256 senderNonce = nonces[msg.sender];
+        marketId = keccak256(abi.encodePacked(address(quoteToken), address(baseToken), msg.sender, senderNonce));
+        nonces[msg.sender] += 1;
+        Market storage market = markets[marketId];
+        market.quoteToken = IERC20(quoteToken);
+        market.baseToken = IERC20(baseToken);
+        market.params = params;
+        if (tokenMetadata[IERC20(quoteToken)] == 0)
+            tokenMetadata[IERC20(quoteToken)] = 10**(IERC20Metadata(quoteToken).decimals());
+        if (tokenMetadata[IERC20(baseToken)] == 0)
+            tokenMetadata[IERC20(baseToken)] = 10**(IERC20Metadata(baseToken).decimals());
+        emit MarketCreated(quoteToken, baseToken, msg.sender, senderNonce, marketId);
     }
 
     function resetMarketPrice(bytes32 marketId) external {
@@ -463,5 +491,40 @@ contract Marketplace is ReentrancyGuard {
         (bool openOrder, ) = _hasOpenOrder(market, msg.sender);
         if (market.params.privilegedAddress != msg.sender || openOrder) revert NotAllowed();
         market.params.privilegedAddress = to;
+    }
+
+    // ============================ Internal Functions =============================
+
+    function _getOrderAmount(Market memory market) internal pure returns (uint256 amount) {
+        for (uint256 i = market.status.firstIndex; i < market.status.lastIndex; i++) {
+            amount += market.status.orders[i].amount;
+        }
+    }
+
+    function _hasOpenOrder(Market memory market, address owner) internal pure returns (bool openOrder, uint64 orderId) {
+        orderId = type(uint64).max;
+        for (uint256 i = market.status.firstIndex; i < market.status.lastIndex; i++) {
+            if (market.status.orders[i].owner == owner) {
+                orderId = uint64(i);
+                openOrder = true;
+                break;
+            }
+        }
+    }
+
+    function _computeMarketPrice(Market memory market) internal view returns (uint256 marketPrice) {
+        uint256 elapsed = market.status.inversionTimestamp == 0
+            ? 0
+            : block.timestamp - market.status.inversionTimestamp;
+        marketPrice = market.status.oracleValue;
+        if (market.status.buyOrSell == 1) {
+            uint256 premium = elapsed * market.params.premiumIncreaseRate;
+            premium = premium > market.params.maxPremium ? market.params.maxPremium : premium;
+            marketPrice = (marketPrice * (BASE_PARAMS + premium)) / BASE_PARAMS;
+        } else {
+            uint256 discount = elapsed * market.params.discountIncreaseRate;
+            discount = discount > market.params.maxDiscount ? market.params.maxDiscount : discount;
+            marketPrice = (marketPrice * (BASE_PARAMS - discount)) / BASE_PARAMS;
+        }
     }
 }
