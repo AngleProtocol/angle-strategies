@@ -4,11 +4,6 @@ import { utils, constants, BigNumber, Contract, Signer } from 'ethers';
 import { expect } from '../test-utils/chai-setup';
 import { deploy, impersonate } from '../test-utils';
 import { expectApprox } from '../../utils/bignumber';
-<<<<<<< HEAD
-=======
-import axios from 'axios';
-import qs from 'qs';
->>>>>>> 210fe20 (testing replacing storage)
 import {
   AaveFlashloanStrategy,
   FlashMintLib,
@@ -469,10 +464,10 @@ describe('AaveFlashloanStrategy - Main test file', () => {
         expect(await strategy.estimatedTotalAssets()).to.equal(0);
         await strategy.connect(keeper)['harvest(uint256)'](_guessedBorrowed, { gasLimit: 3e6 });
 
-      const { deposits, borrows } = await strategy.getCurrentPosition();
-      expectApprox(borrows, _guessedBorrowed, 0.1);
-      const totalAssets = (await wantToken.balanceOf(strategy.address)).add(deposits).sub(borrows);
-      const debtRatio = (await poolManager.strategies(strategy.address)).debtRatio;
+        const { deposits, borrows } = await strategy.getCurrentPosition();
+        expectApprox(borrows, _guessedBorrowed, 0.1);
+        const totalAssets = (await wantToken.balanceOf(strategy.address)).add(deposits).sub(borrows);
+        const debtRatio = (await poolManager.strategies(strategy.address)).debtRatio;
 
         expect(debtRatio).to.equal(utils.parseUnits('0.75', 9));
         expect(totalAssets).to.be.closeTo(_startAmountUSDC.mul(debtRatio).div(utils.parseUnits('1', 9)), 10);
