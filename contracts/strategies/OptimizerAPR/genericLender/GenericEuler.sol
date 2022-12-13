@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
 import { IEuler, IEulerMarkets, IEulerEToken, IEulerDToken, IBaseIRM } from "../../../interfaces/external/euler/IEuler.sol";
 import "../../../external/ComputePower.sol";

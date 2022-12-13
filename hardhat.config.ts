@@ -53,6 +53,17 @@ const config: HardhatUserConfig = {
         },
       },
     ],
+    overrides: {
+      'contracts/strategies/AaveFlashloanStrategy/AaveFlashloanStrategy.sol': {
+        version: '0.8.17',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 3000,
+          },
+        },
+      },
+    },
   },
   defaultNetwork: 'hardhat',
   // For the lists of Chain ID: https://chainlist.org

@@ -103,7 +103,7 @@ export async function setup(startBlocknumber?: number, collat = 'USDC') {
 
   const oldStrategy = await ethers.getContractAt(
     ['function harvest() external', 'function estimatedTotalAssets() external view returns(uint)'],
-    CONTRACTS_ADDRESSES[1].agEUR.collaterals?.[collat].Strategies?.GenericOptimisedLender as string,
+    CONTRACTS_ADDRESSES[1].agEUR.collaterals?.[collat].Strategies?.GenericOptimisedLender.Contract as string,
   );
 
   // === INIT STRATEGY ===
