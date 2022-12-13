@@ -8,10 +8,10 @@ import {
   StETHStrategy,
   StETHStrategy__factory,
 } from '../../typechain';
-import { gwei, ether } from '../../utils/bignumber';
+import { gwei, parseAmount } from '../../utils/bignumber';
 import { deploy, deployUpgradeable } from '../test-utils';
 import hre, { ethers } from 'hardhat';
-import { expect } from '../test-utils/chai-setup';
+import { expect } from 'chai';
 import { BASE_PARAMS, BASE_TOKENS } from '../utils';
 import { parseUnits } from 'ethers/lib/utils';
 
@@ -63,6 +63,7 @@ let managerError: string;
 describe('StrategyStETH', () => {
   before(async () => {
     ({ governor, guardian, user, keeper } = await ethers.getNamedSigners());
+    console.log(governor.address, guardian.address);
     ({ wETH, managerETH, stETH, curve, strategy } = await initWETH(governor, guardian));
     guardianError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${guardianRole}`;
     managerError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${managerRole}`;
@@ -132,7 +133,7 @@ describe('StrategyStETH', () => {
             stETH.address,
             parseUnits('3', 9),
           ),
-        ).to.be.revertedWith('ZeroAddress');
+        ).to.be.revertedWithCustomError(strategy, `ZeroAddress`);
       });
       it('reverts - zero governor address', async () => {
         const strategy = (await deployUpgradeable(new StETHStrategy__factory(guardian))) as StETHStrategy;
@@ -147,7 +148,7 @@ describe('StrategyStETH', () => {
             stETH.address,
             parseUnits('3', 9),
           ),
-        ).to.be.revertedWith('ZeroAddress');
+        ).to.be.revertedWithCustomError(strategy, `ZeroAddress`);
       });
       it('reverts - zero keeper address', async () => {
         const strategy = (await deployUpgradeable(new StETHStrategy__factory(guardian))) as StETHStrategy;
@@ -162,7 +163,7 @@ describe('StrategyStETH', () => {
             stETH.address,
             parseUnits('3', 9),
           ),
-        ).to.be.revertedWith('ZeroAddress');
+        ).to.be.revertedWithCustomError(strategy, `ZeroAddress`);
       });
       it('reverts - want != weth', async () => {
         const strategy = (await deployUpgradeable(new StETHStrategy__factory(guardian))) as StETHStrategy;
@@ -278,7 +279,7 @@ describe('StrategyStETH', () => {
   });
   describe('harvest', () => {
     it('init - minting on poolManager', async () => {
-      await wETH.mint(managerETH.address, ether('10'));
+      await wETH.mint(managerETH.address, parseAmount.ether('10'));
       expect(await wETH.balanceOf(managerETH.address)).to.be.equal(BASE_TOKENS.mul(BigNumber.from('10')));
     });
 
@@ -286,18 +287,18 @@ describe('StrategyStETH', () => {
       const balance = await hre.ethers.provider.getBalance(curve.address);
       await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       // Still 10 total assets
-      expect(await managerETH.getTotalAsset()).to.be.equal(ether('10'));
+      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('10'));
       // But 8 lent from manager to strategy
-      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(ether('2'));
-      expect(await strategy.estimatedTotalAssets()).to.be.equal(ether('8'));
+      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(parseAmount.ether('2'));
+      expect(await strategy.estimatedTotalAssets()).to.be.equal(parseAmount.ether('8'));
       // These 8 are then given to the lender
-      expect(await wETH.balanceOf(strategy.address)).to.be.equal(ether('0'));
-      expect(await stETH.balanceOf(strategy.address)).to.be.equal(ether('8'));
-      expect(await strategy.wantBalance()).to.be.equal(ether('0'));
-      expect(await strategy.stethBalance()).to.be.equal(ether('8'));
-      expect(await managerETH.totalDebt()).to.be.equal(ether('8'));
-      expect((await managerETH.strategies(strategy.address)).totalStrategyDebt).to.be.equal(ether('8'));
-      expect(await hre.ethers.provider.getBalance(curve.address)).to.be.equal(balance.add(ether('8')));
+      expect(await wETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('0'));
+      expect(await stETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('8'));
+      expect(await strategy.wantBalance()).to.be.equal(parseAmount.ether('0'));
+      expect(await strategy.stethBalance()).to.be.equal(parseAmount.ether('8'));
+      expect(await managerETH.totalDebt()).to.be.equal(parseAmount.ether('8'));
+      expect((await managerETH.strategies(strategy.address)).totalStrategyDebt).to.be.equal(parseAmount.ether('8'));
+      expect(await hre.ethers.provider.getBalance(curve.address)).to.be.equal(balance.add(parseAmount.ether('8')));
     });
 
     it('setting - creation of debt for the strategy', async () => {
@@ -307,7 +308,7 @@ describe('StrategyStETH', () => {
       expect((await managerETH.strategies(strategy.address)).debtRatio).to.be.equal(
         BASE_PARAMS.mul(BigNumber.from('5')).div(BigNumber.from('10')),
       );
-      expect(await managerETH.getTotalAsset()).to.be.equal(ether('10'));
+      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('10'));
     });
     it('success - manager debt ratio check', async () => {
       expect(await managerETH.debtRatio()).to.be.equal(BASE_PARAMS.mul(BigNumber.from('5')).div(BigNumber.from('10')));
@@ -328,13 +329,13 @@ describe('StrategyStETH', () => {
     it('success - harvesting with debt', async () => {
       await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       // 3 have been withdrawn from strat
-      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(ether('5'));
+      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(parseAmount.ether('5'));
 
       // Still 10 total assets
-      expect(await managerETH.getTotalAsset()).to.be.equal(ether('10'));
-      expect(await wETH.balanceOf(strategy.address)).to.be.equal(ether('0'));
-      expect(await stETH.balanceOf(strategy.address)).to.be.equal(ether('5'));
-      expect(await strategy.estimatedTotalAssets()).to.be.equal(ether('5'));
+      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('10'));
+      expect(await wETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('0'));
+      expect(await stETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('5'));
+      expect(await strategy.estimatedTotalAssets()).to.be.equal(parseAmount.ether('5'));
     });
     it('success - resetting everything', async () => {
       await managerETH
@@ -343,17 +344,17 @@ describe('StrategyStETH', () => {
       expect((await managerETH.strategies(strategy.address)).debtRatio).to.be.equal(
         BASE_PARAMS.mul(BigNumber.from('0')).div(BigNumber.from('10')),
       );
-      expect(await managerETH.getTotalAsset()).to.be.equal(ether('10'));
+      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('10'));
       expect(await managerETH.debtRatio()).to.be.equal(BASE_PARAMS.mul(BigNumber.from('0')).div(BigNumber.from('10')));
       await (await strategy.connect(keeper)['harvest(uint256)'](ethers.constants.Zero, { gasLimit: 3e6 })).wait();
       // 3 have been withdrawn from strat
-      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(ether('10'));
+      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(parseAmount.ether('10'));
 
       // Still 10 total assets
-      expect(await managerETH.getTotalAsset()).to.be.equal(ether('10'));
-      expect(await wETH.balanceOf(strategy.address)).to.be.equal(ether('0'));
-      expect(await stETH.balanceOf(strategy.address)).to.be.equal(ether('0'));
-      expect(await strategy.estimatedTotalAssets()).to.be.equal(ether('0'));
+      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('10'));
+      expect(await wETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('0'));
+      expect(await stETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('0'));
+      expect(await strategy.estimatedTotalAssets()).to.be.equal(parseAmount.ether('0'));
     });
     it('success - increasing back again debt ratios and setting dy', async () => {
       await managerETH
@@ -366,15 +367,15 @@ describe('StrategyStETH', () => {
       const balance = await hre.ethers.provider.getBalance(curve.address);
       await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       // Still 10 total assets
-      expect(await managerETH.getTotalAsset()).to.be.equal(ether('10'));
+      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('10'));
       // But 8 lent from manager to strategy
-      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(ether('2'));
-      expect(await strategy.estimatedTotalAssets()).to.be.equal(ether('8'));
+      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(parseAmount.ether('2'));
+      expect(await strategy.estimatedTotalAssets()).to.be.equal(parseAmount.ether('8'));
       // These 8 are then given to the lender
-      expect(await wETH.balanceOf(strategy.address)).to.be.equal(ether('0'));
-      expect(await stETH.balanceOf(strategy.address)).to.be.equal(ether('8'));
-      expect(await managerETH.totalDebt()).to.be.equal(ether('8'));
-      expect((await managerETH.strategies(strategy.address)).totalStrategyDebt).to.be.equal(ether('8'));
+      expect(await wETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('0'));
+      expect(await stETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('8'));
+      expect(await managerETH.totalDebt()).to.be.equal(parseAmount.ether('8'));
+      expect((await managerETH.strategies(strategy.address)).totalStrategyDebt).to.be.equal(parseAmount.ether('8'));
       // The amount of ETH on Curve should not have changed in this situation
       expect(await hre.ethers.provider.getBalance(curve.address)).to.be.equal(balance);
       // Setting reward back to normal
@@ -382,76 +383,76 @@ describe('StrategyStETH', () => {
     });
     it('success - recording a gain', async () => {
       // Minting two stETH meaning there is an increase
-      await stETH.mint(strategy.address, ether('2'));
-      expect(await stETH.balanceOf(strategy.address)).to.be.equal(ether('10'));
+      await stETH.mint(strategy.address, parseAmount.ether('2'));
+      expect(await stETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('10'));
     });
     it('success - harvesting after a gain', async () => {
       // There is 12 in total assets now, 0.8 * 12 should go to the strategy, the rest to the poolManager
       await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
-      expect(await managerETH.getTotalAsset()).to.be.equal(ether('12'));
+      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('12'));
       // But 8 lent from manager to strategy
-      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(ether('2.4'));
-      expect(await strategy.estimatedTotalAssets()).to.be.equal(ether('9.6'));
+      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(parseAmount.ether('2.4'));
+      expect(await strategy.estimatedTotalAssets()).to.be.equal(parseAmount.ether('9.6'));
       // These 8 are then given to the lender
-      expect(await wETH.balanceOf(strategy.address)).to.be.equal(ether('0'));
-      expect(await stETH.balanceOf(strategy.address)).to.be.equal(ether('9.6'));
-      expect(await managerETH.totalDebt()).to.be.equal(ether('9.6'));
-      expect((await managerETH.strategies(strategy.address)).totalStrategyDebt).to.be.equal(ether('9.6'));
+      expect(await wETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('0'));
+      expect(await stETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('9.6'));
+      expect(await managerETH.totalDebt()).to.be.equal(parseAmount.ether('9.6'));
+      expect((await managerETH.strategies(strategy.address)).totalStrategyDebt).to.be.equal(parseAmount.ether('9.6'));
     });
     it('success - recording a loss', async () => {
-      await stETH.burn(strategy.address, ether('2'));
+      await stETH.burn(strategy.address, parseAmount.ether('2'));
       await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
-      expect(await managerETH.getTotalAsset()).to.be.equal(ether('10'));
+      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('10'));
       expect(await managerETH.debtRatio()).to.be.equal(BASE_PARAMS.mul(BigNumber.from('8')).div(BigNumber.from('10')));
       // Still 10 total assets
-      expect(await wETH.balanceOf(strategy.address)).to.be.equal(ether('0'));
-      expect(await stETH.balanceOf(strategy.address)).to.be.equal(ether('8'));
-      expect(await strategy.estimatedTotalAssets()).to.be.equal(ether('8'));
+      expect(await wETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('0'));
+      expect(await stETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('8'));
+      expect(await strategy.estimatedTotalAssets()).to.be.equal(parseAmount.ether('8'));
     });
   });
   describe('withdraw', () => {
     it('reverts - invalid strategy', async () => {
-      await expect(managerETH.connect(governor).withdrawFromStrategy(governor.address, ether('1'))).to.be.revertedWith(
+      await expect(managerETH.connect(governor).withdrawFromStrategy(governor.address, parseAmount.ether('1'))).to.be.revertedWith(
         '78',
       );
     });
     it('success - wantBal < _amountNeeded', async () => {
-      await managerETH.connect(governor).withdrawFromStrategy(strategy.address, ether('1'));
+      await managerETH.connect(governor).withdrawFromStrategy(strategy.address, parseAmount.ether('1'));
       // 1 have been withdrawn from strat
-      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(ether('3'));
-      expect(await strategy.estimatedTotalAssets()).to.be.equal(ether('7'));
+      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(parseAmount.ether('3'));
+      expect(await strategy.estimatedTotalAssets()).to.be.equal(parseAmount.ether('7'));
       // Still 10 total assets
-      expect(await managerETH.getTotalAsset()).to.be.equal(ether('10'));
+      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('10'));
       // 4 are given to the lender
-      expect(await wETH.balanceOf(strategy.address)).to.be.equal(ether('0'));
+      expect(await wETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('0'));
     });
     it('success - wantBal >= amountNeeded', async () => {
-      await wETH.mint(strategy.address, ether('1'));
-      await managerETH.connect(governor).withdrawFromStrategy(strategy.address, ether('1'));
+      await wETH.mint(strategy.address, parseAmount.ether('1'));
+      await managerETH.connect(governor).withdrawFromStrategy(strategy.address, parseAmount.ether('1'));
       // 1 have been withdrawn from strat
-      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(ether('4'));
-      expect(await strategy.estimatedTotalAssets()).to.be.equal(ether('7'));
+      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(parseAmount.ether('4'));
+      expect(await strategy.estimatedTotalAssets()).to.be.equal(parseAmount.ether('7'));
       // Still 10 total assets
       // total debt is not updated after withdrawing
-      expect(await managerETH.getTotalAsset()).to.be.equal(ether('10'));
+      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('10'));
       // 4 are given to the lender
-      expect(await wETH.balanceOf(strategy.address)).to.be.equal(ether('0'));
+      expect(await wETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('0'));
     });
     it('success - with a loss', async () => {
       await curve.setDy(BASE_TOKENS.mul(BigNumber.from('11')).div(BigNumber.from('10')));
       // In this case you loose a portion and cannot withdraw everything
-      await managerETH.connect(governor).withdrawFromStrategy(strategy.address, ether('1'));
+      await managerETH.connect(governor).withdrawFromStrategy(strategy.address, parseAmount.ether('1'));
 
       // 1 have been withdrawn from strat
       expect(await wETH.balanceOf(managerETH.address)).to.be.equal(
-        ether('4').add(ether('1').mul(BigNumber.from('10')).div(BigNumber.from('11'))),
+        parseAmount.ether('4').add(parseAmount.ether('1').mul(BigNumber.from('10')).div(BigNumber.from('11'))),
       );
-      expect(await strategy.estimatedTotalAssets()).to.be.equal(ether('6'));
+      expect(await strategy.estimatedTotalAssets()).to.be.equal(parseAmount.ether('6'));
       // Still 10 total assets
 
-      expect(await managerETH.getTotalAsset()).to.be.equal(ether('9').add(ether('10').div(BigNumber.from('11'))));
+      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('9').add(parseAmount.ether('10').div(BigNumber.from('11'))));
       // 4 are given to the lender
-      expect(await wETH.balanceOf(strategy.address)).to.be.equal(ether('0'));
+      expect(await wETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('0'));
       await curve.setDy(BASE_TOKENS);
     });
   });
@@ -463,9 +464,9 @@ describe('StrategyStETH', () => {
     it('success - harvest', async () => {
       await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       // This harvest makes us find about the wETH that had been left aside
-      expect(await managerETH.getTotalAsset()).to.be.equal(ether('10').add(ether('10').div(BigNumber.from('11'))));
-      expect(await wETH.balanceOf(strategy.address)).to.be.equal(ether('0'));
-      expect(await strategy.estimatedTotalAssets()).to.be.equal(ether('0'));
+      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('10').add(parseAmount.ether('10').div(BigNumber.from('11'))));
+      expect(await wETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('0'));
+      expect(await strategy.estimatedTotalAssets()).to.be.equal(parseAmount.ether('0'));
     });
   });
 
@@ -494,7 +495,7 @@ describe('StrategyStETH', () => {
   });
   describe('invest', () => {
     it('reverts - wantBalance <= amount', async () => {
-      await expect(strategy.connect(guardian).invest(BASE_TOKENS.mul(BigNumber.from('100')))).to.be.revertedWith('');
+      await expect(strategy.connect(guardian).invest(BASE_TOKENS.mul(BigNumber.from('100')))).to.be.reverted;
     });
 
     it('success', async () => {
@@ -518,12 +519,10 @@ describe('StrategyStETH', () => {
   });
   describe('sweep', () => {
     it('reverts - wETH', async () => {
-      await expect(strategy.connect(guardian).sweep(wETH.address, governor.address)).to.be.revertedWith('InvalidToken');
+      await expect(strategy.connect(guardian).sweep(wETH.address, governor.address)).to.be.revertedWithCustomError(strategy, `InvalidToken`);
     });
     it('reverts - stETH', async () => {
-      await expect(strategy.connect(guardian).sweep(stETH.address, governor.address)).to.be.revertedWith(
-        'InvalidToken',
-      );
+      await expect(strategy.connect(guardian).sweep(stETH.address, governor.address)).to.be.revertedWithCustomError(strategy, `InvalidToken`);
     });
   });
   describe('harvest - other cases', () => {
@@ -539,49 +538,49 @@ describe('StrategyStETH', () => {
         value: ethers.utils.parseEther('10'),
       });
       await stETH.mint(curve.address, BASE_TOKENS.mul(BigNumber.from('10')));
-      await wETH.mint(managerETH.address, ether('10'));
+      await wETH.mint(managerETH.address, parseAmount.ether('10'));
       await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
     });
     it('success - withdraw < withdrawn', async () => {
       // In this situation we should have a profit inferior to the loss
       // This will result in a loss if we increase the dy
       await curve.setDy(BASE_TOKENS.mul(BigNumber.from('20')).div(BigNumber.from('10')));
-      await wETH.burn(managerETH.address, ether('2'));
+      await wETH.burn(managerETH.address, parseAmount.ether('2'));
       await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       // Has lost 2, then to bring it back to 0.64 => has lost 0.8 when withdrawing
-      expect(await managerETH.getTotalAsset()).to.be.equal(ether('7.2'));
+      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('7.2'));
       // But 8 lent from manager to strategy
-      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(ether('0.8'));
-      expect(await strategy.estimatedTotalAssets()).to.be.equal(ether('6.4'));
+      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(parseAmount.ether('0.8'));
+      expect(await strategy.estimatedTotalAssets()).to.be.equal(parseAmount.ether('6.4'));
       // These 8 are then given to the lender
-      expect(await wETH.balanceOf(strategy.address)).to.be.equal(ether('0'));
-      expect(await stETH.balanceOf(strategy.address)).to.be.equal(ether('6.4'));
-      expect(await strategy.wantBalance()).to.be.equal(ether('0'));
-      expect(await strategy.stethBalance()).to.be.equal(ether('6.4'));
-      expect(await managerETH.totalDebt()).to.be.equal(ether('6.4'));
-      expect((await managerETH.strategies(strategy.address)).totalStrategyDebt).to.be.equal(ether('6.4'));
+      expect(await wETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('0'));
+      expect(await stETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('6.4'));
+      expect(await strategy.wantBalance()).to.be.equal(parseAmount.ether('0'));
+      expect(await strategy.stethBalance()).to.be.equal(parseAmount.ether('6.4'));
+      expect(await managerETH.totalDebt()).to.be.equal(parseAmount.ether('6.4'));
+      expect((await managerETH.strategies(strategy.address)).totalStrategyDebt).to.be.equal(parseAmount.ether('6.4'));
       await curve.setDy(BASE_TOKENS);
     });
     it('success - wantBal < toWithdraw', async () => {
-      await stETH.mint(strategy.address, ether('2'));
+      await stETH.mint(strategy.address, parseAmount.ether('2'));
       await strategy.connect(guardian).updateMaxSingleTrade(BigNumber.from('0'));
       await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
-      expect(await managerETH.getTotalAsset()).to.be.equal(ether('7.2'));
+      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('7.2'));
       // But 8 lent from manager to strategy
-      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(ether('0.8'));
-      expect(await strategy.estimatedTotalAssets()).to.be.equal(ether('8.4'));
+      expect(await wETH.balanceOf(managerETH.address)).to.be.equal(parseAmount.ether('0.8'));
+      expect(await strategy.estimatedTotalAssets()).to.be.equal(parseAmount.ether('8.4'));
       // These 8 are then given to the lender
-      expect(await wETH.balanceOf(strategy.address)).to.be.equal(ether('0'));
-      expect(await stETH.balanceOf(strategy.address)).to.be.equal(ether('8.4'));
-      expect(await strategy.wantBalance()).to.be.equal(ether('0'));
-      expect(await strategy.stethBalance()).to.be.equal(ether('8.4'));
-      expect(await managerETH.totalDebt()).to.be.equal(ether('6.4'));
-      expect((await managerETH.strategies(strategy.address)).totalStrategyDebt).to.be.equal(ether('6.4'));
+      expect(await wETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('0'));
+      expect(await stETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('8.4'));
+      expect(await strategy.wantBalance()).to.be.equal(parseAmount.ether('0'));
+      expect(await strategy.stethBalance()).to.be.equal(parseAmount.ether('8.4'));
+      expect(await managerETH.totalDebt()).to.be.equal(parseAmount.ether('6.4'));
+      expect((await managerETH.strategies(strategy.address)).totalStrategyDebt).to.be.equal(parseAmount.ether('6.4'));
     });
     it('success - harvestTrigger with a big debt threshold', async () => {
-      await strategy.connect(guardian).setDebtThreshold(ether('1'));
+      await strategy.connect(guardian).setDebtThreshold(parseAmount.ether('1'));
       await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
-      await stETH.burn(strategy.address, ether('8.4'));
+      await stETH.burn(strategy.address, parseAmount.ether('8.4'));
     });
     it('success - strategyExit with too much freed', async () => {
       await managerETH.connect(governor).setStrategyEmergencyExit(strategy.address);

@@ -16,7 +16,7 @@ import {
 import { gwei } from '../../utils/bignumber';
 import { deploy, deployUpgradeable, impersonate } from '../test-utils';
 import { ethers, network } from 'hardhat';
-import { expect } from '../test-utils/chai-setup';
+import { expect } from 'chai';
 import { BASE_TOKENS } from '../utils';
 import { parseUnits } from 'ethers/lib/utils';
 import { findBalancesSlot, setTokenBalanceFor } from '../utils-interaction';
@@ -109,7 +109,7 @@ describe('OptimizerAPR - lenderCompound', () => {
       params: [
         {
           forking: {
-            jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
+            jsonRpcUrl: process.env.ETH_NODE_URI_ETH_FOUNDRY,
             // Changing mainnet fork block breaks some tests
             blockNumber: 14805940,
           },
@@ -214,7 +214,7 @@ describe('OptimizerAPR - lenderCompound', () => {
 
   describe('sweep', () => {
     it('reverts - protected token', async () => {
-      await expect(lenderCompound.connect(governor).sweep(cToken.address, user.address)).to.be.revertedWith(
+      await expect(lenderCompound.connect(governor).sweep(cToken.address, user.address)).to.be.revertedWithCustomError(lenderCompound,
         'ProtectedToken',
       );
     });

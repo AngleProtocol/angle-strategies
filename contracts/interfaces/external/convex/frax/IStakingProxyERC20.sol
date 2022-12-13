@@ -1,5 +1,6 @@
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.12;
+// SPDX-License-Identifier: GPL-3.0
+
+pragma solidity 0.8.17;
 
 interface IStakingProxyERC20 {
     //create a new locked state of _secs timelength

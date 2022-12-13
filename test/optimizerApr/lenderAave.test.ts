@@ -16,7 +16,7 @@ import {
 import { gwei } from '../../utils/bignumber';
 import { deploy, deployUpgradeable, latestTime, impersonate } from '../test-utils';
 import { ethers, network } from 'hardhat';
-import { expect } from '../test-utils/chai-setup';
+import { expect } from 'chai';
 import { BASE_TOKENS } from '../utils';
 import { parseUnits, parseEther } from 'ethers/lib/utils';
 import { logBN, setTokenBalanceFor } from '../utils-interaction';
@@ -104,7 +104,7 @@ describe('OptimizerAPR - lenderAave', () => {
       params: [
         {
           forking: {
-            jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
+            jsonRpcUrl: process.env.ETH_NODE_URI_ETH_FOUNDRY,
             // Changing mainnet fork block breaks some tests
             blockNumber: 14679410,
           },

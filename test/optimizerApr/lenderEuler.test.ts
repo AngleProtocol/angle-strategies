@@ -20,7 +20,7 @@ import {
 import { gwei } from '../../utils/bignumber';
 import { deploy, deployUpgradeable, impersonate } from '../test-utils';
 import { ethers, network } from 'hardhat';
-import { expect } from '../test-utils/chai-setup';
+import { expect } from 'chai';
 import { BASE_TOKENS } from '../utils';
 import { parseUnits } from 'ethers/lib/utils';
 import { findBalancesSlot, logBN, setTokenBalanceFor } from '../utils-interaction';
@@ -106,7 +106,7 @@ describe('OptimizerAPR - lenderEuler', () => {
       params: [
         {
           forking: {
-            jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
+            jsonRpcUrl: process.env.ETH_NODE_URI_ETH_FOUNDRY,
             // Changing mainnet fork block breaks some tests
             blockNumber: 14967667,
           },
@@ -204,10 +204,10 @@ describe('OptimizerAPR - lenderEuler', () => {
 
   describe('sweep', () => {
     it('reverts - protected token', async () => {
-      await expect(lenderEuler.connect(governor).sweep(eToken.address, user.address)).to.be.revertedWith(
+      await expect(lenderEuler.connect(governor).sweep(eToken.address, user.address)).to.be.revertedWithCustomError(lenderEuler,
         'ProtectedToken',
       );
-      await expect(lenderEuler.connect(governor).sweep(token.address, user.address)).to.be.revertedWith(
+      await expect(lenderEuler.connect(governor).sweep(token.address, user.address)).to.be.revertedWithCustomError(lenderEuler,
         'ProtectedToken',
       );
     });

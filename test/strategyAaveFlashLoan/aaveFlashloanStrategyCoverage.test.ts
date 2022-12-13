@@ -1,7 +1,7 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ethers, network } from 'hardhat';
 import { utils, Contract } from 'ethers';
-import { expect } from '../test-utils/chai-setup';
+import { expect } from 'chai';
 import { deploy, impersonate, latestTime } from '../test-utils';
 import {
   AaveFlashloanStrategy,
@@ -52,7 +52,7 @@ describe('AaveFlashloanStrategy - Coverage', () => {
       params: [
         {
           forking: {
-            jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
+            jsonRpcUrl: process.env.ETH_NODE_URI_ETH_FOUNDRY,
             blockNumber: 14519530,
           },
         },

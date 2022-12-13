@@ -1,7 +1,7 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ethers, network } from 'hardhat';
 import { utils, BigNumber, Contract } from 'ethers';
-import { expect } from '../test-utils/chai-setup';
+import { expect } from 'chai';
 import { deploy, impersonate } from '../test-utils';
 import {
   AaveFlashloanStrategy,
@@ -67,7 +67,7 @@ describe('AaveFlashloanStrategy - Harvest Hint', () => {
       params: [
         {
           forking: {
-            jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
+            jsonRpcUrl: process.env.ETH_NODE_URI_ETH_FOUNDRY,
             blockNumber: 14519530,
           },
         },

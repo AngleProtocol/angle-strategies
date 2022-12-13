@@ -56,7 +56,7 @@ export async function setup(startBlocknumber?: number, collat = 'USDC') {
       params: [
         {
           forking: {
-            jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
+            jsonRpcUrl: process.env.ETH_NODE_URI_ETH_FOUNDRY,
             blockNumber: startBlocknumber,
           },
         },
@@ -147,9 +147,9 @@ export async function setup(startBlocknumber?: number, collat = 'USDC') {
   Balance USDC:     ${logBN(await wantToken.balanceOf(strategy.address), { base: wantTokenBase })}
   Balance stkAave:  ${logBN(await stkAave.balanceOf(strategy.address), { base: 18 })}
   Rewards:          ${logBN(
-    await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
-    { base: 18 },
-  )}
+      await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
+      { base: 18 },
+    )}
   `);
 
   const logPosition = async () =>

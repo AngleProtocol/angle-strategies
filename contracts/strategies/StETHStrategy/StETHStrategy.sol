@@ -1,5 +1,6 @@
-// SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.12;
+// SPDX-License-Identifier: GPL-3.0
+
+pragma solidity 0.8.17;
 
 import "../../interfaces/external/curve/IStableSwapPool.sol";
 import "../../interfaces/external/lido/ISteth.sol";

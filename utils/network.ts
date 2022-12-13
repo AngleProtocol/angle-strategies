@@ -24,6 +24,16 @@ export function nodeUrl(networkName: string): string {
   return uri;
 }
 
+export function etherscanKey(networkName: string): string {
+  if (networkName) {
+    const key = process.env[networkName.toUpperCase() + '_ETHERSCAN_API_KEY'];
+    if (key && key !== '') {
+      return key;
+    }
+  }
+  return '';
+}
+
 export function getMnemonic(networkName: string): string {
   if (networkName) {
     const mnemonic = process.env['MNEMONIC_' + networkName.toUpperCase()];
@@ -39,6 +49,6 @@ export function getMnemonic(networkName: string): string {
   return mnemonic;
 }
 
-export function accounts(networkName: string): { mnemonic: string; count: number; } {
+export function accounts(networkName: string): { mnemonic: string; count: number } {
   return { mnemonic: getMnemonic(networkName), count: 20 };
 }
