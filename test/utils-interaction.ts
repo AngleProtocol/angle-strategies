@@ -379,7 +379,7 @@ export async function setTokenBalanceFor(
   // const balanceSlot = await findBalancesSlot(token.address);
   // console.log('the balance slot is ', balanceSlot);
 
-  const balanceStorage = utils.solidityKeccak256(['uint256', 'uint256'], [account, balanceSlot]).replace('0x0', '0x');
+  const balanceStorage = utils.hexStripZeros(utils.solidityKeccak256(['uint256', 'uint256'], [account, balanceSlot]));
 
   await network.provider.send('hardhat_setStorageAt', [
     token.address,
