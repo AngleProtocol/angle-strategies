@@ -70,4 +70,4 @@ jobs:
         env:
           ENABLE_GAS_REPORT: true
           CI: true
-          ETH_NODE_URI_FORK: ${{secrets.ETH_NODE_URI_FORK}}
+          ETH_NODE_URI_ETH_FOUNDRY: ${{secrets.ETH_NODE_URI_ETH_FOUNDRY}}
