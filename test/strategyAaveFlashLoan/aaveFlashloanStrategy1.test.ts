@@ -926,7 +926,6 @@ describe('AaveFlashloanStrategy - Main test file', () => {
           await debtToken.balanceOf(strategy.address),
           5,
         );
-        expect(96).to.be.closeTo(await wantToken.balanceOf(strategy.address), 5);
       });
     });
     describe('emergencyExit', () => {
