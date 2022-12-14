@@ -1,15 +1,16 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { utils, BigNumber, Contract } from 'ethers';
+import { BigNumber, Contract, utils } from 'ethers';
+import { parseUnits } from 'ethers/lib/utils';
+
 import {
   AaveFlashloanStrategy,
   ERC20,
-  PoolManager,
-  IProtocolDataProvider,
   IAaveIncentivesController,
   ILendingPool,
+  IProtocolDataProvider,
+  PoolManager,
 } from '../typechain';
 import { SCalculateBorrow } from '../utils/optimization';
-import { parseUnits } from 'ethers/lib/utils';
 
 export const BASE_PARAMS = parseUnits('1', 9);
 export const BASE_TOKENS = parseUnits('1', 18);

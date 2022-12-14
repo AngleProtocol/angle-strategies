@@ -1,25 +1,26 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { ethers, network } from 'hardhat';
-import { utils, BigNumber, Contract } from 'ethers';
 import { expect } from 'chai';
-import { deploy, impersonate } from '../test-utils';
+import { BigNumber, Contract, utils } from 'ethers';
+import { parseUnits } from 'ethers/lib/utils';
+import { ethers, network } from 'hardhat';
+
 import {
   AaveFlashloanStrategy,
-  FlashMintLib,
+  AaveFlashloanStrategy__factory,
   ERC20,
   ERC20__factory,
-  IAaveIncentivesController__factory,
-  AaveFlashloanStrategy__factory,
-  PoolManager,
-  IProtocolDataProvider,
+  FlashMintLib,
   IAaveIncentivesController,
+  IAaveIncentivesController__factory,
   ILendingPool,
-  IProtocolDataProvider__factory,
   ILendingPool__factory,
+  IProtocolDataProvider,
+  IProtocolDataProvider__factory,
+  PoolManager,
 } from '../../typechain';
-import { getOptimalBorrow, getConstrainedBorrow } from '../../utils/optimization';
-import { parseUnits } from 'ethers/lib/utils';
 import { expectApproxDelta } from '../../utils/bignumber';
+import { getConstrainedBorrow, getOptimalBorrow } from '../../utils/optimization';
+import { deploy, impersonate } from '../test-utils';
 import { getParamsOptim } from '../utils';
 
 const PRECISION = 3;

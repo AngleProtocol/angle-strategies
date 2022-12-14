@@ -1,6 +1,7 @@
 /* eslint-disable camelcase */
-import { network } from 'hardhat';
 import { utils } from 'ethers';
+import { network } from 'hardhat';
+
 import { setup } from './setup_tests';
 
 describe('AaveFlashloanStrategy - Random USDC', () => {

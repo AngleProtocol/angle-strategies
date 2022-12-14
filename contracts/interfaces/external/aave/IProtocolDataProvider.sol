@@ -10,6 +10,7 @@ interface IProtocolDataProvider {
         address tokenAddress;
     }
 
+    // solhint-disable-next-line
     function ADDRESSES_PROVIDER() external view returns (ILendingPoolAddressesProvider);
 
     function getAllReservesTokens() external view returns (TokenData[] memory);

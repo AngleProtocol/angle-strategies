@@ -25,6 +25,7 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
 
     // ======================= References to contracts =============================
 
+    // solhint-disable-next-line
     address internal constant oneInch = 0x1111111254fb6c44bAC0beD2854e76F90643097d;
 
     // ========================= References and Parameters =========================

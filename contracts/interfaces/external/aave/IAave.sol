@@ -80,10 +80,12 @@ interface IStakedAave is IERC20 {
 
     function getTotalRewardsBalance(address) external view returns (uint256);
 
+    // solhint-disable-next-line
     function COOLDOWN_SECONDS() external view returns (uint256);
 
     function stakersCooldowns(address) external view returns (uint256);
 
+    // solhint-disable-next-line
     function UNSTAKE_WINDOW() external view returns (uint256);
 }
 
@@ -105,6 +107,7 @@ interface IReserveInterestRateStrategy {
 
     function variableRateSlope2() external view returns (uint256);
 
+    // solhint-disable-next-line
     function OPTIMAL_UTILIZATION_RATE() external view returns (uint256);
 
     function calculateInterestRates(

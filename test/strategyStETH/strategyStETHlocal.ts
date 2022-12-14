@@ -1,5 +1,9 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { expect } from 'chai';
 import { BigNumber } from 'ethers';
+import { parseUnits } from 'ethers/lib/utils';
+import hre, { ethers } from 'hardhat';
+
 import {
   MockCurveStETHETH,
   MockStETH,
@@ -10,10 +14,7 @@ import {
 } from '../../typechain';
 import { gwei, parseAmount } from '../../utils/bignumber';
 import { deploy, deployUpgradeable } from '../test-utils';
-import hre, { ethers } from 'hardhat';
-import { expect } from 'chai';
 import { BASE_PARAMS, BASE_TOKENS } from '../utils';
-import { parseUnits } from 'ethers/lib/utils';
 
 async function initWETH(
   governor: SignerWithAddress,
@@ -412,9 +413,9 @@ describe('StrategyStETH', () => {
   });
   describe('withdraw', () => {
     it('reverts - invalid strategy', async () => {
-      await expect(managerETH.connect(governor).withdrawFromStrategy(governor.address, parseAmount.ether('1'))).to.be.revertedWith(
-        '78',
-      );
+      await expect(
+        managerETH.connect(governor).withdrawFromStrategy(governor.address, parseAmount.ether('1')),
+      ).to.be.revertedWith('78');
     });
     it('success - wantBal < _amountNeeded', async () => {
       await managerETH.connect(governor).withdrawFromStrategy(strategy.address, parseAmount.ether('1'));
@@ -450,7 +451,9 @@ describe('StrategyStETH', () => {
       expect(await strategy.estimatedTotalAssets()).to.be.equal(parseAmount.ether('6'));
       // Still 10 total assets
 
-      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('9').add(parseAmount.ether('10').div(BigNumber.from('11'))));
+      expect(await managerETH.getTotalAsset()).to.be.equal(
+        parseAmount.ether('9').add(parseAmount.ether('10').div(BigNumber.from('11'))),
+      );
       // 4 are given to the lender
       expect(await wETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('0'));
       await curve.setDy(BASE_TOKENS);
@@ -464,7 +467,9 @@ describe('StrategyStETH', () => {
     it('success - harvest', async () => {
       await (await strategy['harvest()']({ gasLimit: 3e6 })).wait();
       // This harvest makes us find about the wETH that had been left aside
-      expect(await managerETH.getTotalAsset()).to.be.equal(parseAmount.ether('10').add(parseAmount.ether('10').div(BigNumber.from('11'))));
+      expect(await managerETH.getTotalAsset()).to.be.equal(
+        parseAmount.ether('10').add(parseAmount.ether('10').div(BigNumber.from('11'))),
+      );
       expect(await wETH.balanceOf(strategy.address)).to.be.equal(parseAmount.ether('0'));
       expect(await strategy.estimatedTotalAssets()).to.be.equal(parseAmount.ether('0'));
     });
@@ -519,10 +524,16 @@ describe('StrategyStETH', () => {
   });
   describe('sweep', () => {
     it('reverts - wETH', async () => {
-      await expect(strategy.connect(guardian).sweep(wETH.address, governor.address)).to.be.revertedWithCustomError(strategy, `InvalidToken`);
+      await expect(strategy.connect(guardian).sweep(wETH.address, governor.address)).to.be.revertedWithCustomError(
+        strategy,
+        `InvalidToken`,
+      );
     });
     it('reverts - stETH', async () => {
-      await expect(strategy.connect(guardian).sweep(stETH.address, governor.address)).to.be.revertedWithCustomError(strategy, `InvalidToken`);
+      await expect(strategy.connect(guardian).sweep(stETH.address, governor.address)).to.be.revertedWithCustomError(
+        strategy,
+        `InvalidToken`,
+      );
     });
   });
   describe('harvest - other cases', () => {

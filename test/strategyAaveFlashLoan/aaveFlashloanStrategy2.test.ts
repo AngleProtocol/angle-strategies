@@ -1,10 +1,10 @@
-import { network } from 'hardhat';
-import { utils, BigNumber } from 'ethers';
-import { impersonate } from '../test-utils';
 import { expect } from 'chai';
-
-import { setup } from './setup_tests';
+import { BigNumber, utils } from 'ethers';
 import { parseUnits } from 'ethers/lib/utils';
+import { network } from 'hardhat';
+
+import { impersonate } from '../test-utils';
+import { setup } from './setup_tests';
 
 describe('AaveFlashloanStrategy - Scenario', () => {
   it('scenario static', async () => {
@@ -64,25 +64,25 @@ poolManagerFund=${(await poolManager.getTotalAsset()).mul(3).div(4).mul(normaliz
 compBorrowStable=${_data.totalStableDebt.mul(normalizationFactor).div(ray)}.0
 compBorrowVariable=${_data.totalVariableDebt.sub(borrow).mul(normalizationFactor).div(ray)}.0
 compDeposit=${_data.availableLiquidity
-          .add(_data.totalStableDebt)
-          .add(_data.totalVariableDebt)
-          .add(await wantToken.balanceOf(strategy.address))
-          .sub(borrow)
-          .mul(normalizationFactor)
-          .div(ray)}.0
+        .add(_data.totalStableDebt)
+        .add(_data.totalVariableDebt)
+        .add(await wantToken.balanceOf(strategy.address))
+        .sub(borrow)
+        .mul(normalizationFactor)
+        .div(ray)}.0
 rFixed=0.${_data.averageStableBorrowRate}
 rewardDeposit=${(await incentivesController.assets(aToken.address)).emissionPerSecond
-          .mul(86400 * 365)
-          .mul(aavePrice.mul(await strategy.discountFactor()).div(utils.parseUnits('1', 4)))
-          .mul(utils.parseUnits('1', 9))
-          .div(1e6)
-          .div(ray)}.0
+        .mul(86400 * 365)
+        .mul(aavePrice.mul(await strategy.discountFactor()).div(utils.parseUnits('1', 4)))
+        .mul(utils.parseUnits('1', 9))
+        .div(1e6)
+        .div(ray)}.0
 rewardBorrow=${(await incentivesController.assets(debtToken.address)).emissionPerSecond
-          .mul(86400 * 365)
-          .mul(aavePrice.mul(await strategy.discountFactor()).div(utils.parseUnits('1', 4)))
-          .mul(utils.parseUnits('1', 9))
-          .div(1e6)
-          .div(ray)}.0
+        .mul(86400 * 365)
+        .mul(aavePrice.mul(await strategy.discountFactor()).div(utils.parseUnits('1', 4)))
+        .mul(utils.parseUnits('1', 9))
+        .div(1e6)
+        .div(ray)}.0
         ---
   `);
 

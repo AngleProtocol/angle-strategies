@@ -1,5 +1,9 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { expect } from 'chai';
 import { utils } from 'ethers';
+import { parseUnits } from 'ethers/lib/utils';
+import { ethers, network } from 'hardhat';
+
 import {
   CErc20I,
   CErc20I__factory,
@@ -15,12 +19,9 @@ import {
 } from '../../typechain';
 import { gwei } from '../../utils/bignumber';
 import { deploy, deployUpgradeable, impersonate } from '../test-utils';
-import { ethers, network } from 'hardhat';
-import { expect } from 'chai';
-import { BASE_TOKENS } from '../utils';
-import { parseUnits } from 'ethers/lib/utils';
-import { findBalancesSlot, setTokenBalanceFor } from '../utils-interaction';
 import { time, ZERO_ADDRESS } from '../test-utils/helpers';
+import { BASE_TOKENS } from '../utils';
+import { findBalancesSlot, setTokenBalanceFor } from '../utils-interaction';
 
 async function initStrategy(
   governor: SignerWithAddress,
@@ -214,7 +215,8 @@ describe('OptimizerAPR - lenderCompound', () => {
 
   describe('sweep', () => {
     it('reverts - protected token', async () => {
-      await expect(lenderCompound.connect(governor).sweep(cToken.address, user.address)).to.be.revertedWithCustomError(lenderCompound,
+      await expect(lenderCompound.connect(governor).sweep(cToken.address, user.address)).to.be.revertedWithCustomError(
+        lenderCompound,
         'ProtectedToken',
       );
     });
@@ -227,7 +229,10 @@ describe('OptimizerAPR - lenderCompound', () => {
       await lenderCompound
         .connect(governor)
         .changeAllowance([token.address], [cToken.address], [ethers.constants.Zero]);
-      await expect(lenderCompound.connect(keeper).deposit()).to.be.revertedWithCustomError(lenderCompound, 'FailedToMint');
+      await expect(lenderCompound.connect(keeper).deposit()).to.be.revertedWithCustomError(
+        lenderCompound,
+        'FailedToMint',
+      );
     });
     it('success', async () => {
       const amount = 1;

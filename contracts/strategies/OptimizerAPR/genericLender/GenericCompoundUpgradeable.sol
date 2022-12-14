@@ -18,13 +18,17 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
     uint256 public constant BLOCKS_PER_YEAR = 2_350_000;
 
+    // solhint-disable-next-line
     AggregatorV3Interface public constant oracle = AggregatorV3Interface(0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5);
+    // solhint-disable-next-line
     IComptroller public constant comptroller = IComptroller(0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B);
+    // solhint-disable-next-line
     address public constant comp = 0xc00e94Cb662C3520282E6f5717214004A7f26888;
 
     // ======================== References to contracts ============================
 
     CErc20I public cToken;
+    // solhint-disable-next-line
     uint256 private dust;
 
     // =============================== Errors ======================================

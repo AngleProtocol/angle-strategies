@@ -26,6 +26,7 @@ contract MockWETH is MockToken {
 
     function withdraw(uint256 wad) public {
         _burn(msg.sender, wad);
+        // solhint-disable-next-line
         (bool sent, ) = msg.sender.call{ value: wad }("");
         require(sent, "Failed to send Ether");
         emit Withdrawal(msg.sender, wad);

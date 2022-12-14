@@ -22,6 +22,7 @@ contract MockCurveStETHETH {
     function exchange(
         int128 from,
         int128 to,
+        // solhint-disable-next-line
         uint256 _from_amount,
         uint256
     ) external payable {
@@ -29,6 +30,7 @@ contract MockCurveStETHETH {
             IERC20(stETH).transfer(msg.sender, (msg.value * dy) / 10**18);
         } else {
             IERC20(stETH).transferFrom(msg.sender, address(this), _from_amount);
+            // solhint-disable-next-line
             (bool sent, ) = msg.sender.call{ value: (_from_amount * 10**18) / dy }("");
             require(sent, "Failed to send Ether");
         }
@@ -38,9 +40,11 @@ contract MockCurveStETHETH {
         dy = _dy;
     }
 
+    // solhint-disable-next-line
     function get_dy(
         int128,
         int128,
+        // solhint-disable-next-line
         uint256 _from_amount
     ) external view returns (uint256) {
         return (_from_amount * dy) / 10**18;

@@ -18,18 +18,23 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
     using SafeERC20 for IERC20;
 
     // ============================= Protocols Addresses ============================
-
+    // solhint-disable-next-line
     AggregatorV3Interface private constant oracleFXS =
         AggregatorV3Interface(0x6Ebc52C8C1089be9eB3945C4350B68B8E4C2233f);
+    // solhint-disable-next-line
     IBoosterFrax private constant booster = IBoosterFrax(0x9cA3EC5f627ad5D92498Fd1b006b35577760ba9A);
+    // solhint-disable-next-line
     IPoolRegistryFrax private constant poolRegistry = IPoolRegistryFrax(0x41a5881c17185383e19Df6FA4EC158a6F4851A69);
+    // solhint-disable-next-line
     IFeeRegistryFrax private constant feeRegistry = IFeeRegistryFrax(0xC9aCB83ADa68413a6Aa57007BC720EE2E2b3C46D);
+    // solhint-disable-next-line
     uint256 private constant convexPid = 2;
-
+    // solhint-disable-next-line
     IFraxUnifiedFarmTemplate private constant aFraxStakingContract =
         IFraxUnifiedFarmTemplate(0x02577b426F223A6B4f2351315A19ecD6F357d65c);
+    // solhint-disable-next-line
     uint256 private constant FRAX_IDX = 0;
-
+    // solhint-disable-next-line
     uint256 internal constant RAY = 1e27;
 
     // ================================ Variables ==================================
@@ -41,6 +46,7 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
     uint256 public lastAaveReserveNormalizedIncome;
     /// @notice Tracks the amount of FRAX controlled by the protocol and lent as aFRAX on Frax staking contract
     /// This quantity increases due to the Aave native yield
+    // solhint-disable-next-line
     uint256 private lastLiquidity;
     /// @notice Last time a staker has been created
     uint256 public lastCreatedStake;
@@ -48,6 +54,7 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
     // ================================ Parameters =================================
 
     /// @notice Minimum amount of aFRAX to stake
+    // solhint-disable-next-line
     uint256 private constant minStakingAmount = 1000 * 1e18; // 1000 aFrax
     /// @notice Staking duration
     uint256 public stakingPeriod;

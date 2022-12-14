@@ -14,20 +14,27 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     using Address for address;
 
     /// @notice Base used for interest rate / power computation
+    // solhint-disable-next-line
     uint256 private constant BASE_INTEREST = 10**27;
 
     /// @notice Euler address holding assets
+    // solhint-disable-next-line
     IEuler private constant _euler = IEuler(0x27182842E098f60e3D576794A5bFFb0777E025d3);
     /// @notice Euler address with data on all eTokens, debt tokens and interest rates
+    // solhint-disable-next-line
     IEulerMarkets private constant _eulerMarkets = IEulerMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
+    // solhint-disable-next-line
     uint256 private constant SECONDS_PER_YEAR = 365.2425 * 86400;
+    // solhint-disable-next-line
     uint256 private constant RESERVE_FEE_SCALE = 4_000_000_000;
 
     // ======================== References to contracts ============================
 
     /// @notice Euler interest rate model for the desired token
+    // solhint-disable-next-line
     IBaseIRM private irm;
     /// @notice Euler debt token
+    // solhint-disable-next-line
     IEulerDToken private dToken;
     /// @notice Token given to lenders on Euler
     IEulerEToken public eToken;

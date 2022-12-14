@@ -1,27 +1,28 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import hre, { ethers, network } from 'hardhat';
-import { utils, constants, BigNumber, Contract, Signer } from 'ethers';
 import { expect } from 'chai';
-import { deploy, impersonate } from '../test-utils';
-import { expectApprox } from '../../utils/bignumber';
+import { BigNumber, constants, Contract, Signer, utils } from 'ethers';
+import { parseEther, parseUnits } from 'ethers/lib/utils';
+import hre, { ethers, network } from 'hardhat';
+
 import {
   AaveFlashloanStrategy,
-  FlashMintLib,
+  AaveFlashloanStrategy__factory,
   ERC20,
   ERC20__factory,
+  FlashMintLib,
+  // IAaveIncentivesController,
+  ILendingPool,
+  ILendingPool__factory,
+  IProtocolDataProvider,
+  IProtocolDataProvider__factory,
   // IAaveIncentivesController__factory,
   IStakedAave,
   IStakedAave__factory,
-  AaveFlashloanStrategy__factory,
   PoolManager,
-  IProtocolDataProvider,
-  // IAaveIncentivesController,
-  ILendingPool,
-  IProtocolDataProvider__factory,
-  ILendingPool__factory,
 } from '../../typechain';
-import { parseUnits, parseEther } from 'ethers/lib/utils';
-import { latestTime, increaseTime } from '../test-utils/helpers';
+import { expectApprox } from '../../utils/bignumber';
+import { deploy, impersonate } from '../test-utils';
+import { increaseTime, latestTime } from '../test-utils/helpers';
 
 describe('AaveFlashloanStrategy - Main test file', () => {
   // ATokens
@@ -363,9 +364,9 @@ describe('AaveFlashloanStrategy - Main test file', () => {
         await expect(
           strategy.connect(guardian).setMinsAndMaxs(1000, utils.parseUnits('0.7', 18), 0),
         ).to.be.revertedWithCustomError(strategy, 'InvalidSetOfParameters');
-        await expect(strategy.connect(guardian).setMinsAndMaxs(1000, utils.parseUnits('10', 18), 5)).to.be.revertedWithCustomError(strategy,
-          'InvalidSetOfParameters',
-        );
+        await expect(
+          strategy.connect(guardian).setMinsAndMaxs(1000, utils.parseUnits('10', 18), 5),
+        ).to.be.revertedWithCustomError(strategy, 'InvalidSetOfParameters');
       });
       it('success - parameters updated', async () => {
         expect(await strategy.minWant()).to.equal(100);
@@ -388,7 +389,10 @@ describe('AaveFlashloanStrategy - Main test file', () => {
     });
     describe('setDiscountFactor', () => {
       it('reverts - too high parameter value', async () => {
-        await expect(strategy.connect(guardian).setDiscountFactor(12000)).to.revertedWithCustomError(strategy, 'TooHighParameterValue');
+        await expect(strategy.connect(guardian).setDiscountFactor(12000)).to.revertedWithCustomError(
+          strategy,
+          'TooHighParameterValue',
+        );
       });
       it('success - parameter updated', async () => {
         expect(await strategy.discountFactor()).to.equal(9000);
@@ -674,7 +678,8 @@ describe('AaveFlashloanStrategy - Main test file', () => {
           '0000000000000001165faa24c0e7600000000000000000000000000000000000000000000000000000000000000600000000000000000' +
           '0000000000000000000000000000000000000000000000010000000000000000000000001a76f6b9b3d9c532e0b56990944a31a705933fbdcfee7c08';
 
-        await expect(strategy.connect(keeper).sellRewards(parseEther('10'), payload)).to.be.revertedWithCustomError(strategy,
+        await expect(strategy.connect(keeper).sellRewards(parseEther('10'), payload)).to.be.revertedWithCustomError(
+          strategy,
           'TooSmallAmountOut',
         );
       });

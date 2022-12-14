@@ -1,23 +1,24 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { ethers, network } from 'hardhat';
-import { utils, Contract } from 'ethers';
 import { expect } from 'chai';
-import { deploy, impersonate, latestTime } from '../test-utils';
+import { Contract, utils } from 'ethers';
+import { parseUnits } from 'ethers/lib/utils';
+import { ethers, network } from 'hardhat';
+
 import {
   AaveFlashloanStrategy,
-  FlashMintLib,
+  AaveFlashloanStrategy__factory,
   ERC20,
   ERC20__factory,
-  IAaveIncentivesController__factory,
-  AaveFlashloanStrategy__factory,
-  PoolManager,
+  FlashMintLib,
   IAaveIncentivesController,
-  IProtocolDataProvider__factory,
+  IAaveIncentivesController__factory,
   IProtocolDataProvider,
+  IProtocolDataProvider__factory,
+  PoolManager,
 } from '../../typechain';
-import { findBalancesSlot, setTokenBalanceFor } from '../utils-interaction';
-import { parseUnits } from 'ethers/lib/utils';
+import { deploy, impersonate, latestTime } from '../test-utils';
 import { BASE_PARAMS } from '../utils';
+import { findBalancesSlot, setTokenBalanceFor } from '../utils-interaction';
 
 describe('AaveFlashloanStrategy - Coverage', () => {
   // ATokens

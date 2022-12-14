@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // this interface doesn't wok with 3Pool as it doesn't return anything on add_liquidity, remove_liquidity_one_coin
 
+// solhint-disable
 interface IStableSwapPool is IERC20 {
     function A() external view returns (uint256);
 

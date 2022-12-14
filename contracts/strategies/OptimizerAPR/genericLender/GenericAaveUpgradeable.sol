@@ -22,15 +22,21 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     using Address for address;
 
     // ======================== Reference to contract ==============================
+    // solhint-disable-next-line
     AggregatorV3Interface private constant oracle = AggregatorV3Interface(0x547a514d5e3769680Ce22B2361c10Ea13619e8a9);
 
     // ========================== Aave Protocol Addresses ==========================
 
+    // solhint-disable-next-line
     address private constant _aave = 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9;
+    // solhint-disable-next-line
     IStakedAave private constant _stkAave = IStakedAave(0x4da27a545c0c5B758a6BA100e3a049001de870f5);
+    // solhint-disable-next-line
     IAaveIncentivesController private constant _incentivesController =
         IAaveIncentivesController(0xd784927Ff2f95ba542BfC824c8a8a98F3495f6b5);
+    // solhint-disable-next-line
     ILendingPool internal constant _lendingPool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
+    // solhint-disable-next-line
     IProtocolDataProvider private constant _protocolDataProvider =
         IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
 

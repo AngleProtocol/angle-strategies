@@ -47,6 +47,7 @@ interface IAaveIncentivesController {
     /**
      * @dev for backward compatibility with previous implementation of the Incentives controller
      */
+    // solhint-disable-next-line
     function REWARD_TOKEN() external view returns (address);
 
     function getDistributionEnd() external view returns (uint256);

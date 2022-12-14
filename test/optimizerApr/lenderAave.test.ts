@@ -1,5 +1,9 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { expect } from 'chai';
 import { BigNumber, utils } from 'ethers';
+import { parseEther, parseUnits } from 'ethers/lib/utils';
+import { ethers, network } from 'hardhat';
+
 import {
   ERC20,
   ERC20__factory,
@@ -14,13 +18,10 @@ import {
   PoolManager,
 } from '../../typechain';
 import { gwei } from '../../utils/bignumber';
-import { deploy, deployUpgradeable, latestTime, impersonate } from '../test-utils';
-import { ethers, network } from 'hardhat';
-import { expect } from 'chai';
-import { BASE_TOKENS } from '../utils';
-import { parseUnits, parseEther } from 'ethers/lib/utils';
-import { logBN, setTokenBalanceFor } from '../utils-interaction';
+import { deploy, deployUpgradeable, impersonate, latestTime } from '../test-utils';
 import { ZERO_ADDRESS } from '../test-utils/helpers';
+import { BASE_TOKENS } from '../utils';
+import { logBN, setTokenBalanceFor } from '../utils-interaction';
 
 async function initStrategy(
   governor: SignerWithAddress,

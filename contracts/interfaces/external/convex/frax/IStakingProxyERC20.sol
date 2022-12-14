@@ -7,12 +7,15 @@ interface IStakingProxyERC20 {
     function stakeLocked(uint256 _liquidity, uint256 _secs) external;
 
     //add to a current lock
+    // solhint-disable-next-line
     function lockAdditional(bytes32 _kek_id, uint256 _addl_liq) external;
 
     //withdraw a staked position
+    // solhint-disable-next-line
     function withdrawLocked(bytes32 _kek_id) external;
 
     //helper function to combine earned tokens on staking contract and any tokens that are on this vault
+    // solhint-disable-next-line
     function earned() external view returns (address[] memory token_addresses, uint256[] memory total_earned);
 
     /*

@@ -1,9 +1,10 @@
 /* eslint-disable camelcase */
-import { network } from 'hardhat';
 import { ethers, utils } from 'ethers';
+import { network } from 'hardhat';
+
 import { setup } from './setup_tests';
 
-export async function setDaiBalanceFor(account: string, amount: number) {
+export async function setDaiBalanceFor(account: string, amount: number): Promise<void> {
   const balanceStorage = utils.solidityKeccak256(['uint256', 'uint256'], [account, 2]);
 
   await network.provider.send('hardhat_setStorageAt', [

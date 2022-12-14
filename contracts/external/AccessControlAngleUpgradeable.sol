@@ -50,10 +50,12 @@ import "../interfaces/IAccessControlAngle.sol";
  * accounts that have been granted it.
  */
 abstract contract AccessControlAngleUpgradeable is Initializable, IAccessControlAngle {
+    // solhint-disable-next-line
     function __AccessControl_init() internal initializer {
         __AccessControl_init_unchained();
     }
 
+    // solhint-disable-next-line
     function __AccessControl_init_unchained() internal initializer {}
 
     struct RoleData {

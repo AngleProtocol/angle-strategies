@@ -25,6 +25,7 @@ library RPow {
         uint256 n,
         uint256 base
     ) internal pure returns (uint256 z) {
+        // solhint-disable-next-line
         assembly {
             switch x
             case 0 {
