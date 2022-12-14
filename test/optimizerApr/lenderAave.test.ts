@@ -173,8 +173,8 @@ describe('OptimizerAPR - lenderAave', () => {
       expect(await lenderAave.hasRole(guardianRole, user.address)).to.be.equal(false);
       expect(await lenderAave.hasRole(guardianRole, governor.address)).to.be.equal(true);
       expect(await lenderAave.getRoleAdmin(guardianRole)).to.be.equal(strategyRole);
-      await expect(lenderAave.connect(user).grantRole(keeperRole, user.address)).to.be.revertedWith(guardianRole);
-      await expect(lenderAave.connect(user).revokeRole(keeperRole, keeper.address)).to.be.revertedWith(guardianRole);
+      await expect(lenderAave.connect(user).grantRole(keeperRole, user.address)).to.be.revertedWith(guardianError);
+      await expect(lenderAave.connect(user).revokeRole(keeperRole, keeper.address)).to.be.revertedWith(guardianError);
       await expect(lenderAave.connect(user).changeAllowance([], [], [])).to.be.revertedWith(guardianError);
       await expect(lenderAave.connect(user).sweep(ZERO_ADDRESS, ZERO_ADDRESS)).to.be.revertedWith(guardianError);
       await expect(lenderAave.connect(user).emergencyWithdraw(BASE_TOKENS)).to.be.revertedWith(guardianError);

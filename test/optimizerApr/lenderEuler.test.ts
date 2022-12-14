@@ -170,8 +170,8 @@ describe('OptimizerAPR - lenderEuler', () => {
       expect(await lenderEuler.hasRole(guardianRole, user.address)).to.be.equal(false);
       expect(await lenderEuler.hasRole(guardianRole, governor.address)).to.be.equal(true);
       expect(await lenderEuler.getRoleAdmin(guardianRole)).to.be.equal(strategyRole);
-      await expect(lenderEuler.connect(user).grantRole(keeperRole, user.address)).to.be.revertedWith(guardianRole);
-      await expect(lenderEuler.connect(user).revokeRole(keeperRole, keeper.address)).to.be.revertedWith(guardianRole);
+      await expect(lenderEuler.connect(user).grantRole(keeperRole, user.address)).to.be.revertedWith(guardianError);
+      await expect(lenderEuler.connect(user).revokeRole(keeperRole, keeper.address)).to.be.revertedWith(guardianError);
       await expect(lenderEuler.connect(user).changeAllowance([], [], [])).to.be.revertedWith(guardianError);
       await expect(lenderEuler.connect(user).sweep(ZERO_ADDRESS, ZERO_ADDRESS)).to.be.revertedWith(guardianError);
       await expect(lenderEuler.connect(user).emergencyWithdraw(BASE_TOKENS)).to.be.revertedWith(guardianError);
@@ -214,14 +214,6 @@ describe('OptimizerAPR - lenderEuler', () => {
   });
 
   describe('deposit', () => {
-    it('revert', async () => {
-      const amount = 100000000;
-      await setTokenBalanceFor(token, lenderEuler.address, amount, balanceSlot);
-      await lenderEuler.connect(governor).changeAllowance([token.address], [euler.address], [ethers.constants.Zero]);
-      await expect(lenderEuler.connect(keeper).deposit()).to.be.revertedWith(
-        'ERC20: transfer amount exceeds allowance',
-      );
-    });
     it('success', async () => {
       const amount = 100000000;
       await setTokenBalanceFor(token, lenderEuler.address, amount, balanceSlot);

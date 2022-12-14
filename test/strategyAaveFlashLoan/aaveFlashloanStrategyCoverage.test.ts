@@ -178,7 +178,7 @@ describe('AaveFlashloanStrategy - Coverage', () => {
           strategy
             .connect(keeper)
             .onFlashLoan(keeper.address, keeper.address, ethers.constants.Zero, ethers.constants.Zero, '0x'),
-        ).to.be.revertedWith('InvalidSender');
+        ).to.be.revertedWithCustomError(strategy, 'InvalidSender');
       });
 
       it('cooldownStkAave - too soon', async () => {

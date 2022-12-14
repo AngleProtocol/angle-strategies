@@ -149,7 +149,7 @@ describe('OptimizerAPR - lenderCompound', () => {
         lender.initialize(strategy.address, 'wrong lender', wrongCToken.address, [governor.address], guardian.address, [
           keeper.address,
         ]),
-      ).to.be.revertedWith('WrongCToken');
+      ).to.be.revertedWithCustomError(lender, 'WrongCToken');
     });
     it('Parameters', async () => {
       expect(await lenderCompound.comp()).to.be.equal(comp.address);
@@ -194,9 +194,9 @@ describe('OptimizerAPR - lenderCompound', () => {
       expect(await lenderCompound.hasRole(guardianRole, user.address)).to.be.equal(false);
       expect(await lenderCompound.hasRole(guardianRole, governor.address)).to.be.equal(true);
       expect(await lenderCompound.getRoleAdmin(guardianRole)).to.be.equal(strategyRole);
-      await expect(lenderCompound.connect(user).grantRole(keeperRole, user.address)).to.be.revertedWith(guardianRole);
+      await expect(lenderCompound.connect(user).grantRole(keeperRole, user.address)).to.be.revertedWith(guardianError);
       await expect(lenderCompound.connect(user).revokeRole(keeperRole, keeper.address)).to.be.revertedWith(
-        guardianRole,
+        guardianError,
       );
       await expect(lenderCompound.connect(user).changeAllowance([], [], [])).to.be.revertedWith(guardianError);
       await expect(lenderCompound.connect(user).sweep(ZERO_ADDRESS, ZERO_ADDRESS)).to.be.revertedWith(guardianError);
@@ -227,7 +227,7 @@ describe('OptimizerAPR - lenderCompound', () => {
       await lenderCompound
         .connect(governor)
         .changeAllowance([token.address], [cToken.address], [ethers.constants.Zero]);
-      await expect(lenderCompound.connect(keeper).deposit()).to.be.revertedWith('FailedToMint()');
+      await expect(lenderCompound.connect(keeper).deposit()).to.be.revertedWithCustomError(lenderCompound, 'FailedToMint');
     });
     it('success', async () => {
       const amount = 1;
@@ -352,7 +352,7 @@ describe('OptimizerAPR - lenderCompound', () => {
       });
       await expect(
         lenderCompound.connect(governor).recoverETH(strategy.address, utils.parseEther('1')),
-      ).to.be.revertedWith('FailedToRecoverETH');
+      ).to.be.revertedWithCustomError(lenderCompound, 'FailedToRecoverETH');
     });
     it('success', async () => {
       await governor.sendTransaction({
