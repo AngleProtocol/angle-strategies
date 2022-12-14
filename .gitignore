@@ -3,53 +3,44 @@ __pycache__
 .idea
 .DS_Store
 .deps
-.vscode
 .docs
 .env
 node_modules
-tenderly.yaml
-settings.json
-.mocharc.json
 venv
 
 # Build output
-cache
+/cache
+/cache-hh
 build
 export
 **/artifacts
 .openzeppelin
-docgen/docs
-docgen/SUMMARY.md
-solidity-flattenedContracts
-./crytic-export
 typechain
-
+slither-audit.txt
+slither
+slither.db.json
 
 # Test output
 coverage
 coverage.json
+lcov.info
 
 # Running output
 gas-report.txt
 gasReporterOutput.json
 addresses.json
 blockchain_db
-ganache*
 yarn-error.log
+broadcast
 
 # deployments
-deployments/*
-!deployments/kovan
-!deployments/rinkeby
-!deployments/mainnet
-!deployments/polygon
+deployments/localhost
+deployments/mainnetForkRemote
 
 # bin
 bin
 
-# temporary delete
-test/perpetualManager/perpetualManagerChangeBase.test.js
-typechain/cacheIndex.ts
 
-# used for storing temporary vyper artifacts
-vyper_temp_dir
+# foundry
+/out
+/cache-forge

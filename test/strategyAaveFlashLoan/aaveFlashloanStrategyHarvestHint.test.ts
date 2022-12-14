@@ -1,25 +1,26 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { expect } from 'chai';
+import { BigNumber, Contract, utils } from 'ethers';
+import { parseUnits } from 'ethers/lib/utils';
 import { ethers, network } from 'hardhat';
-import { utils, BigNumber, Contract } from 'ethers';
-import { expect } from '../test-utils/chai-setup';
-import { deploy, impersonate } from '../test-utils';
+
 import {
   AaveFlashloanStrategy,
-  FlashMintLib,
+  AaveFlashloanStrategy__factory,
   ERC20,
   ERC20__factory,
-  IAaveIncentivesController__factory,
-  AaveFlashloanStrategy__factory,
-  PoolManager,
-  IProtocolDataProvider,
+  FlashMintLib,
   IAaveIncentivesController,
+  IAaveIncentivesController__factory,
   ILendingPool,
-  IProtocolDataProvider__factory,
   ILendingPool__factory,
+  IProtocolDataProvider,
+  IProtocolDataProvider__factory,
+  PoolManager,
 } from '../../typechain';
-import { getOptimalBorrow, getConstrainedBorrow } from '../../utils/optimization';
-import { parseUnits } from 'ethers/lib/utils';
 import { expectApproxDelta } from '../../utils/bignumber';
+import { getConstrainedBorrow, getOptimalBorrow } from '../../utils/optimization';
+import { deploy, impersonate } from '../test-utils';
 import { getParamsOptim } from '../utils';
 
 const PRECISION = 3;
@@ -67,7 +68,7 @@ describe('AaveFlashloanStrategy - Harvest Hint', () => {
       params: [
         {
           forking: {
-            jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
+            jsonRpcUrl: process.env.ETH_NODE_URI_ETH_FOUNDRY,
             blockNumber: 14519530,
           },
         },

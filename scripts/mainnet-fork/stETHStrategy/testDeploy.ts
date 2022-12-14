@@ -13,7 +13,7 @@ import {
   Weth__factory,
 } from '@angleprotocol/sdk/dist/constants/interfaces';
 
-import { expect } from '../../../test/test-utils/chai-setup';
+import { expect } from 'chai';
 import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
 import { network, ethers, deployments } from 'hardhat';
 import { parseUnits } from 'ethers/lib/utils';

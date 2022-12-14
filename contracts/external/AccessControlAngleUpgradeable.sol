@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts-upgradeable/utils/StringsUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -50,10 +50,12 @@ import "../interfaces/IAccessControlAngle.sol";
  * accounts that have been granted it.
  */
 abstract contract AccessControlAngleUpgradeable is Initializable, IAccessControlAngle {
+    // solhint-disable-next-line
     function __AccessControl_init() internal initializer {
         __AccessControl_init_unchained();
     }
 
+    // solhint-disable-next-line
     function __AccessControl_init_unchained() internal initializer {}
 
     struct RoleData {

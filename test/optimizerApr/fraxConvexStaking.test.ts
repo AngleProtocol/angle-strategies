@@ -1,5 +1,9 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { expect } from 'chai';
 import { BigNumber, utils } from 'ethers';
+import { parseEther, parseUnits } from 'ethers/lib/utils';
+import { ethers, network } from 'hardhat';
+
 import {
   AggregatorV3Interface,
   AggregatorV3Interface__factory,
@@ -9,7 +13,6 @@ import {
   GenericAaveFraxConvexStaker__factory,
   IMockFraxUnifiedFarm,
   IMockFraxUnifiedFarm__factory,
-  IPoolRegistryFrax,
   IStakedAave,
   IStakedAave__factory,
   MockToken,
@@ -19,13 +22,10 @@ import {
   PoolManager,
 } from '../../typechain';
 import { gwei } from '../../utils/bignumber';
-import { deploy, deployUpgradeable, impersonate } from '../test-utils';
-import { ethers, network } from 'hardhat';
-import { expect } from '../test-utils/chai-setup';
-import { parseUnits, parseEther } from 'ethers/lib/utils';
-import { logBN, setTokenBalanceFor } from '../utils-interaction';
 import { DAY } from '../contants';
+import { deploy, deployUpgradeable, impersonate } from '../test-utils';
 import { latestTime, time, ZERO_ADDRESS } from '../test-utils/helpers';
+import { logBN, setTokenBalanceFor } from '../utils-interaction';
 
 async function initStrategy(
   governor: SignerWithAddress,
@@ -98,7 +98,7 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       params: [
         {
           forking: {
-            jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
+            jsonRpcUrl: process.env.ETH_NODE_URI_ETH_FOUNDRY,
             blockNumber: 14786806,
           },
         },
@@ -169,7 +169,7 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       )) as GenericAaveFraxConvexStaker;
       await expect(
         lender.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address], 0),
-      ).to.be.revertedWith('TooSmallStakingPeriod()');
+      ).to.be.revertedWithCustomError(lender, 'TooSmallStakingPeriod');
       await expect(
         lenderAave.initialize(
           strategy.address,
@@ -237,7 +237,8 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
   describe('Governance functions', () => {
     describe('setLockTime', () => {
       it('reverts - too small staking period', async () => {
-        await expect(lenderAave.connect(guardian).setLockTime(ethers.constants.Zero)).to.be.revertedWith(
+        await expect(lenderAave.connect(guardian).setLockTime(ethers.constants.Zero)).to.be.revertedWithCustomError(
+          lenderAave,
           'TooSmallStakingPeriod',
         );
       });
@@ -254,7 +255,8 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
     });
     describe('sweep', () => {
       it('reverts - protected token', async () => {
-        await expect(lenderAave.connect(guardian).sweep(token.address, guardian.address)).to.be.revertedWith(
+        await expect(lenderAave.connect(guardian).sweep(token.address, guardian.address)).to.be.revertedWithCustomError(
+          lenderAave,
           'ProtectedToken',
         );
       });
@@ -387,7 +389,8 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
   describe('Governance functions', () => {
     describe('setLockTime', () => {
       it('reverts - too small staking period', async () => {
-        await expect(lenderAave.connect(guardian).setLockTime(ethers.constants.Zero)).to.be.revertedWith(
+        await expect(lenderAave.connect(guardian).setLockTime(ethers.constants.Zero)).to.be.revertedWithCustomError(
+          lenderAave,
           'TooSmallStakingPeriod',
         );
       });
@@ -404,7 +407,8 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
     });
     describe('sweep', () => {
       it('reverts - protected token', async () => {
-        await expect(lenderAave.connect(guardian).sweep(token.address, guardian.address)).to.be.revertedWith(
+        await expect(lenderAave.connect(guardian).sweep(token.address, guardian.address)).to.be.revertedWithCustomError(
+          lenderAave,
           'ProtectedToken',
         );
       });

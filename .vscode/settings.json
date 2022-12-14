@@ -1,0 +1,6 @@
+{
+  "python.terminal.activateEnvironment": true,
+  "python.defaultInterpreterPath": "/opt/anaconda3/envs/angle/bin/python",
+  "python.terminal.activateEnvInCurrentTerminal": false,
+  "python.terminal.executeInFileDir": false
+}

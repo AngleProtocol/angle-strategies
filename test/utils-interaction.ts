@@ -14,9 +14,10 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { BigNumber, BigNumberish, utils } from 'ethers';
 import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { ethers, network } from 'hardhat';
+
 import { ERC20, ERC20__factory, OptimizerAPRStrategy, StETHStrategy } from '../typechain';
 
-export const wait = (n = 1000) => {
+export const wait = (n = 1000): Promise<unknown> => {
   return new Promise(resolve => {
     setTimeout(() => {
       resolve('ok');
@@ -24,7 +25,7 @@ export const wait = (n = 1000) => {
   });
 };
 
-export const logBN = (amount: BigNumber, { base = 18, pad = 20, sign = false } = {}) => {
+export const logBN = (amount: BigNumber, { base = 18, pad = 20, sign = false } = {}): string => {
   const num = parseFloat(formatUnits(amount, base));
   const formattedNum = new Intl.NumberFormat('fr-FR', {
     style: 'decimal',
@@ -39,13 +40,13 @@ export const logGeneralInfo = async (
   stableMaster: StableMasterFront,
   poolManager: PoolManager,
   perpetualManager: PerpetualManagerFront,
-) => {
+): Promise<void> => {
   const agTokenAddress = await stableMaster.agToken();
-  const agToken = ((await ethers.getContractAt(AgToken__factory.abi, agTokenAddress)) as unknown) as AgToken;
+  const agToken = (await ethers.getContractAt(AgToken__factory.abi, agTokenAddress)) as unknown as AgToken;
   const agTokenName = await agToken.name();
 
   const collatData = await stableMaster.collateralMap(poolManager.address);
-  const oracle = ((await ethers.getContractAt(OracleMulti__factory.abi, collatData.oracle)) as unknown) as OracleMulti;
+  const oracle = (await ethers.getContractAt(OracleMulti__factory.abi, collatData.oracle)) as unknown as OracleMulti;
   const oracleValues = await oracle.readAll();
 
   console.log(`
@@ -60,7 +61,7 @@ export const logGeneralInfo = async (
   `);
 };
 
-export const logSLP = async (stableMaster: StableMasterFront, poolManager: PoolManager) => {
+export const logSLP = async (stableMaster: StableMasterFront, poolManager: PoolManager): Promise<void> => {
   const collatAddress = (await stableMaster.collateralMap(poolManager.address)).token;
   const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;
   const collatDecimal = await collat.decimals();
@@ -84,7 +85,7 @@ export const logStETHInfo = async (
   stableMaster: StableMasterFront,
   poolManager: PoolManager,
   strategy: StETHStrategy,
-) => {
+): Promise<void> => {
   const collatAddress = (await stableMaster.collateralMap(poolManager.address)).token;
   const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;
   const collatDecimal = await collat.decimals();
@@ -106,7 +107,7 @@ export const logOptimizerInfo = async (
   stableMaster: StableMasterFront,
   poolManager: PoolManager,
   strategy: OptimizerAPRStrategy,
-) => {
+): Promise<void> => {
   const collatAddress = (await stableMaster.collateralMap(poolManager.address)).token;
   const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;
   const collatDecimal = await collat.decimals();
@@ -135,19 +136,19 @@ export const randomMint = async (
   user: SignerWithAddress,
   stableMaster: StableMasterFront,
   poolManager: PoolManager,
-) => {
+): Promise<void> => {
   const min = 2;
   const max = 500;
 
   const collatData = await stableMaster.collateralMap(poolManager.address);
-  const oracle = ((await ethers.getContractAt(OracleMulti__factory.abi, collatData.oracle)) as unknown) as OracleMulti;
+  const oracle = (await ethers.getContractAt(OracleMulti__factory.abi, collatData.oracle)) as unknown as OracleMulti;
   const oracleValues = await oracle.readAll();
 
   const collatAddress = (await stableMaster.collateralMap(poolManager.address)).token;
   const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;
   const collatDecimal = await collat.decimals();
   const agTokenAddress = await stableMaster.agToken();
-  const agToken = ((await ethers.getContractAt(AgToken__factory.abi, agTokenAddress)) as unknown) as AgToken;
+  const agToken = (await ethers.getContractAt(AgToken__factory.abi, agTokenAddress)) as unknown as AgToken;
   let amount = parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), collatDecimal);
 
   const maxMintable = collatData.feeData.capOnStableMinted
@@ -175,14 +176,14 @@ export const randomBurn = async (
   user: SignerWithAddress,
   stableMaster: StableMasterFront,
   poolManager: PoolManager,
-) => {
+): Promise<void> => {
   const min = 20_000;
   const max = 1_000_000;
   const collatAddress = (await stableMaster.collateralMap(poolManager.address)).token;
   const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;
   const collatDecimal = await collat.decimals();
   const agTokenAddress = await stableMaster.agToken();
-  const agToken = ((await ethers.getContractAt(AgToken__factory.abi, agTokenAddress)) as unknown) as AgToken;
+  const agToken = (await ethers.getContractAt(AgToken__factory.abi, agTokenAddress)) as unknown as AgToken;
 
   let amount = parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), 18);
   const maxAmount = (await agToken.balanceOf(user.address)).div(parseUnits('2', 0));
@@ -207,13 +208,13 @@ export const randomDeposit = async (
   user: SignerWithAddress,
   stableMaster: StableMasterFront,
   poolManager: PoolManager,
-) => {
+): Promise<void> => {
   const min = 2;
   const max = 500;
   const collatAddress = (await stableMaster.collateralMap(poolManager.address)).token;
   const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;
   const sanTokenAddress = (await stableMaster.collateralMap(poolManager.address)).sanToken;
-  const sanToken = ((await ethers.getContractAt(SanToken__factory.abi, sanTokenAddress)) as unknown) as SanToken;
+  const sanToken = (await ethers.getContractAt(SanToken__factory.abi, sanTokenAddress)) as unknown as SanToken;
   const collatDecimal = await collat.decimals();
 
   const amount = parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), collatDecimal);
@@ -235,13 +236,13 @@ export const randomWithdraw = async (
   user: SignerWithAddress,
   stableMaster: StableMasterFront,
   poolManager: PoolManager,
-) => {
+): Promise<void> => {
   const min = 2;
   const max = 500;
   const collatAddress = (await stableMaster.collateralMap(poolManager.address)).token;
   const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;
   const sanTokenAddress = (await stableMaster.collateralMap(poolManager.address)).sanToken;
-  const sanToken = ((await ethers.getContractAt(SanToken__factory.abi, sanTokenAddress)) as unknown) as SanToken;
+  const sanToken = (await ethers.getContractAt(SanToken__factory.abi, sanTokenAddress)) as unknown as SanToken;
   const collatDecimal = await collat.decimals();
 
   let amount = parseUnits(Math.floor(Math.random() * (max - min + 1) + min).toString(), collatDecimal);
@@ -268,7 +269,7 @@ export const randomOpenPerp = async (
   collateral: ERC20,
   // stableMaster: StableMasterFront,
   // poolManager: PoolManager,
-) => {
+): Promise<void> => {
   const min = 2;
   const max = 50;
   // in bps
@@ -329,7 +330,7 @@ export const closePerp = async (
   perpetualManager: PerpetualManagerFront,
   collateral: ERC20,
   perpId: number,
-) => {
+): Promise<void> => {
   const collatDecimal = await collateral.decimals();
 
   const collatBalanceBefore = await collateral.connect(user).balanceOf(user.address);
@@ -368,12 +369,17 @@ export async function findBalancesSlot(tokenAddress: string): Promise<number> {
   throw Error('Balances slot not found!');
 }
 
-export async function setTokenBalanceFor(token: ERC20, account: string, amount: BigNumberish, balanceSlot = 0) {
+export async function setTokenBalanceFor(
+  token: ERC20,
+  account: string,
+  amount: BigNumberish,
+  balanceSlot = 0,
+): Promise<void> {
   // for FRAX we know it's 0
   // const balanceSlot = await findBalancesSlot(token.address);
   // console.log('the balance slot is ', balanceSlot);
 
-  const balanceStorage = utils.solidityKeccak256(['uint256', 'uint256'], [account, balanceSlot]).replace('0x0', '0x');
+  const balanceStorage = utils.hexStripZeros(utils.solidityKeccak256(['uint256', 'uint256'], [account, balanceSlot]));
 
   await network.provider.send('hardhat_setStorageAt', [
     token.address,

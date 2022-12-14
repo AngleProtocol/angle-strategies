@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.8.12;
+pragma solidity ^0.8.17;
 
+// solhint-disable
 interface IConvexBooster {
     function FEE_DENOMINATOR() external view returns (uint256);
 

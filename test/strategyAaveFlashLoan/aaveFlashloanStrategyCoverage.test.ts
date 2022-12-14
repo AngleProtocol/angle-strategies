@@ -1,23 +1,24 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { expect } from 'chai';
+import { Contract, utils } from 'ethers';
+import { parseUnits } from 'ethers/lib/utils';
 import { ethers, network } from 'hardhat';
-import { utils, Contract } from 'ethers';
-import { expect } from '../test-utils/chai-setup';
-import { deploy, impersonate, latestTime } from '../test-utils';
+
 import {
   AaveFlashloanStrategy,
-  FlashMintLib,
+  AaveFlashloanStrategy__factory,
   ERC20,
   ERC20__factory,
-  IAaveIncentivesController__factory,
-  AaveFlashloanStrategy__factory,
-  PoolManager,
+  FlashMintLib,
   IAaveIncentivesController,
-  IProtocolDataProvider__factory,
+  IAaveIncentivesController__factory,
   IProtocolDataProvider,
+  IProtocolDataProvider__factory,
+  PoolManager,
 } from '../../typechain';
-import { findBalancesSlot, setTokenBalanceFor } from '../utils-interaction';
-import { parseUnits } from 'ethers/lib/utils';
+import { deploy, impersonate, latestTime } from '../test-utils';
 import { BASE_PARAMS } from '../utils';
+import { findBalancesSlot, setTokenBalanceFor } from '../utils-interaction';
 
 describe('AaveFlashloanStrategy - Coverage', () => {
   // ATokens
@@ -52,7 +53,7 @@ describe('AaveFlashloanStrategy - Coverage', () => {
       params: [
         {
           forking: {
-            jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
+            jsonRpcUrl: process.env.ETH_NODE_URI_ETH_FOUNDRY,
             blockNumber: 14519530,
           },
         },
@@ -178,7 +179,7 @@ describe('AaveFlashloanStrategy - Coverage', () => {
           strategy
             .connect(keeper)
             .onFlashLoan(keeper.address, keeper.address, ethers.constants.Zero, ethers.constants.Zero, '0x'),
-        ).to.be.revertedWith('InvalidSender');
+        ).to.be.revertedWithCustomError(strategy, 'InvalidSender');
       });
 
       it('cooldownStkAave - too soon', async () => {

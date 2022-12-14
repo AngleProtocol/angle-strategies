@@ -1,5 +1,9 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { expect } from 'chai';
 import { BigNumber, utils } from 'ethers';
+import { parseEther, parseUnits } from 'ethers/lib/utils';
+import { ethers, network } from 'hardhat';
+
 import {
   ERC20,
   ERC20__factory,
@@ -14,13 +18,10 @@ import {
   PoolManager,
 } from '../../typechain';
 import { gwei } from '../../utils/bignumber';
-import { deploy, deployUpgradeable, latestTime, impersonate } from '../test-utils';
-import { ethers, network } from 'hardhat';
-import { expect } from '../test-utils/chai-setup';
-import { BASE_TOKENS } from '../utils';
-import { parseUnits, parseEther } from 'ethers/lib/utils';
-import { logBN, setTokenBalanceFor } from '../utils-interaction';
+import { deploy, deployUpgradeable, impersonate, latestTime } from '../test-utils';
 import { ZERO_ADDRESS } from '../test-utils/helpers';
+import { BASE_TOKENS } from '../utils';
+import { logBN, setTokenBalanceFor } from '../utils-interaction';
 
 async function initStrategy(
   governor: SignerWithAddress,
@@ -104,7 +105,7 @@ describe('OptimizerAPR - lenderAave', () => {
       params: [
         {
           forking: {
-            jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
+            jsonRpcUrl: process.env.ETH_NODE_URI_ETH_FOUNDRY,
             // Changing mainnet fork block breaks some tests
             blockNumber: 14679410,
           },
@@ -173,8 +174,8 @@ describe('OptimizerAPR - lenderAave', () => {
       expect(await lenderAave.hasRole(guardianRole, user.address)).to.be.equal(false);
       expect(await lenderAave.hasRole(guardianRole, governor.address)).to.be.equal(true);
       expect(await lenderAave.getRoleAdmin(guardianRole)).to.be.equal(strategyRole);
-      await expect(lenderAave.connect(user).grantRole(keeperRole, user.address)).to.be.revertedWith(guardianRole);
-      await expect(lenderAave.connect(user).revokeRole(keeperRole, keeper.address)).to.be.revertedWith(guardianRole);
+      await expect(lenderAave.connect(user).grantRole(keeperRole, user.address)).to.be.revertedWith(guardianError);
+      await expect(lenderAave.connect(user).revokeRole(keeperRole, keeper.address)).to.be.revertedWith(guardianError);
       await expect(lenderAave.connect(user).changeAllowance([], [], [])).to.be.revertedWith(guardianError);
       await expect(lenderAave.connect(user).sweep(ZERO_ADDRESS, ZERO_ADDRESS)).to.be.revertedWith(guardianError);
       await expect(lenderAave.connect(user).emergencyWithdraw(BASE_TOKENS)).to.be.revertedWith(guardianError);

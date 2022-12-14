@@ -1,10 +1,10 @@
-import { network } from 'hardhat';
-import { utils, BigNumber } from 'ethers';
-import { impersonate } from '../test-utils';
-import { expect } from '../test-utils/chai-setup';
-
-import { setup } from './setup_tests';
+import { expect } from 'chai';
+import { BigNumber, utils } from 'ethers';
 import { parseUnits } from 'ethers/lib/utils';
+import { network } from 'hardhat';
+
+import { impersonate } from '../test-utils';
+import { setup } from './setup_tests';
 
 describe('AaveFlashloanStrategy - Scenario', () => {
   it('scenario static', async () => {

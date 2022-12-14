@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.8.12;
+pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -25,6 +25,7 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
 
     // ======================= References to contracts =============================
 
+    // solhint-disable-next-line
     address internal constant oneInch = 0x1111111254fb6c44bAC0beD2854e76F90643097d;
 
     // ========================= References and Parameters =========================

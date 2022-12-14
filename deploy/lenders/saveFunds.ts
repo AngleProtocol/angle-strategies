@@ -19,7 +19,7 @@ import {
   GenericCompound,
   GenericCompound__factory,
 } from '@angleprotocol/sdk/dist/constants/types';
-import { expect } from '../../test/test-utils/chai-setup';
+import { expect } from 'chai';
 import { parseUnits } from 'ethers/lib/utils';
 import { Contract } from 'ethers';
 

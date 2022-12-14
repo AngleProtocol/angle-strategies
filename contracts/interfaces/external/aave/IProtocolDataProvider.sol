@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.8.12;
+pragma solidity ^0.8.17;
 
 import { ILendingPoolAddressesProvider } from "./ILendingPool.sol";
 
@@ -10,6 +10,7 @@ interface IProtocolDataProvider {
         address tokenAddress;
     }
 
+    // solhint-disable-next-line
     function ADDRESSES_PROVIDER() external view returns (ILendingPoolAddressesProvider);
 
     function getAllReservesTokens() external view returns (TokenData[] memory);

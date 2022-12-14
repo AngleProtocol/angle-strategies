@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.8.12;
+pragma solidity ^0.8.17;
 
 /// @title ComputeProfitability
 /// @author Angle Core Team
@@ -25,6 +25,7 @@ library ComputeProfitability {
     int256 private constant _BASE_RAY = 10**27;
 
     /// @notice Computes the Aave utilization ratio
+    // solhint-disable-next-line
     function _computeUtilization(int256 borrow, SCalculateBorrow memory parameters) internal pure returns (int256) {
         return
             ((parameters.totalStableDebt + parameters.totalVariableDebt + borrow) * _BASE_RAY) /
@@ -32,6 +33,7 @@ library ComputeProfitability {
     }
 
     /// @notice Computes the derivative of the utilization ratio with respect to the amount borrowed
+    // solhint-disable-next-line
     function _computeUprime(int256 borrow, SCalculateBorrow memory parameters) internal pure returns (int256) {
         return
             ((parameters.totalDeposits - parameters.totalStableDebt - parameters.totalVariableDebt) * _BASE_RAY) /
@@ -40,6 +42,7 @@ library ComputeProfitability {
 
     /// @notice Computes the value of the interest rate, its first and second order derivatives
     /// @dev The returned value is in `_BASE_RAY`
+    // solhint-disable-next-line
     function _calculateInterestPrimes(int256 borrow, SCalculateBorrow memory parameters)
         internal
         pure
@@ -71,6 +74,7 @@ library ComputeProfitability {
     }
 
     /// @notice Computes the value of the revenue, as well as its first and second order derivatives
+    // solhint-disable-next-line
     function _revenuePrimes(
         int256 borrow,
         SCalculateBorrow memory parameters,

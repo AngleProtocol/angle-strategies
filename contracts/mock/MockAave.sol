@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -106,6 +106,7 @@ abstract contract MockAave is
 
     function getTotalRewardsBalance(address) external view override returns (uint256) {}
 
+    // solhint-disable-next-line
     function COOLDOWN_SECONDS() external pure override returns (uint256) {
         return 0;
     }
@@ -114,6 +115,7 @@ abstract contract MockAave is
         return stakersCooldownsValue;
     }
 
+    // solhint-disable-next-line
     function UNSTAKE_WINDOW() external view override returns (uint256) {
         return unstakeWindow;
     }
@@ -314,6 +316,7 @@ contract MockProtocolDataProvider {
         variableDebtTokenAddress = debtToken;
     }
 
+    // solhint-disable-next-line
     function ADDRESSES_PROVIDER() external view returns (ILendingPoolAddressesProvider) {
         return ILendingPoolAddressesProvider(mockAave);
     }

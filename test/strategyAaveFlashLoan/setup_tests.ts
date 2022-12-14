@@ -1,24 +1,25 @@
+import { ALL_TOKENS, CONTRACTS_ADDRESSES } from '@angleprotocol/sdk';
+import { BigNumber, constants, Contract, utils } from 'ethers';
 import { ethers, network } from 'hardhat';
-import { utils, constants, Contract, BigNumber } from 'ethers';
-import { deploy } from '../test-utils';
+
 import {
   AaveFlashloanStrategy,
+  AaveFlashloanStrategy__factory,
   ERC20,
   ERC20__factory,
-  PoolManager__factory,
-  ILendingPool__factory,
-  ILendingPool,
   FlashMintLib,
-  AaveFlashloanStrategy__factory,
-  PoolManager,
-  IAaveIncentivesController__factory,
   IAaveIncentivesController,
-  IProtocolDataProvider__factory,
+  IAaveIncentivesController__factory,
+  ILendingPool,
+  ILendingPool__factory,
   IProtocolDataProvider,
+  IProtocolDataProvider__factory,
+  PoolManager,
+  PoolManager__factory,
 } from '../../typechain';
-import { CONTRACTS_ADDRESSES, ALL_TOKENS } from '@angleprotocol/sdk';
+import { deploy } from '../test-utils';
 
-export const logBN = (amount: BigNumber, { base = 6, pad = 20, sign = false } = {}) => {
+export const logBN = (amount: BigNumber, { base = 6, pad = 20, sign = false } = {}): string => {
   const num = parseFloat(utils.formatUnits(amount, base));
   const formattedNum = new Intl.NumberFormat('fr-FR', {
     style: 'decimal',
@@ -29,15 +30,15 @@ export const logBN = (amount: BigNumber, { base = 6, pad = 20, sign = false } = 
   return formattedNum.padStart(pad, ' ');
 };
 
-export const advanceTime = async (hours: number) => {
+export const advanceTime = async (hours: number): Promise<void> => {
   await network.provider.send('evm_increaseTime', [3600 * hours]); // forward X hours
   await network.provider.send('evm_mine');
 };
 
-export function assert(assertion: boolean, message = 'Assertion failed') {
+export function assert(assertion: boolean, message = 'Assertion failed'): void {
   if (!assertion) throw new Error(message);
 }
-export function assertAlmostEq(bn1: BigNumber, bn2: BigNumber, percentage = 10) {
+export function assertAlmostEq(bn1: BigNumber, bn2: BigNumber, percentage = 10): void {
   const addedPercentage = percentage * 100;
 
   const base = bn1.sub(bn2).lt(0) ? bn1 : bn2;
@@ -56,7 +57,7 @@ export async function setup(startBlocknumber?: number, collat = 'USDC') {
       params: [
         {
           forking: {
-            jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
+            jsonRpcUrl: process.env.ETH_NODE_URI_ETH_FOUNDRY,
             blockNumber: startBlocknumber,
           },
         },
@@ -103,7 +104,7 @@ export async function setup(startBlocknumber?: number, collat = 'USDC') {
 
   const oldStrategy = await ethers.getContractAt(
     ['function harvest() external', 'function estimatedTotalAssets() external view returns(uint)'],
-    CONTRACTS_ADDRESSES[1].agEUR.collaterals?.[collat].Strategies?.GenericOptimisedLender as string,
+    CONTRACTS_ADDRESSES[1].agEUR.collaterals?.[collat].Strategies?.GenericOptimisedLender.Contract as string,
   );
 
   // === INIT STRATEGY ===
@@ -250,6 +251,7 @@ export async function setup(startBlocknumber?: number, collat = 'USDC') {
     const totalUSD = aEmissions.add(debtEmissions).add(interests);
     const strategyDebt = (await poolManager.strategies(strategy.address)).totalStrategyDebt;
     const finalRate = totalUSD.div(strategyDebt); // BASE 21
+    finalRate;
 
     // console.log(`
     // ==========================

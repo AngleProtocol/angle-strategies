@@ -1,6 +1,7 @@
-import { ethers, network } from 'hardhat';
-import { Contract, ContractFactory, Wallet } from 'ethers';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { Contract, ContractFactory, Wallet } from 'ethers';
+import { ethers, network } from 'hardhat';
+
 import { TransparentUpgradeableProxy__factory } from '../../typechain';
 
 export async function deploy(
@@ -21,7 +22,7 @@ export async function latestTime(): Promise<number> {
   return timestamp as number;
 }
 
-export const randomAddress = () => Wallet.createRandom().address;
+export const randomAddress = (): string => Wallet.createRandom().address;
 
 export async function impersonate(
   address: string,

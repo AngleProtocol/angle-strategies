@@ -1,12 +1,13 @@
 import { BigNumber } from 'ethers';
 import { parseUnits } from 'ethers/lib/utils';
+
+import { expectApproxDelta } from '../../utils/bignumber';
 import {
   computeInterestPrimes,
-  getOptimalBorrow,
   computeRevenuePrimes,
+  getOptimalBorrow,
   SCalculateBorrow,
 } from '../../utils/optimization';
-import { expectApproxDelta } from '../../utils/bignumber';
 
 const PRECISION = 4;
 let priceAave: number;

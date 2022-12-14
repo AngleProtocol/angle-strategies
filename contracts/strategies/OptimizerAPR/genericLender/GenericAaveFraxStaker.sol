@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.8.12;
+pragma solidity ^0.8.17;
 
 import "../../../interfaces/external/frax/IFraxUnifiedFarmTemplate.sol";
 import "./GenericAaveUpgradeable.sol";
@@ -14,11 +14,13 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     using Address for address;
 
     // ============================= Protocol Addresses ============================
-
+    // solhint-disable-next-line
     AggregatorV3Interface private constant oracleFXS =
         AggregatorV3Interface(0x6Ebc52C8C1089be9eB3945C4350B68B8E4C2233f);
+    // solhint-disable-next-line
     IFraxUnifiedFarmTemplate private constant aFraxStakingContract =
         IFraxUnifiedFarmTemplate(0x02577b426F223A6B4f2351315A19ecD6F357d65c);
+    // solhint-disable-next-line
     uint256 private constant FRAX_IDX = 0;
 
     // ================================ Variables ==================================
@@ -29,6 +31,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     uint256 public lastAaveReserveNormalizedIncome;
     /// @notice Tracks the amount of FRAX controlled by the protocol and lent as aFRAX on Frax staking contract
     /// This quantity increases due to the Aave native yield
+    // solhint-disable-next-line
     uint256 private lastLiquidity;
     /// @notice Last time a staker has been created
     uint256 public lastCreatedStake;
@@ -36,6 +39,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     // ================================ Parameters =================================
 
     /// @notice Minimum amount of aFRAX to stake
+    // solhint-disable-next-line
     uint256 private constant minStakingAmount = 1000 * 1e18; // 1000 aFrax
     /// @notice Staking duration
     uint256 public stakingPeriod;

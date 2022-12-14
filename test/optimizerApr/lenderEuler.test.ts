@@ -1,16 +1,18 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { expect } from 'chai';
 import { BigNumber, utils } from 'ethers';
+import { parseUnits } from 'ethers/lib/utils';
+import { ethers, network } from 'hardhat';
+
 import {
   ERC20,
   ERC20__factory,
   GenericEuler,
   GenericEuler__factory,
   IEuler,
+  IEuler__factory,
   IEulerEToken,
   IEulerEToken__factory,
-  IEulerMarkets,
-  IEulerMarkets__factory,
-  IEuler__factory,
   IGovernance,
   IGovernance__factory,
   OptimizerAPRStrategy,
@@ -19,12 +21,9 @@ import {
 } from '../../typechain';
 import { gwei } from '../../utils/bignumber';
 import { deploy, deployUpgradeable, impersonate } from '../test-utils';
-import { ethers, network } from 'hardhat';
-import { expect } from '../test-utils/chai-setup';
-import { BASE_TOKENS } from '../utils';
-import { parseUnits } from 'ethers/lib/utils';
-import { findBalancesSlot, logBN, setTokenBalanceFor } from '../utils-interaction';
 import { time, ZERO_ADDRESS } from '../test-utils/helpers';
+import { BASE_TOKENS } from '../utils';
+import { findBalancesSlot, logBN, setTokenBalanceFor } from '../utils-interaction';
 
 async function initStrategy(
   governor: SignerWithAddress,
@@ -106,7 +105,7 @@ describe('OptimizerAPR - lenderEuler', () => {
       params: [
         {
           forking: {
-            jsonRpcUrl: process.env.ETH_NODE_URI_FORK,
+            jsonRpcUrl: process.env.ETH_NODE_URI_ETH_FOUNDRY,
             // Changing mainnet fork block breaks some tests
             blockNumber: 14967667,
           },
@@ -170,8 +169,8 @@ describe('OptimizerAPR - lenderEuler', () => {
       expect(await lenderEuler.hasRole(guardianRole, user.address)).to.be.equal(false);
       expect(await lenderEuler.hasRole(guardianRole, governor.address)).to.be.equal(true);
       expect(await lenderEuler.getRoleAdmin(guardianRole)).to.be.equal(strategyRole);
-      await expect(lenderEuler.connect(user).grantRole(keeperRole, user.address)).to.be.revertedWith(guardianRole);
-      await expect(lenderEuler.connect(user).revokeRole(keeperRole, keeper.address)).to.be.revertedWith(guardianRole);
+      await expect(lenderEuler.connect(user).grantRole(keeperRole, user.address)).to.be.revertedWith(guardianError);
+      await expect(lenderEuler.connect(user).revokeRole(keeperRole, keeper.address)).to.be.revertedWith(guardianError);
       await expect(lenderEuler.connect(user).changeAllowance([], [], [])).to.be.revertedWith(guardianError);
       await expect(lenderEuler.connect(user).sweep(ZERO_ADDRESS, ZERO_ADDRESS)).to.be.revertedWith(guardianError);
       await expect(lenderEuler.connect(user).emergencyWithdraw(BASE_TOKENS)).to.be.revertedWith(guardianError);
@@ -204,24 +203,18 @@ describe('OptimizerAPR - lenderEuler', () => {
 
   describe('sweep', () => {
     it('reverts - protected token', async () => {
-      await expect(lenderEuler.connect(governor).sweep(eToken.address, user.address)).to.be.revertedWith(
+      await expect(lenderEuler.connect(governor).sweep(eToken.address, user.address)).to.be.revertedWithCustomError(
+        lenderEuler,
         'ProtectedToken',
       );
-      await expect(lenderEuler.connect(governor).sweep(token.address, user.address)).to.be.revertedWith(
+      await expect(lenderEuler.connect(governor).sweep(token.address, user.address)).to.be.revertedWithCustomError(
+        lenderEuler,
         'ProtectedToken',
       );
     });
   });
 
   describe('deposit', () => {
-    it('revert', async () => {
-      const amount = 100000000;
-      await setTokenBalanceFor(token, lenderEuler.address, amount, balanceSlot);
-      await lenderEuler.connect(governor).changeAllowance([token.address], [euler.address], [ethers.constants.Zero]);
-      await expect(lenderEuler.connect(keeper).deposit()).to.be.revertedWith(
-        'ERC20: transfer amount exceeds allowance',
-      );
-    });
     it('success', async () => {
       const amount = 100000000;
       await setTokenBalanceFor(token, lenderEuler.address, amount, balanceSlot);

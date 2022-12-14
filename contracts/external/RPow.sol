@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0
 
 // From MakerDAO DSS
 
@@ -25,6 +25,7 @@ library RPow {
         uint256 n,
         uint256 base
     ) internal pure returns (uint256 z) {
+        // solhint-disable-next-line
         assembly {
             switch x
             case 0 {

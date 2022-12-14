@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.8.12;
+pragma solidity ^0.8.17;
 
 interface IAaveIncentivesController {
     /**
@@ -47,6 +47,7 @@ interface IAaveIncentivesController {
     /**
      * @dev for backward compatibility with previous implementation of the Incentives controller
      */
+    // solhint-disable-next-line
     function REWARD_TOKEN() external view returns (address);
 
     function getDistributionEnd() external view returns (uint256);
