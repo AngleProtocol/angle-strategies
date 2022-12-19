@@ -4,11 +4,11 @@ pragma solidity ^0.8.17;
 
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
-import "../../../interfaces/external/compound/CErc20I.sol";
-import "../../../interfaces/external/compound/IComptroller.sol";
-import "../../../interfaces/external/compound/InterestRateModel.sol";
+import "../../../../interfaces/external/compound/CErc20I.sol";
+import "../../../../interfaces/external/compound/IComptroller.sol";
+import "../../../../interfaces/external/compound/InterestRateModel.sol";
 
-import "./GenericLenderBaseUpgradeable.sol";
+import "./../GenericLenderBaseUpgradeable.sol";
 
 /// @title GenericCompoundV3
 /// @author Forked from here: https://github.com/Grandthrax/yearnV2-generic-lender-strat/blob/master/contracts/GenericLender/GenericCompound.sol

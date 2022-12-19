@@ -5,12 +5,12 @@ pragma solidity ^0.8.17;
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-import { DataTypes, IStakedAave, IReserveInterestRateStrategy } from "../../../interfaces/external/aave/IAave.sol";
-import { IProtocolDataProvider } from "../../../interfaces/external/aave/IProtocolDataProvider.sol";
-import { ILendingPool } from "../../../interfaces/external/aave/ILendingPool.sol";
-import { IAaveIncentivesController } from "../../../interfaces/external/aave/IAaveIncentivesController.sol";
-import { IAToken, IVariableDebtToken } from "../../../interfaces/external/aave/IAaveToken.sol";
-import "./GenericLenderBaseUpgradeable.sol";
+import { DataTypes, IStakedAave, IReserveInterestRateStrategy } from "../../../../interfaces/external/aave/IAave.sol";
+import { IProtocolDataProvider } from "../../../../interfaces/external/aave/IProtocolDataProvider.sol";
+import { ILendingPool } from "../../../../interfaces/external/aave/ILendingPool.sol";
+import { IAaveIncentivesController } from "../../../../interfaces/external/aave/IAaveIncentivesController.sol";
+import { IAToken, IVariableDebtToken } from "../../../../interfaces/external/aave/IAaveToken.sol";
+import "./../GenericLenderBaseUpgradeable.sol";
 
 /// @title GenericAave
 /// @author Forked from https://github.com/Grandthrax/yearnV2-generic-lender-strat/blob/master/contracts/GenericLender/GenericAave.sol

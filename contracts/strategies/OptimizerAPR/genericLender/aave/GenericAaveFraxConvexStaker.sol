@@ -2,11 +2,11 @@
 
 pragma solidity ^0.8.17;
 
-import "../../../interfaces/external/frax/IFraxUnifiedFarmTemplate.sol";
-import "../../../interfaces/external/convex/frax/IBoosterFrax.sol";
-import "../../../interfaces/external/convex/frax/IPoolRegistryFrax.sol";
-import "../../../interfaces/external/convex/frax/IFeeRegistryFrax.sol";
-import "../../../interfaces/external/convex/frax/IStakingProxyERC20.sol";
+import "../../../../interfaces/external/frax/IFraxUnifiedFarmTemplate.sol";
+import "../../../../interfaces/external/convex/frax/IBoosterFrax.sol";
+import "../../../../interfaces/external/convex/frax/IPoolRegistryFrax.sol";
+import "../../../../interfaces/external/convex/frax/IFeeRegistryFrax.sol";
+import "../../../../interfaces/external/convex/frax/IStakingProxyERC20.sol";
 
 import "./GenericAaveUpgradeable.sol";
 

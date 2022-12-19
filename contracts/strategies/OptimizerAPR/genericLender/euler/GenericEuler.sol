@@ -2,9 +2,9 @@
 
 pragma solidity ^0.8.17;
 
-import { IEuler, IEulerMarkets, IEulerEToken, IEulerDToken, IBaseIRM } from "../../../interfaces/external/euler/IEuler.sol";
-import "../../../external/ComputePower.sol";
-import "./GenericLenderBaseUpgradeable.sol";
+import { IEuler, IEulerMarkets, IEulerEToken, IEulerDToken, IBaseIRM } from "../../../../interfaces/external/euler/IEuler.sol";
+import "../../../../external/ComputePower.sol";
+import "./../GenericLenderBaseUpgradeable.sol";
 
 /// @title GenericEuler
 /// @author Angle Core Team
@@ -28,7 +28,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     // solhint-disable-next-line
     uint256 private constant RESERVE_FEE_SCALE = 4_000_000_000;
 
-    // ======================== References to contracts ============================
+    // ========================== REFERENCES TO CONTRACTS ==========================
 
     /// @notice Euler interest rate model for the desired token
     // solhint-disable-next-line
@@ -41,20 +41,20 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     /// @notice Reserve fee on the token on Euler
     uint32 public reserveFee;
 
-    // ============================= Constructor ===================================
+    // ================================ CONSTRUCTOR ================================
 
     /// @notice Initializer of the `GenericEuler`
     /// @param _strategy Reference to the strategy using this lender
     /// @param governorList List of addresses with governor privilege
     /// @param keeperList List of addresses with keeper privilege
     /// @param guardian Address of the guardian
-    function initialize(
+    function initializeEuler(
         address _strategy,
         string memory _name,
         address[] memory governorList,
         address guardian,
         address[] memory keeperList
-    ) external {
+    ) public {
         _initialize(_strategy, _name, governorList, guardian, keeperList);
 
         eToken = IEulerEToken(_eulerMarkets.underlyingToEToken(address(want)));
@@ -65,7 +65,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         want.safeApprove(address(_euler), type(uint256).max);
     }
 
-    // ===================== External Permissionless Functions =====================
+    // ===================== EXTERNAL PERMISSIONLESS FUNCTIONS =====================
 
     /// @notice Retrieves Euler variables `reserveFee` and the `irm` - rates curve -  used for the underlying token
     /// @dev No access control is needed here because values are fetched from Euler directly
@@ -74,12 +74,15 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         _setEulerPoolVariables();
     }
 
-    // ===================== External Strategy Functions ===========================
+    // ======================== EXTERNAL STRATEGY FUNCTIONS ========================
 
     /// @inheritdoc IGenericLender
     function deposit() external override onlyRole(STRATEGY_ROLE) {
         uint256 balance = want.balanceOf(address(this));
         eToken.deposit(0, balance);
+        // We don't stake balance but the whole aTokenBalance
+        // if some dust has been kept idle
+        _stake(eToken.balanceOf(address(this)));
     }
 
     /// @inheritdoc IGenericLender
@@ -94,11 +97,11 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         return returned >= invested;
     }
 
-    // ========================== External View Functions ==========================
+    // ========================== EXTERNAL VIEW FUNCTIONS ==========================
 
     /// @inheritdoc GenericLenderBaseUpgradeable
     function underlyingBalanceStored() public view override returns (uint256) {
-        return eToken.balanceOfUnderlying(address(this));
+        return eToken.balanceOfUnderlying(address(this)) + _stakedBalance();
     }
 
     /// @inheritdoc IGenericLender
@@ -106,15 +109,16 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         return _aprAfterDeposit(amount);
     }
 
-    // ================================= Governance ================================
+    // ================================= GOVERNANCE ================================
 
     /// @inheritdoc IGenericLender
     function emergencyWithdraw(uint256 amount) external override onlyRole(GUARDIAN_ROLE) {
+        _unstake(amount);
         eToken.withdraw(0, amount);
         want.safeTransfer(address(poolManager), want.balanceOf(address(this)));
     }
 
-    // ============================= Internal Functions ============================
+    // ============================= INTERNAL FUNCTIONS ============================
 
     /// @notice See `apr`
     function _apr() internal view override returns (uint256) {
@@ -137,7 +141,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         }
 
         // Adding the yield from EUL
-        return supplyAPY + _incentivesRate(amount);
+        return supplyAPY + _stakingApr(amount);
     }
 
     /// @notice Computes APYs based on the interest rate, reserve fee, borrow
@@ -162,9 +166,10 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
 
     /// @notice See `withdraw`
     function _withdraw(uint256 amount) internal returns (uint256) {
+        uint256 stakedBalance = _stakedBalance();
         uint256 balanceUnderlying = eToken.balanceOfUnderlying(address(this));
         uint256 looseBalance = want.balanceOf(address(this));
-        uint256 total = balanceUnderlying + looseBalance;
+        uint256 total = stakedBalance + balanceUnderlying + looseBalance;
 
         if (amount > total) {
             // Can't withdraw more than we own
@@ -181,25 +186,20 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
 
         if (availableLiquidity > 1) {
             uint256 toWithdraw = amount - looseBalance;
-            if (toWithdraw <= availableLiquidity) {
-                // We can take all
-                eToken.withdraw(0, toWithdraw);
-            } else {
-                // Take all we can
-                eToken.withdraw(0, availableLiquidity);
-            }
+            uint256 toUnstake;
+            // We can take all
+            if (toWithdraw <= availableLiquidity)
+                toUnstake = toWithdraw > balanceUnderlying + looseBalance
+                    ? toWithdraw - (balanceUnderlying + looseBalance)
+                    : 0;
+            else toUnstake = availableLiquidity > balanceUnderlying ? availableLiquidity - balanceUnderlying : 0; // take all we can
+            uint256 freedAmount = toUnstake > 0 ? _unstake(toUnstake) : 0;
+            eToken.withdraw(0, freedAmount + balanceUnderlying);
         }
 
         looseBalance = want.balanceOf(address(this));
         want.safeTransfer(address(strategy), looseBalance);
         return looseBalance;
-    }
-
-    /// @notice Calculates APR from Liquidity Mining Program
-    /// @dev amountToAdd Amount to add to the currently supplied liquidity (for the `aprAfterDeposit` function)
-    /// @dev For the moment no on-chain tracking of rewards (+ only for borrowers for now)
-    function _incentivesRate(uint256) internal pure returns (uint256) {
-        return 0;
     }
 
     /// @notice Internal version of the `setEulerPoolVariables`
@@ -216,5 +216,33 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         protected[0] = address(want);
         protected[1] = address(eToken);
         return protected;
+    }
+
+    // ============================= VIRTUAL FUNCTIONS =============================
+
+    /// @notice Allows the lender to stake its eTokens in an external staking contract
+    /// @param amount Amount of eTokens to stake
+    /// @return Amount of eTokens actually staked
+    function _stake(uint256 amount) internal virtual returns (uint256) {
+        return amount;
+    }
+
+    /// @notice Allows the lender to unstake its eTokens from an external staking contract
+    /// @param amount Amount of eToken to unstake
+    /// @return Amount of eTokens actually unstaked
+    function _unstake(uint256 amount) internal virtual returns (uint256) {
+        return amount;
+    }
+
+    /// @notice Gets the amount of eTokens currently staked
+    function _stakedBalance() internal view virtual returns (uint256) {
+        return 0;
+    }
+
+    /// @notice Calculates APR from Liquidity Mining Program
+    /// @dev amountToAdd Amount to add to the currently supplied liquidity (for the `aprAfterDeposit` function)
+    /// @dev For the moment no on-chain tracking of rewards (+ only for borrowers for now)
+    function _stakingApr(uint256) internal view virtual returns (uint256) {
+        return 0;
     }
 }
