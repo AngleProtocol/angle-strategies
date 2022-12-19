@@ -15,7 +15,7 @@ import {
   IProtocolDataProvider,
   IProtocolDataProvider__factory,
   PoolManager,
-} from '../../typechain';
+} from '../../../typechain';
 import { deploy, impersonate, latestTime } from '../test-utils';
 import { BASE_PARAMS } from '../utils';
 import { findBalancesSlot, setTokenBalanceFor } from '../utils-interaction';

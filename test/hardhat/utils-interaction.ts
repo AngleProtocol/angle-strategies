@@ -15,7 +15,7 @@ import { BigNumber, BigNumberish, utils } from 'ethers';
 import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { ethers, network } from 'hardhat';
 
-import { ERC20, ERC20__factory, OptimizerAPRStrategy, StETHStrategy } from '../typechain';
+import { ERC20, ERC20__factory, OptimizerAPRStrategy, StETHStrategy } from '../../typechain';
 
 export const wait = (n = 1000): Promise<unknown> => {
   return new Promise(resolve => {

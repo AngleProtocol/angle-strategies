@@ -17,9 +17,9 @@ import {
   IProtocolDataProvider,
   IProtocolDataProvider__factory,
   PoolManager,
-} from '../../typechain';
-import { expectApproxDelta } from '../../utils/bignumber';
-import { getConstrainedBorrow, getOptimalBorrow } from '../../utils/optimization';
+} from '../../../typechain';
+import { expectApproxDelta } from '../../../utils/bignumber';
+import { getConstrainedBorrow, getOptimalBorrow } from '../../../utils/optimization';
 import { deploy, impersonate } from '../test-utils';
 import { getParamsOptim } from '../utils';
 

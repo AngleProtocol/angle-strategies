@@ -16,8 +16,8 @@ import {
   OptimizerAPRStrategy,
   OptimizerAPRStrategy__factory,
   PoolManager,
-} from '../../typechain';
-import { gwei } from '../../utils/bignumber';
+} from '../../../typechain';
+import { gwei } from '../../../utils/bignumber';
 import { deploy, deployUpgradeable, impersonate } from '../test-utils';
 import { time, ZERO_ADDRESS } from '../test-utils/helpers';
 import { BASE_TOKENS } from '../utils';

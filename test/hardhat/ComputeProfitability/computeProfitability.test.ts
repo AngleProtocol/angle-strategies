@@ -1,7 +1,7 @@
 import { BigNumber, Contract } from 'ethers';
 import { parseUnits } from 'ethers/lib/utils';
 
-import { expectApproxDelta } from '../../utils/bignumber';
+import { expectApproxDelta } from '../../../utils/bignumber';
 import { deploy } from '../test-utils';
 
 const PRECISION = 3;

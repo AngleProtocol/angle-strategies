@@ -18,8 +18,8 @@ import {
   OptimizerAPRStrategy,
   OptimizerAPRStrategy__factory,
   PoolManager,
-} from '../../typechain';
-import { gwei } from '../../utils/bignumber';
+} from '../../../typechain';
+import { gwei } from '../../../utils/bignumber';
 import { deploy, deployUpgradeable, impersonate } from '../test-utils';
 import { time, ZERO_ADDRESS } from '../test-utils/helpers';
 import { BASE_TOKENS } from '../utils';
@@ -49,7 +49,7 @@ async function initLenderEuler(
   lender: GenericEuler;
 }> {
   const lender = (await deployUpgradeable(new GenericEuler__factory(guardian))) as GenericEuler;
-  await lender.initialize(strategy.address, name, [governor.address], guardian.address, [keeper.address]);
+  await lender.initializeEuler(strategy.address, name, [governor.address], guardian.address, [keeper.address]);
   await strategy.connect(governor).addLender(lender.address);
   return { lender };
 }
@@ -132,7 +132,7 @@ describe('OptimizerAPR - lenderEuler', () => {
       manager = (await deploy('PoolManager', [token.address, governor.address, guardian.address])) as PoolManager;
       ({ strategy } = await initStrategy(governor, guardian, keeper, manager));
       const lender = (await deployUpgradeable(new GenericEuler__factory(guardian))) as GenericEuler;
-      await lender.initialize(strategy.address, 'wrong lender', [governor.address], guardian.address, [keeper.address]);
+      await lender.initializeEuler(strategy.address, 'wrong lender', [governor.address], guardian.address, [keeper.address]);
       expect(await lender.eToken()).to.not.equal(wrongEToken.address);
     });
     it('Parameters', async () => {

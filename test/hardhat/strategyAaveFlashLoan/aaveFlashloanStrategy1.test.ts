@@ -19,8 +19,8 @@ import {
   IStakedAave,
   IStakedAave__factory,
   PoolManager,
-} from '../../typechain';
-import { expectApprox } from '../../utils/bignumber';
+} from '../../../typechain';
+import { expectApprox } from '../../../utils/bignumber';
 import { deploy, impersonate } from '../test-utils';
 import { increaseTime, latestTime } from '../test-utils/helpers';
 

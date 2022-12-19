@@ -11,8 +11,8 @@ import {
   PoolManager,
   StETHStrategy,
   StETHStrategy__factory,
-} from '../../typechain';
-import { gwei, parseAmount } from '../../utils/bignumber';
+} from '../../../typechain';
+import { gwei, parseAmount } from '../../../utils/bignumber';
 import { deploy, deployUpgradeable } from '../test-utils';
 import { BASE_PARAMS, BASE_TOKENS } from '../utils';
 

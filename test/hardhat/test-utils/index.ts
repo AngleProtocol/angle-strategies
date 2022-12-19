@@ -2,7 +2,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { Contract, ContractFactory, Wallet } from 'ethers';
 import { ethers, network } from 'hardhat';
 
-import { TransparentUpgradeableProxy__factory } from '../../typechain';
+import { TransparentUpgradeableProxy__factory } from '../../../typechain';
 
 export async function deploy(
   contractName: string,

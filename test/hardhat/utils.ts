@@ -9,8 +9,8 @@ import {
   ILendingPool,
   IProtocolDataProvider,
   PoolManager,
-} from '../typechain';
-import { SCalculateBorrow } from '../utils/optimization';
+} from '../../typechain';
+import { SCalculateBorrow } from '../../utils/optimization';
 
 export const BASE_PARAMS = parseUnits('1', 9);
 export const BASE_TOKENS = parseUnits('1', 18);
