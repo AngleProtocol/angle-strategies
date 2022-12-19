@@ -192,9 +192,13 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
                 toUnstake = toWithdraw > balanceUnderlying + looseBalance
                     ? toWithdraw - (balanceUnderlying + looseBalance)
                     : 0;
-            else toUnstake = availableLiquidity > balanceUnderlying ? availableLiquidity - balanceUnderlying : 0; // take all we can
-            uint256 freedAmount = toUnstake > 0 ? _unstake(toUnstake) : 0;
-            eToken.withdraw(0, freedAmount + balanceUnderlying);
+            else {
+                // take all we can
+                toUnstake = availableLiquidity > balanceUnderlying ? availableLiquidity - balanceUnderlying : 0;
+                toWithdraw = availableLiquidity;
+            }
+            _unstake(toUnstake);
+            eToken.withdraw(0, toWithdraw);
         }
 
         looseBalance = want.balanceOf(address(this));
