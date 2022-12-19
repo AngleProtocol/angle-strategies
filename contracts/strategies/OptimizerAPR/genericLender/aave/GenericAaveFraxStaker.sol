@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.17;
 
-import "../../../interfaces/external/frax/IFraxUnifiedFarmTemplate.sol";
+import "../../../../interfaces/external/frax/IFraxUnifiedFarmTemplate.sol";
 import "./GenericAaveUpgradeable.sol";
 
 /// @title GenericAaveFraxStaker
