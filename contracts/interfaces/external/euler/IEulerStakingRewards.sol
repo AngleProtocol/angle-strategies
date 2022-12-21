@@ -36,4 +36,6 @@ interface IEulerStakingRewards {
     function withdraw(uint256 amount) external;
 
     function withdraw(uint256 subAccountId, uint256 amount) external;
+
+    function notifyRewardAmount(uint256 reward) external;
 }

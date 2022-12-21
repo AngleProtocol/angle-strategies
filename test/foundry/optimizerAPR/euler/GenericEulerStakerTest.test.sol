@@ -1,174 +1,161 @@
-// // SPDX-License-Identifier: UNLICENSED
-// pragma solidity ^0.8.17;
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.17;
 
-// import "../BaseTest.test.sol";
-// import "../../../contracts/interfaces/external/convex/IBaseRewardPool.sol";
-// import "../../../contracts/interfaces/external/convex/IBooster.sol";
-// import "../../../contracts/interfaces/external/convex/IConvexToken.sol";
-// import "borrow/interfaces/ICoreBorrow.sol";
-// import "../../../contracts/mock/MockTokenPermit.sol";
-// import { MockCurveStaker3TokensWithBP, BorrowStakerStorage, ILiquidityGauge } from "../../../contracts/mock/MockCurveStaker3TokensWithBP.sol";
+import "../../BaseTest.test.sol";
+import { PoolManager } from "../../../../contracts/mock/MockPoolManager2.sol";
+import { OptimizerAPRStrategy } from "../../../../contracts/strategies/OptimizerAPR/OptimizerAPRStrategy.sol";
+import { GenericEulerStakerUSDC, IERC20, IEulerStakingRewards, IEulerEToken, IGenericLender } from "../../../../contracts/strategies/OptimizerAPR/genericLender/euler/implementations/GenericEulerStakerUSDC.sol";
 
-// interface IMinimalLiquidityGauge {
-//     // solhint-disable-next-line
-//     function add_reward(address rewardToken, address distributor) external;
-// }
+interface IMinimalLiquidityGauge {
+    // solhint-disable-next-line
+    function add_reward(address rewardToken, address distributor) external;
+}
 
-// contract CurveLPTokenStakerTest is BaseTest {
-//     using stdStorage for StdStorage;
+contract GenericEulerStakerTest is BaseTest {
+    using stdStorage for StdStorage;
 
-//     address internal _hacker = address(uint160(uint256(keccak256(abi.encodePacked("hacker")))));
-//     address public CRVDistributor = address(uint160(uint256(keccak256(abi.encodePacked("CRVDistributor")))));
+    address internal _hacker = address(uint160(uint256(keccak256(abi.encodePacked("hacker")))));
 
-//     IERC20 public asset = IERC20(0xdAD97F7713Ae9437fa9249920eC8507e5FbB23d3);
-//     IERC20 public CRV;
-//     IERC20 public rewardToken;
-//     uint256 public constant NBR_REWARD = 1;
+    IERC20 internal constant _TOKEN = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
+    IERC20 internal constant _EUL = IERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
+    IEulerStakingRewards internal constant _STAKER = IEulerStakingRewards(0xE5aFE81e63f0A52a3a03B922b30f73B8ce74D570);
+    IEulerEToken internal constant _eUSDC = IEulerEToken(0xEb91861f8A4e1C12333F42DCE8fB0Ecdc28dA716);
+    uint8 internal constant _DECIMAL_REWARD = 18;
+    uint8 internal constant _DECIMAL_TOKEN = 6;
 
-//     MockCurveStaker3TokensWithBP public stakerImplementation;
-//     MockCurveStaker3TokensWithBP public staker;
-//     ILiquidityGauge public gauge;
-//     uint8 public decimalToken;
-//     uint256 public minTokenAmount;
-//     uint256 public maxTokenAmount;
-//     uint8 public decimalReward;
-//     uint256 public rewardAmount;
+    PoolManager public manager;
+    OptimizerAPRStrategy public stratImplementation;
+    OptimizerAPRStrategy public strat;
+    GenericEulerStakerUSDC public lenderImplementation;
+    GenericEulerStakerUSDC public lender;
+    uint256 public maxTokenAmount = 10**(_DECIMAL_TOKEN + 6);
+    uint256 public minTokenAmount = 10**(_DECIMAL_TOKEN - 1);
 
-//     uint256 public constant WITHDRAW_LENGTH = 3;
+    uint256 public constant WITHDRAW_LENGTH = 3;
 
-//     function setUp() public override {
-//         _polygon = vm.createFork(vm.envString("ETH_NODE_URI_POLYGON"), 35447035);
-//         vm.selectFork(_ethereum);
+    function setUp() public override {
+        _ethereum = vm.createFork(vm.envString("ETH_NODE_URI_ETH_FOUNDRY"), 16220173);
+        vm.selectFork(_ethereum);
 
-//         super.setUp();
-//         stakerImplementation = new MockCurveStaker3TokensWithBP();
-//         staker = MockCurveStaker3TokensWithBP(
-//             deployUpgradeable(
-//                 address(stakerImplementation),
-//                 abi.encodeWithSelector(staker.initialize.selector, coreBorrow)
-//             )
-//         );
+        super.setUp();
 
-//         gauge = staker.liquidityGauge();
+        address[] memory keeperList = new address[](1);
+        address[] memory governorList = new address[](1);
+        keeperList[0] = _KEEPER;
+        governorList[0] = _GOVERNOR;
 
-//         // CRV rewards are distributed on mainnet not on polygon - fake rewards
-//         CRV = IERC20(new MockTokenPermit("CRV", "CRV", 18));
-//         rewardToken = CRV;
-//         staker.setFakeReward(rewardToken);
+        manager = new PoolManager(address(_TOKEN), _GOVERNOR, _GUARDIAN);
+        stratImplementation = new OptimizerAPRStrategy();
+        strat = OptimizerAPRStrategy(
+            deployUpgradeable(
+                address(stratImplementation),
+                abi.encodeWithSelector(strat.initialize.selector, address(manager), _GOVERNOR, _GUARDIAN, keeperList)
+            )
+        );
+        vm.prank(_GOVERNOR);
+        manager.addStrategy(address(strat), 8 * 10**8);
 
-//         vm.startPrank(0x8A97FBD532A5C1eD67fd67c11dD76013abAc840e);
-//         IMinimalLiquidityGauge(address(gauge)).add_reward(address(rewardToken), CRVDistributor);
-//         vm.stopPrank();
+        lenderImplementation = new GenericEulerStakerUSDC();
+        lender = GenericEulerStakerUSDC(
+            deployUpgradeable(
+                address(lenderImplementation),
+                abi.encodeWithSelector(
+                    lender.initialize.selector,
+                    address(strat),
+                    "Euler lender staker USDC",
+                    governorList,
+                    _GUARDIAN,
+                    keeperList
+                )
+            )
+        );
+        vm.prank(_GOVERNOR);
+        strat.addLender(IGenericLender(address(lender)));
+        vm.prank(_GOVERNOR);
+        lender.grantRole(keccak256("STRATEGY_ROLE"), _KEEPER);
+    }
 
-//         decimalReward = IERC20Metadata(address(rewardToken)).decimals();
-//         rewardAmount = 10**2 * 10**(decimalReward);
-//         decimalToken = IERC20Metadata(address(asset)).decimals();
-//         maxTokenAmount = 10**15 * 10**decimalToken;
-//         minTokenAmount = 1;
-//     }
+    // ================================= INITIALIZE ================================
 
-//     // ============================= DEPOSIT / WITHDRAW ============================
+    function testInitalize() public {
+        assertEq(IERC20(address(_eUSDC)).allowance(address(lender), address(_STAKER)), type(uint256).max);
+    }
 
-//     function testCurveBorrowStakerRewards(
-//         uint256[WITHDRAW_LENGTH] memory amounts,
-//         uint256[WITHDRAW_LENGTH] memory depositWithdrawRewards,
-//         uint256[WITHDRAW_LENGTH] memory accounts,
-//         uint256[WITHDRAW_LENGTH] memory elapseTimes
-//     ) public {
-//         amounts[0] = bound(amounts[0], minTokenAmount, maxTokenAmount);
-//         deal(address(asset), _alice, amounts[0]);
-//         vm.startPrank(_alice);
-//         asset.approve(address(staker), amounts[0]);
-//         staker.deposit(amounts[0], _alice);
-//         vm.stopPrank();
+    // ================================== DEPOSIT ==================================
 
-//         uint256[5] memory pendingRewards;
+    function testDepositSuccess(uint256 amount) public {
+        amount = bound(amount, 1, maxTokenAmount);
+        deal(address(_TOKEN), address(lender), amount);
+        vm.prank(_KEEPER);
+        lender.deposit();
+        assertEq(_TOKEN.balanceOf(address(lender)), 0);
+        assertEq(_eUSDC.balanceOf(address(lender)), 0);
+        uint256 balanceInUnderlying = _eUSDC.convertBalanceToUnderlying(
+            IERC20(address(_STAKER)).balanceOf(address(lender))
+        );
+        assertApproxEqAbs(balanceInUnderlying, amount, 1 wei);
+        assertApproxEqAbs(lender.underlyingBalanceStored(), amount, 1 wei);
+    }
 
-//         for (uint256 i; i < amounts.length; ++i) {
-//             elapseTimes[i] = bound(elapseTimes[i], 1, 180 days);
-//             vm.warp(block.timestamp + elapseTimes[i]);
-//             if (depositWithdrawRewards[i] % 3 == 2) {
-//                 _depositRewards(rewardAmount);
-//             } else {
-//                 uint256 randomIndex = bound(accounts[i], 0, 3);
-//                 address account = randomIndex == 0 ? _alice : randomIndex == 1 ? _bob : randomIndex == 2
-//                     ? _charlie
-//                     : _dylan;
-//                 if (staker.balanceOf(account) == 0) depositWithdrawRewards[i] = 0;
+    // ================================== WITHDRAW =================================
 
-//                 {
-//                     uint256 totSupply = staker.totalSupply();
-//                     uint256 claimableRewardsFromStaker = gauge.claimable_reward(address(staker), address(rewardToken));
-//                     if (totSupply > 0) {
-//                         pendingRewards[0] +=
-//                             (staker.balanceOf(_alice) * claimableRewardsFromStaker) /
-//                             staker.totalSupply();
-//                         pendingRewards[1] +=
-//                             (staker.balanceOf(_bob) * claimableRewardsFromStaker) /
-//                             staker.totalSupply();
-//                         pendingRewards[2] +=
-//                             (staker.balanceOf(_charlie) * claimableRewardsFromStaker) /
-//                             staker.totalSupply();
-//                         pendingRewards[3] +=
-//                             (staker.balanceOf(_dylan) * claimableRewardsFromStaker) /
-//                             staker.totalSupply();
-//                     }
-//                 }
+    function testWithdawSuccess(uint256 amount, uint256 propWithdraw) public {
+        amount = bound(amount, minTokenAmount, maxTokenAmount);
+        propWithdraw = bound(propWithdraw, 1, BASE_PARAMS);
+        uint256 toWithdraw = (amount * propWithdraw) / BASE_PARAMS;
+        if (toWithdraw < minTokenAmount) toWithdraw = minTokenAmount;
+        deal(address(_TOKEN), address(lender), amount);
+        vm.prank(_KEEPER);
+        lender.deposit();
+        vm.prank(_KEEPER);
+        lender.withdraw(toWithdraw);
+        assertEq(_TOKEN.balanceOf(address(lender)), 0);
+        assertApproxEqAbs(_eUSDC.balanceOf(address(lender)), 0, 10**(18 - 6));
+        uint256 balanceInUnderlying = _eUSDC.convertBalanceToUnderlying(
+            IERC20(address(_STAKER)).balanceOf(address(lender))
+        );
+        assertApproxEqAbs(_TOKEN.balanceOf(address(strat)), toWithdraw, 1 wei);
+        assertApproxEqAbs(balanceInUnderlying, amount - toWithdraw, 1 wei);
+        assertApproxEqAbs(lender.underlyingBalanceStored(), amount - toWithdraw, 1 wei);
+    }
 
-//                 uint256 amount;
-//                 vm.startPrank(account);
-//                 if (depositWithdrawRewards[i] % 3 == 0) {
-//                     amount = bound(amounts[i], minTokenAmount, maxTokenAmount);
-//                     deal(address(asset), account, amount);
-//                     asset.approve(address(staker), amount);
+    // ================================== INTERNAL =================================
 
-//                     uint256 prevRewardTokenBalance = rewardToken.balanceOf(account);
-//                     staker.deposit(amount, account);
-//                     assertEq(rewardToken.balanceOf(account), prevRewardTokenBalance);
-//                 } else {
-//                     amount = bound(amounts[i], 1, 10**9);
-//                     amount = (amount * staker.balanceOf(account)) / 10**9;
-//                     amount = amount == 0 ? staker.balanceOf(account) : amount;
-//                     staker.withdraw(amount, account, account);
-//                     assertEq(staker.pendingRewardsOf(rewardToken, account), 0);
-//                 }
-//                 vm.stopPrank();
+    function _depositRewards(uint256 amount) internal {
+        deal(address(_EUL), address(_STAKER), amount + _EUL.balanceOf(address(_STAKER)));
+        _STAKER.notifyRewardAmount(amount);
+        vm.stopPrank();
+    }
+}
 
-//                 assertApproxEqAbs(
-//                     rewardToken.balanceOf(account) + staker.pendingRewardsOf(rewardToken, account),
-//                     pendingRewards[randomIndex],
-//                     10**(decimalReward - 4)
-//                 );
-//             }
+// // deposit amount
+// 2433179688
+// // eTokens staked
+// 2374951696752960587574
+// // withdraw amount
+// 191683066
+// // amount
 
-//             // not working so far I don't know why
-//             // check on claimable rewards / added the Governor to just have an address with no stake --> should be 0
-//             address[5] memory allAccounts = [_alice, _bob, _charlie, _dylan, _hacker];
-//             for (uint256 j = 0; j < allAccounts.length; j++) {
-//                 uint256 prevRewardTokenBalance = rewardToken.balanceOf(allAccounts[j]);
-//                 uint256 functionClaimableRewards = staker.claimableRewards(allAccounts[j], rewardToken);
-//                 uint256[] memory claimedRewards = staker.claim_rewards(allAccounts[j]);
-//                 assertEq(functionClaimableRewards, claimedRewards[0]);
-//                 assertEq(rewardToken.balanceOf(allAccounts[j]) - prevRewardTokenBalance, functionClaimableRewards);
-//                 // Otherwise it has already been taken into account when deposit/withdraw
-//                 if (depositWithdrawRewards[i] % 3 == 2) pendingRewards[j] += functionClaimableRewards;
+// // lower bound amount stake in underlying
+// 2433178387
+// // rate
+// 1024517
+// // balance eToken in underlying
+// 0
+// // looseBalance
+// 0
+// // total
+// 2433178387
+// // hexa staked tokens
+// 2374951696752960587574
+// // unstake amount
+// 187096032569493722408
+// // actual burn amount
+// 187095932569493704406
+// 187095932569493704405
+// // estimated amount staked after withdraw
+// 18709593153581
+// 18709593253581
 
-//                 assertApproxEqAbs(
-//                     rewardToken.balanceOf(allAccounts[j]) + staker.pendingRewardsOf(rewardToken, allAccounts[j]),
-//                     pendingRewards[j],
-//                     10**(decimalReward - 4)
-//                 );
-//             }
-//         }
-//     }
-
-//     // ================================== INTERNAL =================================
-
-//     function _depositRewards(uint256 amount) internal {
-//         deal(address(rewardToken), CRVDistributor, amount);
-//         vm.startPrank(CRVDistributor);
-//         rewardToken.approve(address(gauge), amount);
-//         gauge.deposit_reward_token(address(rewardToken), amount);
-//         vm.stopPrank();
-//     }
-// }
+// 18709603153582
+// 18709603253582

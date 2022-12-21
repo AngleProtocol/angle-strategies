@@ -50,19 +50,35 @@ abstract contract GenericEulerStaker is GenericEuler, OracleMath {
     }
 
     /// @notice Implementation of the `_unstake` function
-    function _unstake(uint256 amount) internal override returns (uint256) {
+    function _unstake(uint256 amount, uint256 rate) internal override returns (uint256) {
         // TODO Possible that with rounding we don't have a balance large enough?
         // just test whether the staked balance is strictly smaller than amount `amountInEToken``
         // and take a lower bound?
-        uint256 amountInEToken = eToken.convertUnderlyingToBalance(amount);
-        _eulerStakingContract().withdraw(amountInEToken);
-        return amount;
+        if (rate == 0) {
+            // choose large underlying amount to not have a null exchange rate
+            uint256 fakeUnderlyingAmount = 10**20;
+            uint256 amountInEToken = eToken.convertUnderlyingToBalance(fakeUnderlyingAmount);
+            rate = (fakeUnderlyingAmount * 10**18) / amountInEToken;
+        }
+        uint256 maxAmountEToken = _eulerStakingContract().balanceOf(address(this));
+        uint256 upperBoundEToken = (amount * 10**18 + (rate - 1)) / rate;
+        // uint256 upperBoundEToken = eToken.convertUnderlyingToBalance(amount) + 1;
+        if (upperBoundEToken > maxAmountEToken) upperBoundEToken = maxAmountEToken;
+        _eulerStakingContract().withdraw(upperBoundEToken);
+        return upperBoundEToken;
     }
 
     /// @notice Get current staked balance
-    function _stakedBalance() internal view override returns (uint256 amount) {
+    /// @return amount Lower bound on balance staked
+    /// @return rate Exchange rate eToken<>Token
+    function _stakedBalance() internal view override returns (uint256 amount, uint256 rate) {
         uint256 amountInEToken = _eulerStakingContract().balanceOf(address(this));
-        return eToken.convertBalanceToUnderlying(amountInEToken);
+        uint256 fakeBalanceAmount = 10**27;
+        amount = eToken.convertBalanceToUnderlying(fakeBalanceAmount);
+        rate = (amount * 10**18) / fakeBalanceAmount;
+        console.log("amount staker ", (amountInEToken * rate) / 10**18);
+        amount = (amountInEToken * rate - (rate - 1)) / 10**18;
+        console.log("lower bound amount staker ", amount, rate);
     }
 
     /// @notice Get stakingAPR after staking an additional `amount`

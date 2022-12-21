@@ -5,6 +5,7 @@ pragma solidity ^0.8.17;
 import { IEuler, IEulerMarkets, IEulerEToken, IEulerDToken, IBaseIRM } from "../../../../interfaces/external/euler/IEuler.sol";
 import "../../../../external/ComputePower.sol";
 import "./../GenericLenderBaseUpgradeable.sol";
+import "hardhat/console.sol";
 
 /// @title GenericEuler
 /// @author Angle Core Team
@@ -101,7 +102,8 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
 
     /// @inheritdoc GenericLenderBaseUpgradeable
     function underlyingBalanceStored() public view override returns (uint256) {
-        return eToken.balanceOfUnderlying(address(this)) + _stakedBalance();
+        (uint256 stakeAmount, ) = _stakedBalance();
+        return eToken.balanceOfUnderlying(address(this)) + stakeAmount;
     }
 
     /// @inheritdoc IGenericLender
@@ -113,7 +115,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
 
     /// @inheritdoc IGenericLender
     function emergencyWithdraw(uint256 amount) external override onlyRole(GUARDIAN_ROLE) {
-        _unstake(amount);
+        _unstake(amount, 0);
         eToken.withdraw(0, amount);
         want.safeTransfer(address(poolManager), want.balanceOf(address(this)));
     }
@@ -166,7 +168,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
 
     /// @notice See `withdraw`
     function _withdraw(uint256 amount) internal returns (uint256) {
-        uint256 stakedBalance = _stakedBalance();
+        (uint256 stakedBalance, uint256 rate) = _stakedBalance();
         uint256 balanceUnderlying = eToken.balanceOfUnderlying(address(this));
         uint256 looseBalance = want.balanceOf(address(this));
         uint256 total = stakedBalance + balanceUnderlying + looseBalance;
@@ -189,7 +191,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
             uint256 toUnstake;
             // We can take all
             if (toWithdraw <= availableLiquidity)
-                toUnstake = toWithdraw > balanceUnderlying + looseBalance
+                toUnstake = toWithdraw > (balanceUnderlying + looseBalance)
                     ? toWithdraw - (balanceUnderlying + looseBalance)
                     : 0;
             else {
@@ -197,7 +199,9 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
                 toUnstake = availableLiquidity > balanceUnderlying ? availableLiquidity - balanceUnderlying : 0;
                 toWithdraw = availableLiquidity;
             }
-            _unstake(toUnstake);
+            console.log("toUnstake ", toUnstake);
+            if (toUnstake > 0) _unstake(toUnstake, rate);
+            console.log("balance ", eToken.balanceOf(address(this)));
             eToken.withdraw(0, toWithdraw);
         }
 
@@ -225,22 +229,23 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     // ============================= VIRTUAL FUNCTIONS =============================
 
     /// @notice Allows the lender to stake its eTokens in an external staking contract
-    /// @param amount Amount of eTokens to stake
+    /// @dev First parameter Amount of eTokens to stake
     /// @return Amount of eTokens actually staked
-    function _stake(uint256 amount) internal virtual returns (uint256) {
-        return amount;
+    function _stake(uint256) internal virtual returns (uint256) {
+        return 0;
     }
 
     /// @notice Allows the lender to unstake its eTokens from an external staking contract
-    /// @param amount Amount of eToken to unstake
+    /// @dev First parameter Amount of token to unstake
+    /// @dev Second parameter is the rate between eToken<>Token, only needed when we stake
     /// @return Amount of eTokens actually unstaked
-    function _unstake(uint256 amount) internal virtual returns (uint256) {
-        return amount;
+    function _unstake(uint256, uint256) internal virtual returns (uint256) {
+        return 0;
     }
 
     /// @notice Gets the amount of eTokens currently staked
-    function _stakedBalance() internal view virtual returns (uint256) {
-        return 0;
+    function _stakedBalance() internal view virtual returns (uint256, uint256) {
+        return (0, 0);
     }
 
     /// @notice Calculates APR from Liquidity Mining Program
