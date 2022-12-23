@@ -230,7 +230,6 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
 
     /// @notice Allows the lender to unstake its eTokens from an external staking contract
     /// @dev First parameter Amount of token to unstake
-    /// @dev Second parameter is the rate between eToken<>Token, only needed when we stake
     /// @return Amount of eTokens actually unstaked
     function _unstake(uint256) internal virtual returns (uint256) {
         return 0;
@@ -243,7 +242,6 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
 
     /// @notice Calculates APR from Liquidity Mining Program
     /// @dev amountToAdd Amount to add to the currently supplied liquidity (for the `aprAfterDeposit` function)
-    /// @dev For the moment no on-chain tracking of rewards (+ only for borrowers for now)
     function _stakingApr(uint256) internal view virtual returns (uint256) {
         return 0;
     }
