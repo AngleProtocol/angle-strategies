@@ -43,30 +43,25 @@ abstract contract GenericEulerStaker is GenericEuler, OracleMath {
 
     // ============================= VIRTUAL FUNCTIONS =============================
 
-    /// @notice Implementation of the `_stake` function to stake eToken in the Euler staking contract
+    /// @inheritdoc GenericEuler
     function _stakeAll() internal override {
         _eulerStakingContract().stake(eToken.balanceOf(address(this)));
     }
 
-    /// @notice Implementation of the `_unstake` function
-    function _unstake(uint256 amount) internal override returns (uint256) {
-        // uint256 maxAmountEToken = _eulerStakingContract().balanceOf(address(this));
-        // Take an upper bound as withdrawing from Euler could lead to rounding issue
-        uint256 upperBoundEToken = eToken.convertUnderlyingToBalance(amount) + 1;
-        // if (upperBoundEToken > maxAmountEToken) upperBoundEToken = maxAmountEToken;
-        _eulerStakingContract().withdraw(upperBoundEToken);
-        return upperBoundEToken;
+    /// @inheritdoc GenericEuler
+    function _unstake(uint256 amount) internal override returns (uint256 eTokensUnstaked) {
+        // Take an upper bound as when withdrawing from Euler there could be rounding issue
+        eTokensUnstaked = eToken.convertUnderlyingToBalance(amount) + 1;
+        _eulerStakingContract().withdraw(eTokensUnstaked);
     }
 
-    /// @notice Get current staked balance
-    /// @return amount Lower bound on balance staked
+    /// @inheritdoc GenericEuler
     function _stakedBalance() internal view override returns (uint256 amount) {
         uint256 amountInEToken = _eulerStakingContract().balanceOf(address(this));
         amount = eToken.convertBalanceToUnderlying(amountInEToken);
     }
 
-    /// @notice Get stakingAPR after staking an additional `amount`
-    /// @param amount Virtual amount to be staked
+    /// @inheritdoc GenericEuler
     function _stakingApr(uint256 amount) internal view override returns (uint256 apr) {
         uint256 periodFinish = _eulerStakingContract().periodFinish();
         uint256 newTotalSupply = _eulerStakingContract().totalSupply() + eToken.convertUnderlyingToBalance(amount);
