@@ -21,6 +21,8 @@ interface IEulerStakingRewards {
 
     function totalSupply() external view returns (uint256);
 
+    function periodFinish() external view returns (uint256);
+
     // Mutative
 
     function exit() external;

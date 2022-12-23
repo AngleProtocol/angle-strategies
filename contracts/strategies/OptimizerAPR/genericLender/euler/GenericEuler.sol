@@ -5,7 +5,6 @@ pragma solidity ^0.8.17;
 import { IEuler, IEulerMarkets, IEulerEToken, IEulerDToken, IBaseIRM } from "../../../../interfaces/external/euler/IEuler.sol";
 import "../../../../external/ComputePower.sol";
 import "./../GenericLenderBaseUpgradeable.sol";
-import "hardhat/console.sol";
 
 /// @title GenericEuler
 /// @author Angle Core Team
@@ -199,9 +198,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
                 toUnstake = availableLiquidity > balanceUnderlying ? availableLiquidity - balanceUnderlying : 0;
                 toWithdraw = availableLiquidity;
             }
-            console.log("toUnstake ", toUnstake);
             if (toUnstake > 0) _unstake(toUnstake);
-            console.log("balance ", eToken.balanceOf(address(this)));
             eToken.withdraw(0, toWithdraw);
         }
 
