@@ -82,7 +82,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         eToken.deposit(0, balance);
         // We don't stake balance but the whole aTokenBalance
         // if some dust has been kept idle
-        _stake(eToken.balanceOf(address(this)));
+        _stakeAll();
     }
 
     /// @inheritdoc IGenericLender
@@ -226,11 +226,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     // ============================= VIRTUAL FUNCTIONS =============================
 
     /// @notice Allows the lender to stake its eTokens in an external staking contract
-    /// @dev First parameter Amount of eTokens to stake
-    /// @return Amount of eTokens actually staked
-    function _stake(uint256) internal virtual returns (uint256) {
-        return 0;
-    }
+    function _stakeAll() internal virtual {}
 
     /// @notice Allows the lender to unstake its eTokens from an external staking contract
     /// @dev First parameter Amount of token to unstake

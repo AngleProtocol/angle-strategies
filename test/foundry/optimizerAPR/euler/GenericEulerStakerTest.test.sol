@@ -321,74 +321,78 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
         assertApproxEqAbs(lender.underlyingBalanceStored(), amount, 1 wei);
     }
 
-    function testMultiRewardsSuccess(
-        uint256[REWARDS_LENGTH] memory amounts,
-        uint256[REWARDS_LENGTH] memory isDepositWithdrawBorrow,
-        uint64[REWARDS_LENGTH] memory elapseTime
-    ) public {
-        vm.warp(block.timestamp + 86400 * 7 * 2);
+    // function testMultiRewardsSuccess(
+    //     uint256[REWARDS_LENGTH] memory amounts,
+    //     uint256[REWARDS_LENGTH] memory isDepositWithdrawBorrow,
+    //     uint64[REWARDS_LENGTH] memory elapseTime
+    // ) public {
+    //     vm.warp(block.timestamp + 86400 * 7 * 2);
 
-        uint256 depositedBalance;
-        uint256 lastReward;
-        for (uint256 i = 1; i < amounts.length; ++i) {
-            isDepositWithdrawBorrow[i] = bound(isDepositWithdrawBorrow[i], 0, 3);
-            if (isDepositWithdrawBorrow[i] == 1 && depositedBalance == 0) isDepositWithdrawBorrow[i] = 0;
-            if (isDepositWithdrawBorrow[i] == 0) {
-                uint256 amount = bound(amounts[i], 1, maxTokenAmount);
-                deal(address(_TOKEN), address(strat), amount);
-                vm.prank(_KEEPER);
-                strat.harvest();
-                depositedBalance += amount;
-            } else if (isDepositWithdrawBorrow[i] == 1) {
-                uint256 propWithdraw = bound(amounts[i], 1, 10**9);
-                uint256 toWithdraw = (propWithdraw * depositedBalance) / BASE_PARAMS;
-                if (toWithdraw < minTokenAmount) toWithdraw = minTokenAmount;
-                if (toWithdraw > depositedBalance) toWithdraw = depositedBalance;
-                vm.prank(_KEEPER);
-                lender.withdraw(toWithdraw);
-                depositedBalance -= toWithdraw;
-            } else if (isDepositWithdrawBorrow[i] == 2) {
-                uint256 amount = bound(amounts[i], 1, maxTokenAmount);
-                uint256 toBorrow = amount / 2;
-                deal(address(_TOKEN), address(_BOB), amount);
-                vm.startPrank(_BOB);
-                _TOKEN.approve(address(_euler), amount);
-                _eUSDC.deposit(0, amount);
-                if (toBorrow > 0) _dUSDC.borrow(0, toBorrow);
-                vm.stopPrank();
-            } else {
-                uint256 amount = bound(amounts[i], 10**18, 10**(18 + 4));
-                _depositRewards(amount);
-                lastReward = amount;
-            }
-            // uint256 nativeAPR = lender.apr();
-            // assertApproxEqAbs(_TOKEN.balanceOf(address(lender)), 0, 1 wei);
-            // assertApproxEqAbs(lender.nav(), depositedBalance, 1 wei);
-            // assertApproxEqAbs(lender.underlyingBalanceStored(), depositedBalance, 1 wei);
+    //     uint256 depositedBalance;
+    //     uint256 lastReward;
+    //     for (uint256 i = 1; i < amounts.length; ++i) {
+    //         isDepositWithdrawBorrow[i] = bound(isDepositWithdrawBorrow[i], 0, 3);
+    //         if (isDepositWithdrawBorrow[i] == 1 && depositedBalance == 0) isDepositWithdrawBorrow[i] = 0;
+    //         if (isDepositWithdrawBorrow[i] == 0) {
+    //             uint256 amount = bound(amounts[i], 1, maxTokenAmount);
+    //             deal(address(_TOKEN), address(strat), amount);
+    //             vm.prank(_KEEPER);
+    //             strat.harvest();
+    //             depositedBalance += amount;
+    //         } else if (isDepositWithdrawBorrow[i] == 1) {
+    //             uint256 propWithdraw = bound(amounts[i], 1, 10**9);
+    //             uint256 toWithdraw = (propWithdraw * depositedBalance) / BASE_PARAMS;
+    //             if (toWithdraw < minTokenAmount) toWithdraw = minTokenAmount;
+    //             if (toWithdraw > depositedBalance) toWithdraw = depositedBalance;
+    //             vm.prank(_KEEPER);
+    //             lender.withdraw(toWithdraw);
+    //             depositedBalance -= toWithdraw;
+    //         } else if (isDepositWithdrawBorrow[i] == 2) {
+    //             uint256 amount = bound(amounts[i], 1, maxTokenAmount);
+    //             uint256 toBorrow = amount / 2;
+    //             deal(address(_TOKEN), address(_BOB), amount);
+    //             vm.startPrank(_BOB);
+    //             _TOKEN.approve(address(_euler), amount);
+    //             _eUSDC.deposit(0, amount);
+    //             if (toBorrow > 0) _dUSDC.borrow(0, toBorrow);
+    //             vm.stopPrank();
+    //         } else {
+    //             uint256 amount = bound(amounts[i], 10**18, 10**(18 + 4));
+    //             _depositRewards(amount);
+    //             lastReward = amount;
+    //         }
+    //         // uint256 nativeAPR = lender.apr();
+    //         // assertApproxEqAbs(_TOKEN.balanceOf(address(lender)), 0, 1 wei);
+    //         // assertApproxEqAbs(lender.nav(), depositedBalance, 1 wei);
+    //         // assertApproxEqAbs(lender.underlyingBalanceStored(), depositedBalance, 1 wei);
 
-            // advance in time for rewards to be taken into account
-            elapseTime[i] = uint64(bound(elapseTime[i], 1, 86400 * 7));
-            vm.warp(block.timestamp + elapseTime[i]);
+    //         // advance in time for rewards to be taken into account
+    //         elapseTime[i] = uint64(bound(elapseTime[i], 1, 86400 * 7));
+    //         vm.warp(block.timestamp + elapseTime[i]);
 
-            // uint256 estimatedNewBalance = depositedBalance +
-            //     (depositedBalance * nativeAPR * elapseTime[i]) /
-            //     (365 days * BASE_TOKENS);
-            // assertApproxEqAbs(lender.nav(), estimatedNewBalance, estimatedNewBalance / 10**5);
-            // to not have accumulating errors
-            {
-                uint256 totSupply = _STAKER.totalSupply();
-                uint256 periodFinish = _STAKER.periodFinish();
-                uint256 beginning = (block.timestamp - elapseTime[i]);
-                if (totSupply > 0 && periodFinish > beginning) {
-                    uint256 toClaim = (_STAKER.balanceOf(address(lender)) * lastReward * (periodFinish - beginning)) /
-                        (totSupply * (14 days));
-                    uint256 prevBalance = _EUL.balanceOf(address(lender));
-                    lender.claimRewards();
-                    assertApproxEqAbs(_EUL.balanceOf(address(lender)) - prevBalance, toClaim, 10 wei);
-                }
-            }
-            depositedBalance = lender.nav();
-        }
+    //         // uint256 estimatedNewBalance = depositedBalance +
+    //         //     (depositedBalance * nativeAPR * elapseTime[i]) /
+    //         //     (365 days * BASE_TOKENS);
+    //         // assertApproxEqAbs(lender.nav(), estimatedNewBalance, estimatedNewBalance / 10**5);
+    //         // to not have accumulating errors
+    //         {
+    //             uint256 totSupply = _STAKER.totalSupply();
+    //             uint256 periodFinish = _STAKER.periodFinish();
+    //             uint256 beginning = (block.timestamp - elapseTime[i]);
+    //             console.log("totSupply ", totSupply);
+    //             console.log("periodFinish ", periodFinish);
+    //             console.log("beginning ", beginning);
+    //             console.log("balance ", _STAKER.balanceOf(address(lender)));
+    //             if (totSupply > 0 && periodFinish > beginning) {
+    //                 uint256 toClaim = (_STAKER.balanceOf(address(lender)) * lastReward * (periodFinish - beginning)) /
+    //                     (totSupply * (14 days));
+    //                 uint256 prevBalance = _EUL.balanceOf(address(lender));
+    //                 lender.claimRewards();
+    //                 assertApproxEqAbs(_EUL.balanceOf(address(lender)) - prevBalance, toClaim, 10 wei);
+    //             }
+    //         }
+    //         depositedBalance = lender.nav();
+    //     }
     }
 
     // ================================== INTERNAL =================================

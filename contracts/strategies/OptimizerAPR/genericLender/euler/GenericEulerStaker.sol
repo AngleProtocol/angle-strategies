@@ -44,15 +44,14 @@ abstract contract GenericEulerStaker is GenericEuler, OracleMath {
     // ============================= VIRTUAL FUNCTIONS =============================
 
     /// @notice Implementation of the `_stake` function to stake eToken in the Euler staking contract
-    function _stake(uint256 amount) internal override returns (uint256) {
-        _eulerStakingContract().stake(amount);
-        return amount;
+    function _stakeAll() internal override {
+        _eulerStakingContract().stake(eToken.balanceOf(address(this)));
     }
 
     /// @notice Implementation of the `_unstake` function
     function _unstake(uint256 amount) internal override returns (uint256) {
         // uint256 maxAmountEToken = _eulerStakingContract().balanceOf(address(this));
-        // Take an upper bound as whe withdrawing from Euler there could be rounding issue
+        // Take an upper bound as withdrawing from Euler could lead to rounding issue
         uint256 upperBoundEToken = eToken.convertUnderlyingToBalance(amount) + 1;
         // if (upperBoundEToken > maxAmountEToken) upperBoundEToken = maxAmountEToken;
         _eulerStakingContract().withdraw(upperBoundEToken);
@@ -105,7 +104,7 @@ abstract contract GenericEulerStaker is GenericEuler, OracleMath {
         // Computing the `quoteAmount` from the ticks obtained from Uniswap
         uint256 amountInETH = _getQuoteAtTick(timeWeightedAverageTick, quoteAmount, isUniMultiplied);
 
-        (, int256 ethPriceUSD, , , ) = _chainlinkOracleEUL().latestRoundData();
+        int256 ethPriceUSD = _chainlinkOracleEUL();
         // ethPriceUSD is in base 8
         return (uint256(ethPriceUSD) * amountInETH) / 1e8;
     }
@@ -121,7 +120,7 @@ abstract contract GenericEulerStaker is GenericEuler, OracleMath {
     }
 
     /// @notice Return Chainlink oracle used to price the out token of the Uniswap pool
-    function _chainlinkOracleEUL() internal view virtual returns (AggregatorV3Interface) {
-        return AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
+    function _chainlinkOracleEUL() internal view virtual returns (int256 ethPriceUSD) {
+        (, ethPriceUSD, , , ) = AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419).latestRoundData();
     }
 }
