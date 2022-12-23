@@ -80,7 +80,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     function deposit() external override onlyRole(STRATEGY_ROLE) {
         uint256 balance = want.balanceOf(address(this));
         eToken.deposit(0, balance);
-        // We don't stake balance but the whole aTokenBalance
+        // We don't stake balance but the whole eToken Balance
         // if some dust has been kept idle
         _stakeAll();
     }
@@ -121,7 +121,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
 
     // ============================= INTERNAL FUNCTIONS ============================
 
-    /// @notice See `apr`
+    /// @inheritdoc GenericLenderBaseUpgradeable
     function _apr() internal view override returns (uint256) {
         return _aprAfterDeposit(0);
     }
@@ -194,7 +194,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
                     ? toWithdraw - (balanceUnderlying + looseBalance)
                     : 0;
             else {
-                // take all we can
+                // Take all we can
                 toUnstake = availableLiquidity > balanceUnderlying ? availableLiquidity - balanceUnderlying : 0;
                 toWithdraw = availableLiquidity;
             }
@@ -229,13 +229,12 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     function _stakeAll() internal virtual {}
 
     /// @notice Allows the lender to unstake its eTokens from an external staking contract
-    /// @dev First parameter Amount of token to unstake
     /// @return Amount of eTokens actually unstaked
     function _unstake(uint256) internal virtual returns (uint256) {
         return 0;
     }
 
-    /// @notice Gets the amount of eTokens currently staked
+    /// @notice Gets the value of the eTokens currently staked
     function _stakedBalance() internal view virtual returns (uint256) {
         return (0);
     }
