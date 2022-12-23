@@ -32,7 +32,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
 
     /// @notice Router used for swaps
     // solhint-disable-next-line
-    address private constant _oneInch = 0x1111111254fb6c44bAC0beD2854e76F90643097d;
+    address private constant _oneInch = 0x1111111254EEB25477B68fb85Ed929f73A960582;
     /// @notice Chainlink oracle used to fetch data
     // solhint-disable-next-line
     AggregatorV3Interface private constant _chainlinkOracle =
