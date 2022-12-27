@@ -102,6 +102,7 @@ jobs:
       - name: Run Foundry tests
         run: yarn foundry:test
         env:
+          ETH_NODE_URI_ETH_FOUNDRY: ${{secrets.ETH_NODE_URI_ETH_FOUNDRY}}
           ETH_NODE_URI_MAINNET: ${{ secrets.ETH_NODE_URI_MAINNET }}
           ETH_NODE_URI_POLYGON: ${{ secrets.ETH_NODE_URI_POLYGON }}
           ETH_NODE_URI_GOERLI: ${{ secrets.ETH_NODE_URI_GOERLI }}
