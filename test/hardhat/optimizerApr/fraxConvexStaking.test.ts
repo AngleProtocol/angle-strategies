@@ -158,7 +158,7 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       true,
       DAY,
     ));
-    oneInch = '0x1111111254fb6c44bAC0beD2854e76F90643097d';
+    oneInch = '0x1111111254EEB25477B68fb85Ed929f73A960582';
     amountStorage = ethers.utils.hexStripZeros(utils.parseEther('1').toHexString());
   });
 

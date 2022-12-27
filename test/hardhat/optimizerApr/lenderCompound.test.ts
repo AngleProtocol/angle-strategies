@@ -101,7 +101,7 @@ describe('OptimizerAPR - lenderCompound', () => {
     guardianError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${guardianRole}`;
     strategyError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${strategyRole}`;
     keeperError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${keeperRole}`;
-    // oneInch = '0x1111111254fb6c44bAC0beD2854e76F90643097d';
+    // oneInch = '0x1111111254EEB25477B68fb85Ed929f73A960582';
   });
 
   beforeEach(async () => {
