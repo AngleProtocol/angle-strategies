@@ -19,10 +19,10 @@ import {
   randomDeposit,
   randomWithdraw,
   wait,
-} from '../../test/utils-interaction';
+} from '../../test/hardhat/utils-interaction';
 import { OptimizerAPRStrategy, OptimizerAPRStrategy__factory } from '../../typechain';
-import { time } from '../../test/test-utils/helpers';
-import { DAY } from '../../test/contants';
+import { time } from '../../test/hardhat/test-utils/helpers';
+import { DAY } from '../../test/hardhat/contants';
 
 async function main() {
   // =============== Simulation parameters ====================

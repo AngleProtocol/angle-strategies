@@ -15,7 +15,7 @@ import {
   PoolManager,
   PoolManager__factory,
 } from '../../../typechain';
-import { logBN } from '../../../test/utils-interaction';
+import { logBN } from '../../../test/hardhat/utils-interaction';
 
 async function main() {
   // =============== Simulation parameters ====================

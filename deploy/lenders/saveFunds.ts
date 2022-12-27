@@ -12,7 +12,7 @@ import {
   OptimizerAPRStrategy,
   OptimizerAPRStrategy__factory,
 } from '../../typechain';
-import { impersonate } from '../../test/test-utils';
+import { impersonate } from '../../test/hardhat/test-utils';
 import {
   GenericAave,
   GenericAave__factory,

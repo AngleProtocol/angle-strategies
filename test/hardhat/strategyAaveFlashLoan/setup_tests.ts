@@ -16,7 +16,7 @@ import {
   IProtocolDataProvider__factory,
   PoolManager,
   PoolManager__factory,
-} from '../../typechain';
+} from '../../../typechain';
 import { deploy } from '../test-utils';
 
 export const logBN = (amount: BigNumber, { base = 6, pad = 20, sign = false } = {}): string => {
@@ -148,9 +148,9 @@ export async function setup(startBlocknumber?: number, collat = 'USDC') {
   Balance USDC:     ${logBN(await wantToken.balanceOf(strategy.address), { base: wantTokenBase })}
   Balance stkAave:  ${logBN(await stkAave.balanceOf(strategy.address), { base: 18 })}
   Rewards:          ${logBN(
-    await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
-    { base: 18 },
-  )}
+      await incentivesController.getRewardsBalance([aToken.address, debtToken.address], strategy.address),
+      { base: 18 },
+    )}
   `);
 
   const logPosition = async () =>

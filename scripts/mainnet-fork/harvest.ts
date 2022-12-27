@@ -9,7 +9,7 @@ import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
 import { network, ethers } from 'hardhat';
 import { parseUnits } from 'ethers/lib/utils';
 import { ERC20, ERC20__factory, OptimizerAPRStrategy, OptimizerAPRStrategy__factory } from '../../typechain';
-import { logBN } from '../../test/utils-interaction';
+import { logBN } from '../../test/hardhat/utils-interaction';
 
 async function main() {
   // =============== Simulation parameters ====================

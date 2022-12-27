@@ -3,7 +3,7 @@ import { DeployFunction } from 'hardhat-deploy/types';
 import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
 import { BigNumber } from 'ethers';
 import { GenericAaveNoStaker__factory, OptimizerAPRStrategy, OptimizerAPRStrategy__factory } from '../../typechain';
-import { impersonate } from '../../test/test-utils';
+import { impersonate } from '../../test/hardhat/test-utils';
 
 const func: DeployFunction = async ({ deployments, ethers }) => {
   const { deploy } = deployments;

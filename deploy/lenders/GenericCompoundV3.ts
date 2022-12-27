@@ -11,7 +11,7 @@ import {
   OptimizerAPRStrategy__factory,
 } from '../../typechain';
 import { parseUnits } from 'ethers/lib/utils';
-import { impersonate } from '../../test/test-utils';
+import { impersonate } from '../../test/hardhat/test-utils';
 
 const func: DeployFunction = async ({ deployments, ethers }) => {
   const { deploy } = deployments;

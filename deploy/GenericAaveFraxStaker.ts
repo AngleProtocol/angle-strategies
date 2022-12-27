@@ -2,7 +2,7 @@ import hre, { network } from 'hardhat';
 import { DeployFunction } from 'hardhat-deploy/types';
 import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
 import { GenericAaveFraxStaker__factory, OptimizerAPRStrategy, OptimizerAPRStrategy__factory } from '../typechain';
-import { DAY } from '../test/contants';
+import { DAY } from '../test/hardhat/contants';
 import { BigNumber } from 'ethers';
 
 const func: DeployFunction = async ({ deployments, ethers }) => {
