@@ -21,7 +21,7 @@ contract GenericEulerStaker is GenericEuler, OracleMath {
 
     // ================================= VARIABLES =================================
     IEulerStakingRewards public eulerStakingContract;
-    AggregatorV3Interface public chainlinkOracleEUL;
+    AggregatorV3Interface public chainlinkOracle;
     IUniswapV3Pool public pool;
     uint8 public isUniMultiplied;
 
@@ -35,13 +35,13 @@ contract GenericEulerStaker is GenericEuler, OracleMath {
         address guardian,
         address[] memory keeperList,
         IEulerStakingRewards _eulerStakingContract,
-        AggregatorV3Interface _chainlinkOracleEUL,
+        AggregatorV3Interface _chainlinkOracle,
         IUniswapV3Pool _pool,
         uint8 _isUniMultiplied
     ) external {
         initializeEuler(_strategy, _name, governorList, guardian, keeperList);
         eulerStakingContract = _eulerStakingContract;
-        chainlinkOracleEUL = _chainlinkOracleEUL;
+        chainlinkOracle = _chainlinkOracle;
         pool = _pool;
         isUniMultiplied = _isUniMultiplied;
         IERC20(address(eToken)).safeApprove(address(_eulerStakingContract), type(uint256).max);
@@ -115,9 +115,10 @@ contract GenericEulerStaker is GenericEuler, OracleMath {
 
     // ============================= VIRTUAL FUNCTIONS =============================
 
-    /// @notice Return Chainlink oracle used to price the out token of the Uniswap pool
+    /// @notice Return quote amount of the EUL amount
     function _quoteOracleEUL(uint256 amount) internal view virtual returns (uint256 quoteAmount) {
-        (, int256 ethPriceUSD, , , ) = chainlinkOracleEUL.latestRoundData();
+        // no stale checks are made as it is only used to estimate the staking APR
+        (, int256 ethPriceUSD, , , ) = chainlinkOracle.latestRoundData();
         // ethPriceUSD is in base 8
         return (uint256(ethPriceUSD) * amount) / 1e8;
     }
