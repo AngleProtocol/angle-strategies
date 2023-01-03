@@ -5,7 +5,7 @@ import "../../BaseTest.test.sol";
 import { OracleMath } from "../../../../contracts/utils/OracleMath.sol";
 import { PoolManager } from "../../../../contracts/mock/MockPoolManager2.sol";
 import { OptimizerAPRStrategy } from "../../../../contracts/strategies/OptimizerAPR/OptimizerAPRStrategy.sol";
-import { GenericEulerStakerUSDC, IERC20, IEulerStakingRewards, IEuler, IEulerEToken, IEulerDToken, IGenericLender, AggregatorV3Interface, IUniswapV3Pool } from "../../../../contracts/strategies/OptimizerAPR/genericLender/euler/implementations/GenericEulerStakerUSDC.sol";
+import { GenericEulerStaker, IERC20, IEulerStakingRewards, IEuler, IEulerEToken, IEulerDToken, IGenericLender, AggregatorV3Interface, IUniswapV3Pool } from "../../../../contracts/strategies/OptimizerAPR/genericLender/euler/GenericEulerStaker.sol";
 
 interface IMinimalLiquidityGauge {
     // solhint-disable-next-line
@@ -23,6 +23,11 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
     IEuler private constant _euler = IEuler(0x27182842E098f60e3D576794A5bFFb0777E025d3);
     IEulerEToken internal constant _eUSDC = IEulerEToken(0xEb91861f8A4e1C12333F42DCE8fB0Ecdc28dA716);
     IEulerDToken internal constant _dUSDC = IEulerDToken(0x84721A3dB22EB852233AEAE74f9bC8477F8bcc42);
+    IUniswapV3Pool private constant _POOL = IUniswapV3Pool(0xB003DF4B243f938132e8CAdBEB237AbC5A889FB4);
+    uint8 private constant _IS_UNI_MULTIPLIED = 0;
+    AggregatorV3Interface private constant _CHAINLINK =
+        AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
+
     uint8 internal constant _DECIMAL_REWARD = 18;
     uint8 internal constant _DECIMAL_TOKEN = 6;
     uint256 internal constant _U_OPTIMAL = 8 * 10**17;
@@ -33,8 +38,8 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
     PoolManager public manager;
     OptimizerAPRStrategy public stratImplementation;
     OptimizerAPRStrategy public strat;
-    GenericEulerStakerUSDC public lenderImplementation;
-    GenericEulerStakerUSDC public lender;
+    GenericEulerStaker public lenderImplementation;
+    GenericEulerStaker public lender;
     uint256 public maxTokenAmount = 10**(_DECIMAL_TOKEN + 6);
     uint256 public minTokenAmount = 10**(_DECIMAL_TOKEN - 1);
 
@@ -63,8 +68,8 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
         vm.prank(_GOVERNOR);
         manager.addStrategy(address(strat), 10**9);
 
-        lenderImplementation = new GenericEulerStakerUSDC();
-        lender = GenericEulerStakerUSDC(
+        lenderImplementation = new GenericEulerStaker();
+        lender = GenericEulerStaker(
             deployUpgradeable(
                 address(lenderImplementation),
                 abi.encodeWithSelector(
@@ -73,7 +78,11 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
                     "Euler lender staker USDC",
                     governorList,
                     _GUARDIAN,
-                    keeperList
+                    keeperList,
+                    _STAKER,
+                    _CHAINLINK,
+                    _POOL,
+                    _IS_UNI_MULTIPLIED
                 )
             )
         );
