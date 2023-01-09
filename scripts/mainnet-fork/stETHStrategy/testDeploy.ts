@@ -25,7 +25,7 @@ import {
   randomMint,
   randomWithdraw,
   wait,
-} from '../../../test/utils-interaction';
+} from '../../../test/hardhat/utils-interaction';
 import { StETHStrategy, StETHStrategy__factory } from '../../../typechain';
 
 async function main() {

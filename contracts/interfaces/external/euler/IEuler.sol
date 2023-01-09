@@ -307,6 +307,16 @@ interface IEulerEToken is IEulerConstants {
     /// @param subAccountId 0 for primary, 1-255 for a sub-account
     /// @param amount In underlying units (use max uint256 for full pool balance)
     function withdraw(uint256 subAccountId, uint256 amount) external;
+
+    /// @notice Convert an eToken balance to an underlying amount, taking into account current exchange rate
+    /// @param balance eToken balance, in internal book-keeping units (18 decimals)
+    /// @return Amount in underlying units, (same decimals as underlying token)
+    function convertBalanceToUnderlying(uint256 balance) external view returns (uint256);
+
+    /// @notice Convert an underlying amount to an eToken balance, taking into account current exchange rate
+    /// @param underlyingAmount Amount in underlying units (same decimals as underlying token)
+    /// @return eToken balance, in internal book-keeping units (18 decimals)
+    function convertUnderlyingToBalance(uint256 underlyingAmount) external view returns (uint256);
 }
 
 interface IEulerDToken is IEulerConstants {

@@ -29,7 +29,7 @@ import {
   randomMint,
   // randomWithdraw,
   wait,
-} from '../../../test/utils-interaction';
+} from '../../../test/hardhat/utils-interaction';
 import {
   IStableSwapPool,
   IStableSwapPool__factory,
