@@ -17,6 +17,7 @@ import {
   PoolManager,
 } from '../../../typechain';
 import { deploy, impersonate, latestTime } from '../test-utils';
+import { time } from '../test-utils/helpers';
 import { BASE_PARAMS } from '../utils';
 import { findBalancesSlot, setTokenBalanceFor } from '../utils-interaction';
 
@@ -119,7 +120,7 @@ describe('AaveFlashloanStrategy - Coverage', () => {
     beforeEach(async () => {
       await (await poolManager.addStrategy(strategy.address, utils.parseUnits('0.75', 9))).wait();
 
-      const balanceSlot = await findBalancesSlot(wantToken.address);
+      let balanceSlot = await findBalancesSlot(wantToken.address);
       await setTokenBalanceFor(wantToken, user.address, _startAmount, balanceSlot);
 
       // sending funds to emission controller
@@ -136,6 +137,11 @@ describe('AaveFlashloanStrategy - Coverage', () => {
 
       await wantToken.connect(user).transfer(poolManager.address, parseUnits(_startAmount.toString(), decimalsToken));
       await strategy.connect(keeper)['harvest()']({ gasLimit: 3e6 });
+
+      // add aUSDC to strategy balance sheet to not have revert errors if the delay between blocks is to large when testing
+      balanceSlot = await findBalancesSlot(aToken.address);
+      await setTokenBalanceFor(aToken, user.address, 1, balanceSlot);
+      await aToken.connect(user).transfer(strategy.address, utils.parseUnits("1", await aToken.decimals()))
     });
 
     describe('adjustPosition', () => {

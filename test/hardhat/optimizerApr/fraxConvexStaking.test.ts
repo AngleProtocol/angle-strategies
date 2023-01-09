@@ -513,7 +513,7 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       // expect(await lenderAave.lastAaveLiquidityIndex()).to.be.equal(ethers.constants.Zero);
       expect(await lenderAave.lastCreatedStake()).to.be.equal(ethers.constants.Zero);
 
-      await setTokenBalanceFor(token, strategy.address, 1);
+      await setTokenBalanceFor(token, strategy.address, 10);
 
       const timestamp = await latestTime();
       await (await strategy.connect(keeper)['harvest()']()).wait();
@@ -523,8 +523,8 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       const underlyingBalance = await lenderAave.underlyingBalanceStored();
       const balanceToken = await lenderAave.nav();
       const balanceTokenStrat = await token.balanceOf(strategy.address);
-      expect(balanceToken).to.be.equal(parseUnits('1', tokenDecimal));
-      expect(underlyingBalance).to.be.closeTo(parseUnits('1', tokenDecimal), parseUnits('10', tokenDecimal));
+      expect(balanceToken).to.be.equal(parseUnits('10', tokenDecimal));
+      expect(underlyingBalance).to.be.closeTo(parseUnits('10', tokenDecimal), parseUnits('10', tokenDecimal));
       expect(balanceTokenStrat).to.be.equal(parseUnits('0', tokenDecimal));
       expect(await lenderAave.hasAssets()).to.be.equal(false);
     });
