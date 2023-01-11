@@ -106,7 +106,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     }
 
     /// @inheritdoc IGenericLender
-    function aprAfterDeposit(uint256 amount) external view override returns (uint256) {
+    function aprAfterDeposit(int256 amount) external view override returns (uint256) {
         return _aprAfterDeposit(amount);
     }
 
@@ -127,10 +127,13 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     }
 
     /// @notice Internal version of the `aprAfterDeposit` function
-    function _aprAfterDeposit(uint256 amount) internal view returns (uint256) {
+    function _aprAfterDeposit(int256 amount) internal view returns (uint256) {
         uint256 totalBorrows = dToken.totalSupply();
         // Total supply is current supply + added liquidity
-        uint256 totalSupply = eToken.totalSupplyUnderlying() + amount;
+
+        uint256 totalSupply = eToken.totalSupplyUnderlying();
+        if (amount > 0) totalSupply += uint256(amount);
+        else totalSupply -= uint256(-amount);
 
         uint256 supplyAPY;
         if (totalSupply > 0) {
@@ -241,7 +244,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
 
     /// @notice Calculates APR from Liquidity Mining Program
     /// @dev amountToAdd Amount to add to the currently supplied liquidity (for the `aprAfterDeposit` function)
-    function _stakingApr(uint256) internal view virtual returns (uint256) {
+    function _stakingApr(int256) internal view virtual returns (uint256) {
         return 0;
     }
 }

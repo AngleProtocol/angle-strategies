@@ -39,7 +39,7 @@ contract GenericAaveNoStaker is GenericAaveUpgradeable {
 
     /// @notice Get stakingAPR after staking an additional `amount`: in this case since nothing
     /// is staked, it simply returns 0
-    function _stakingApr(uint256) internal pure override returns (uint256) {
+    function _stakingApr(int256) internal pure override returns (uint256) {
         return 0;
     }
 }

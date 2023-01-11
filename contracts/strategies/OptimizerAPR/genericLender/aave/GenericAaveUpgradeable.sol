@@ -157,7 +157,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     }
 
     /// @inheritdoc IGenericLender
-    function aprAfterDeposit(uint256 extraAmount) external view override returns (uint256) {
+    function aprAfterDeposit(int256 amount) external view override returns (uint256) {
         // i need to calculate new supplyRate after Deposit (when deposit has not been done yet)
         DataTypes.ReserveData memory reserveData = _lendingPool.getReserveData(address(want));
 
@@ -174,7 +174,9 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
         ) = _protocolDataProvider.getReserveData(address(want));
 
-        uint256 newLiquidity = availableLiquidity + extraAmount;
+        uint256 newLiquidity = availableLiquidity;
+        if (amount > 0) newLiquidity += uint256(amount);
+        else newLiquidity -= uint256(-amount);
 
         (, , , , uint256 reserveFactor, , , , , ) = _protocolDataProvider.getReserveConfigurationData(address(want));
 
@@ -188,7 +190,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
                 reserveFactor
             );
         uint256 incentivesRate = _incentivesRate(newLiquidity + totalStableDebt + totalVariableDebt); // total supplied liquidity in Aave v2
-        uint256 stakingApr = _stakingApr(extraAmount);
+        uint256 stakingApr = _stakingApr(amount);
 
         return newLiquidityRate / 1e9 + incentivesRate + stakingApr; // divided by 1e9 to go from Ray to Wad
     }
@@ -379,5 +381,5 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     /// @notice Gets the APR from staking additional `amount` of aTokens in the associated staking
     /// contract
     /// @param amount Virtual amount to be staked
-    function _stakingApr(uint256 amount) internal view virtual returns (uint256);
+    function _stakingApr(int256 amount) internal view virtual returns (uint256);
 }

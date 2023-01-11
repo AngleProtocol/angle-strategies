@@ -135,6 +135,15 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
 
     /// @notice Harvests the Strategy, recognizing any profits or losses and adjusting
     /// the Strategy's position.
+    /// @param data Any data that can help adjust the position
+    /// @dev Permisionnless so the implementation should be safe in adverserial context
+    function harvest(bytes memory data) external {
+        _report();
+        _adjustPosition(data);
+    }
+
+    /// @notice Harvests the Strategy, recognizing any profits or losses and adjusting
+    /// the Strategy's position.
     /// @param borrowInit Approximate optimal borrows to have faster convergence on the NR method
     function harvest(uint256 borrowInit) external onlyRole(KEEPER_ROLE) {
         _report();
@@ -264,8 +273,13 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     /// could be 0, and you should handle that scenario accordingly.
     function _adjustPosition() internal virtual;
 
-    /// @notice same as _adjustPosition but with an initial parameters
+    /// @notice same as _adjustPosition but with an initial parameter
     function _adjustPosition(uint256) internal virtual;
+
+    /// @notice same as _adjustPosition but with permisionless parameters
+    function _adjustPosition(bytes memory) internal virtual {
+        _adjustPosition();
+    }
 
     /// @notice Liquidates up to `_amountNeeded` of `want` of this strategy's positions,
     /// irregardless of slippage. Any excess will be re-invested with `_adjustPosition()`.

@@ -98,7 +98,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     }
 
     /// @inheritdoc IGenericLender
-    function aprAfterDeposit(uint256 amount) external view override returns (uint256) {
+    function aprAfterDeposit(int256 amount) external view override returns (uint256) {
         uint256 cashPrior = want.balanceOf(address(cToken));
 
         uint256 borrows = cToken.totalBorrows();
@@ -109,10 +109,19 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
         InterestRateModel model = cToken.interestRateModel();
 
+        uint256 newCashPrior = cashPrior;
+        uint256 totalSupplyInWant = (cToken.totalSupply() * cToken.exchangeRateStored()) / 1e18;
+        if (amount > 0) {
+            newCashPrior += uint256(amount);
+            totalSupplyInWant += uint256(amount);
+        } else {
+            newCashPrior -= uint256(-amount);
+            totalSupplyInWant -= uint256(-amount);
+        }
         // The supply rate is derived from the borrow rate, reserve factor and the amount of total borrows.
-        uint256 supplyRate = model.getSupplyRate(cashPrior + amount, borrows, reserves, reserverFactor);
+        uint256 supplyRate = model.getSupplyRate(newCashPrior, borrows, reserves, reserverFactor);
         // Adding the yield from comp
-        return supplyRate * BLOCKS_PER_YEAR + _incentivesRate(amount);
+        return supplyRate * BLOCKS_PER_YEAR + _incentivesRate(totalSupplyInWant);
     }
 
     // ================================= Governance ================================
@@ -136,7 +145,8 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
     /// @notice See `apr`
     function _apr() internal view override returns (uint256) {
-        return cToken.supplyRatePerBlock() * BLOCKS_PER_YEAR + _incentivesRate(0);
+        uint256 totalSupplyInWant = (cToken.totalSupply() * cToken.exchangeRateStored()) / 1e18;
+        return cToken.supplyRatePerBlock() * BLOCKS_PER_YEAR + _incentivesRate(totalSupplyInWant);
     }
 
     /// @notice See `withdraw`
@@ -184,10 +194,9 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     }
 
     /// @notice Calculates APR from Compound's Liquidity Mining Program
-    /// @param amountToAdd Amount to add to the `totalSupplyInWant` (for the `aprAfterDeposit` function)
-    function _incentivesRate(uint256 amountToAdd) internal view returns (uint256) {
+    /// @param totalSupplyInWant Total supply in want for this market (for the `aprAfterDeposit` function)
+    function _incentivesRate(uint256 totalSupplyInWant) internal view returns (uint256) {
         uint256 supplySpeed = comptroller.compSupplySpeeds(address(cToken));
-        uint256 totalSupplyInWant = (cToken.totalSupply() * cToken.exchangeRateStored()) / 1e18 + amountToAdd;
         // `supplySpeed` is in `COMP` unit -> the following operation is going to put it in `want` unit
         supplySpeed = _comptoWant(supplySpeed);
         uint256 incentivesRate;

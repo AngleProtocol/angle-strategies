@@ -153,7 +153,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
 
     /// @notice Get stakingAPR after staking an additional `amount`
     /// @param amount Virtual amount to be staked
-    function _stakingApr(uint256 amount) internal view override returns (uint256 apr) {
+    function _stakingApr(int256 amount) internal view override returns (uint256 apr) {
         // These computations are made possible only because there can only be one staker in the contract
         (uint256 oldCombinedWeight, uint256 newVefxsMultiplier, uint256 newCombinedWeight) = aFraxStakingContract
             .calcCurCombinedWeight(address(this));
@@ -164,12 +164,15 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
         // If we didn't stake we need an extra info on the multiplier per staking period
         // otherwise we reverse engineer the function
         else if (lastLiquidity == 0) {
-            newBalance = amount;
+            // Amount can only be positive as we can't withdraw if there is nothing to this strat
+            newBalance = uint256(amount);
             newCombinedWeight =
                 (newBalance * (aFraxStakingContract.lockMultiplier(stakingPeriod) + newVefxsMultiplier)) /
                 1 ether;
         } else {
-            newBalance = (_stakedBalance() + amount);
+            newBalance = _stakedBalance();
+            if (amount > 0) newBalance += uint256(amount);
+            else newBalance -= uint256(-amount);
             newCombinedWeight = (newBalance * newCombinedWeight) / lastLiquidity;
         }
 
