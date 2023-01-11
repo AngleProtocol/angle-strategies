@@ -243,7 +243,8 @@ contract OptimizerAPRSharesStrategy is BaseStrategyUpgradeable {
         uint64[] memory lenderSharesHint = abi.decode(data, (uint64[]));
 
         uint256 estimatedAprHint;
-        if (lenderSharesHint.length != 0) estimatedAprHint = estimatedAPR(lenderSharesHint);
+        int256[] memory lenderAdjustedAmounts;
+        if (lenderSharesHint.length != 0) (estimatedAprHint, lenderAdjustedAmounts) = estimatedAPR(lenderSharesHint);
         (
             uint256 lowest,
             uint256 lowestApr,
@@ -256,15 +257,14 @@ contract OptimizerAPRSharesStrategy is BaseStrategyUpgradeable {
         if (_totalApr < estimatedAprHint) {
             // not optimal currently, we should better withdraw from excess lenders and then deposit reducing the number of withdraw to be done
             for (uint256 i = 0; i < lendersList.length; i++) {
-                lendersList[i].withdrawAll();
+                if (uint256(lenderAdjustedAmounts[i]) < 0) lendersList[i].withdraw(uint256(-lenderAdjustedAmounts[i]));
             }
 
-            uint256 assets = want.balanceOf(address(this));
-
             for (uint256 i = 0; i < lendersList.length; i++) {
-                uint256 toSend = (assets * lenderSharesHint[i]) / 1000;
-                want.safeTransfer(address(lendersList[i]), toSend);
-                lendersList[i].deposit();
+                if (uint256(lenderAdjustedAmounts[i]) > 0) {
+                    want.safeTransfer(address(lendersList[i]), uint256(lenderAdjustedAmounts[i]));
+                    lendersList[i].deposit();
+                }
             }
         } else {
             if (potential > lowestApr) {
@@ -423,29 +423,34 @@ contract OptimizerAPRSharesStrategy is BaseStrategyUpgradeable {
 
     /// @notice The weighted apr in an hypothetical world where the strategy split its nav in respect to shares
     /// @param shares List of shares that should be allocated to each lender
-    function estimatedAPR(uint64[] memory shares) public view returns (uint256) {
+    function estimatedAPR(uint64[] memory shares)
+        public
+        view
+        returns (uint256 weightedAPR, int256[] memory lenderAdjustedAmounts)
+    {
         uint256 lenderListLength = lenders.length;
+        lenderAdjustedAmounts = new int256[](lenderListLength);
         if (lenderListLength != shares.length) revert IncorrectListLength();
 
         uint256 bal = estimatedTotalAssets();
         if (bal == 0) {
-            return 0;
+            return (weightedAPR, lenderAdjustedAmounts);
         }
 
         uint256 share = 0;
-        uint256 weightedAPR = 0;
         for (uint256 i = 0; i < lenderListLength; i++) {
             share = share + shares[i];
             uint256 futureDeposit = (bal * shares[i]) / _BPS;
             uint256 currentDeposit = lenders[i].underlyingBalanceStored();
             // It won't overflow for decimals <= 18, as it would mean gigantic amounts
             int256 adjustedAmount = int256(futureDeposit) - int256(currentDeposit);
+            lenderAdjustedAmounts[i] = adjustedAmount;
             uint256 aprAfterDelta = lenders[i].aprAfterDeposit(adjustedAmount);
             weightedAPR = weightedAPR + futureDeposit * aprAfterDelta;
         }
         if (share != 10000) revert InvalidShares();
 
-        return weightedAPR / bal;
+        weightedAPR /= bal;
     }
 
     /// @notice Prevents the governance from withdrawing want tokens
