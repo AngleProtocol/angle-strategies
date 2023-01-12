@@ -133,22 +133,18 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
         _adjustPosition();
     }
 
-    /// @notice Harvests the Strategy, recognizing any profits or losses and adjusting
-    /// the Strategy's position.
-    /// @param data Any data that can help adjust the position
-    /// @dev Permisionnless so the implementation should be safe in adverserial context
+    /// @notice Same as the funciton above with a `data` parameter to help adjust the position
+    /// @dev Since this function is permissionless, strategy implementations should be made
+    /// to remain safe regardless of the data that is passed in the call
     function harvest(bytes memory data) external {
         _report();
         _adjustPosition(data);
     }
 
-    /// @notice Harvests the Strategy, recognizing any profits or losses and adjusting
-    /// the Strategy's position.
-    /// @param borrowInit Approximate optimal borrows to have faster convergence on the NR method
+    /// @notice Same as above with a `borrowInit` parameter to help in case of the convergence of the `adjustPosition`
+    /// method
     function harvest(uint256 borrowInit) external onlyRole(KEEPER_ROLE) {
         _report();
-        // Check if free returns are left, and re-invest them, gives an hint on the borrow amount to the NR method
-        // to maximise revenue
         _adjustPosition(borrowInit);
     }
 
