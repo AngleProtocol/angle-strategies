@@ -20,7 +20,7 @@ import {
   randomWithdraw,
   wait,
 } from '../../test/hardhat/utils-interaction';
-import { OptimizerAPRStrategy, OptimizerAPRStrategy__factory } from '../../typechain';
+import { OptimizerAPRGreedyStrategy, OptimizerAPRGreedyStrategy__factory } from '../../typechain';
 import { time } from '../../test/hardhat/test-utils/helpers';
 import { DAY } from '../../test/hardhat/contants';
 
@@ -67,9 +67,9 @@ async function main() {
   ) as PerpetualManagerFront;
   const strategy = new ethers.Contract(
     strategyAddress,
-    OptimizerAPRStrategy__factory.createInterface(),
+    OptimizerAPRGreedyStrategy__factory.createInterface(),
     deployer,
-  ) as OptimizerAPRStrategy;
+  ) as OptimizerAPRGreedyStrategy;
   /*
   const oldLender = new ethers.Contract(
     oldLenderAddress,

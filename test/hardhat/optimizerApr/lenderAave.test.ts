@@ -13,8 +13,8 @@ import {
   ILendingPool__factory,
   IStakedAave,
   IStakedAave__factory,
-  OptimizerAPRStrategy,
-  OptimizerAPRStrategy__factory,
+  OptimizerAPRGreedyStrategy,
+  OptimizerAPRGreedyStrategy__factory,
   PoolManager,
 } from '../../../typechain';
 import { gwei } from '../../../utils/bignumber';
@@ -29,9 +29,9 @@ async function initStrategy(
   keeper: SignerWithAddress,
   manager: PoolManager,
 ): Promise<{
-  strategy: OptimizerAPRStrategy;
+  strategy: OptimizerAPRGreedyStrategy;
 }> {
-  const strategy = (await deployUpgradeable(new OptimizerAPRStrategy__factory(guardian))) as OptimizerAPRStrategy;
+  const strategy = (await deployUpgradeable(new OptimizerAPRGreedyStrategy__factory(guardian))) as OptimizerAPRGreedyStrategy;
   await strategy.initialize(manager.address, governor.address, guardian.address, [keeper.address]);
   await manager.connect(governor).addStrategy(strategy.address, gwei('0.8'));
   return { strategy };
@@ -41,7 +41,7 @@ async function initLenderAave(
   governor: SignerWithAddress,
   guardian: SignerWithAddress,
   keeper: SignerWithAddress,
-  strategy: OptimizerAPRStrategy,
+  strategy: OptimizerAPRGreedyStrategy,
   name: string,
   isIncentivized: boolean,
 ): Promise<{
@@ -56,7 +56,7 @@ async function initLenderAave(
 }
 
 let governor: SignerWithAddress, guardian: SignerWithAddress, user: SignerWithAddress, keeper: SignerWithAddress;
-let strategy: OptimizerAPRStrategy;
+let strategy: OptimizerAPRGreedyStrategy;
 let token: ERC20;
 let tokenDecimal: number;
 let FEI: ERC20;

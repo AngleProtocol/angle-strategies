@@ -4,8 +4,8 @@ import { parseUnits } from 'ethers/lib/utils';
 import {
   GenericCompoundUpgradeable,
   GenericCompoundUpgradeable__factory,
-  OptimizerAPRStrategy,
-  OptimizerAPRStrategy__factory,
+  OptimizerAPRGreedyStrategy,
+  OptimizerAPRGreedyStrategy__factory,
 } from '../../../typechain';
 
 async function main() {
@@ -37,9 +37,9 @@ async function main() {
 
   const strategy = new ethers.Contract(
     strategyAddress,
-    OptimizerAPRStrategy__factory.createInterface(),
+    OptimizerAPRGreedyStrategy__factory.createInterface(),
     deployer,
-  ) as OptimizerAPRStrategy;
+  ) as OptimizerAPRGreedyStrategy;
 
   const lenderCompound = new ethers.Contract(
     lenderAddress,

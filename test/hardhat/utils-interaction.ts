@@ -15,7 +15,7 @@ import { BigNumber, BigNumberish, utils } from 'ethers';
 import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { ethers, network } from 'hardhat';
 
-import { ERC20, ERC20__factory, OptimizerAPRStrategy, StETHStrategy } from '../../typechain';
+import { ERC20, ERC20__factory, OptimizerAPRGreedyStrategy, StETHStrategy } from '../../typechain';
 
 export const wait = (n = 1000): Promise<unknown> => {
   return new Promise(resolve => {
@@ -106,7 +106,7 @@ export const logStETHInfo = async (
 export const logOptimizerInfo = async (
   stableMaster: StableMasterFront,
   poolManager: PoolManager,
-  strategy: OptimizerAPRStrategy,
+  strategy: OptimizerAPRGreedyStrategy,
 ): Promise<void> => {
   const collatAddress = (await stableMaster.collateralMap(poolManager.address)).token;
   const collat = (await ethers.getContractAt(ERC20__factory.abi, collatAddress)) as ERC20;

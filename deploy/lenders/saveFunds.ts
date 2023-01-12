@@ -9,8 +9,8 @@ import {
   IAaveIncentivesController,
   IStakedAave,
   IStakedAave__factory,
-  OptimizerAPRStrategy,
-  OptimizerAPRStrategy__factory,
+  OptimizerAPRGreedyStrategy,
+  OptimizerAPRGreedyStrategy__factory,
 } from '../../typechain';
 import { impersonate } from '../../test/hardhat/test-utils';
 import {
@@ -82,9 +82,9 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
 
       const strategy = new ethers.Contract(
         strategyAddress,
-        OptimizerAPRStrategy__factory.createInterface(),
+        OptimizerAPRGreedyStrategy__factory.createInterface(),
         deployer,
-      ) as OptimizerAPRStrategy;
+      ) as OptimizerAPRGreedyStrategy;
 
       const stkAave = (await ethers.getContractAt(IStakedAave__factory.abi, stkAaveAddress)) as IStakedAave;
       const aave = (await ethers.getContractAt(ERC20__factory.abi, aaveAddress)) as ERC20;

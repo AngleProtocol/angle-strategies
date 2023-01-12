@@ -8,7 +8,7 @@ import {
 import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
 import { network, ethers } from 'hardhat';
 import { parseUnits } from 'ethers/lib/utils';
-import { OptimizerAPRStrategy, OptimizerAPRStrategy__factory } from '../../../typechain';
+import { OptimizerAPRGreedyStrategy, OptimizerAPRGreedyStrategy__factory } from '../../../typechain';
 import { DAY } from '../../../test/hardhat/contants';
 
 async function main() {
@@ -40,9 +40,9 @@ async function main() {
 
   const strategy = new ethers.Contract(
     strategyAddress,
-    OptimizerAPRStrategy__factory.createInterface(),
+    OptimizerAPRGreedyStrategy__factory.createInterface(),
     deployer,
-  ) as OptimizerAPRStrategy;
+  ) as OptimizerAPRGreedyStrategy;
   const poolManager = new ethers.Contract(
     poolManagerAddress,
     PoolManager_Interface,

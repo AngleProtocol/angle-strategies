@@ -1,7 +1,7 @@
 import hre, { network } from 'hardhat';
 import { DeployFunction } from 'hardhat-deploy/types';
 import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
-import { GenericAaveFraxStaker__factory, OptimizerAPRStrategy, OptimizerAPRStrategy__factory } from '../typechain';
+import { GenericAaveFraxStaker__factory, OptimizerAPRGreedyStrategy, OptimizerAPRGreedyStrategy__factory } from '../typechain';
 import { DAY } from '../test/hardhat/contants';
 import { BigNumber } from 'ethers';
 
@@ -37,9 +37,9 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
 
   const strategy = new ethers.Contract(
     strategyAddress,
-    OptimizerAPRStrategy__factory.createInterface(),
+    OptimizerAPRGreedyStrategy__factory.createInterface(),
     deployer,
-  ) as OptimizerAPRStrategy;
+  ) as OptimizerAPRGreedyStrategy;
 
   let lenderImplementation = await deployments.getOrNull(
     `GenericAave_${stableName}_${collateralName}_Staker_Implementation`,
