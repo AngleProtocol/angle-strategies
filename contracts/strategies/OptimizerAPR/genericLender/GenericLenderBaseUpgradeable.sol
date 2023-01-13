@@ -12,7 +12,6 @@ import "../../../external/AccessControlAngleUpgradeable.sol";
 import "../../../interfaces/IGenericLender.sol";
 import "../../../interfaces/IPoolManager.sol";
 import "../../../interfaces/IStrategy.sol";
-import "hardhat/console.sol";
 
 /// @title GenericLenderBaseUpgradeable
 /// @author Forked from https://github.com/Grandthrax/yearnV2-generic-lender-strat/tree/master/contracts/GenericLender
@@ -105,8 +104,6 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
     /// @inheritdoc IGenericLender
     function weightedApr() external view override returns (uint256) {
         uint256 a = _apr();
-        console.log("apr ", a);
-        console.log("nav ", _nav());
         return a * _nav();
     }
 

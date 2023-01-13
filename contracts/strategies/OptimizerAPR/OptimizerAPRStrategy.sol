@@ -5,6 +5,7 @@ pragma solidity ^0.8.17;
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import "../BaseStrategyUpgradeable.sol";
 import "../../interfaces/IGenericLender.sol";
+import "hardhat/console.sol";
 
 struct LendStatus {
     string name;
@@ -180,7 +181,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         uint256 highestApr = 0;
         _highest = 0;
 
-        uint256 brutHighestApr;
+        uint256 highestLenderNav;
         uint256 bal = looseAssets;
         uint256[] memory weightedAprs = new uint256[](lendersList.length);
         for (uint256 i = 0; i < lendersList.length; i++) {
@@ -194,16 +195,12 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
                 uint256 apr = lendersList[i].apr();
                 uint256 nav = lendersList[i].nav();
                 weightedAprs[i] = apr * nav;
-                if (_highest == i) brutHighestApr == apr;
+                if (_highest == i) highestLenderNav == nav;
                 if (apr < _lowestApr) {
                     _lowestApr = apr;
                     _lowest = i;
                     lowestNav = nav;
                 }
-            } else {
-                // TODO following line is useless
-                weightedAprs[i] = 0;
-                if (_highest == i) brutHighestApr == lendersList[i].apr();
             }
         }
 
@@ -211,18 +208,13 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         _potential = lendersList[_highest].aprAfterDeposit(int256(lowestNav + looseAssets));
 
         // We will deposits into a lender without funds currently
-        if (weightedAprs[_highest] == 0) weightedAprs[_highest] == looseAssets * brutHighestApr;
-
         if (_potential > _lowestApr) {
             weightedAprs[_lowest] = 0;
-            weightedAprs[_highest] = brutHighestApr > 0 ? (weightedAprs[_highest] / brutHighestApr) * _potential : 0;
-        } else weightedAprs[_highest] = brutHighestApr > 0 ? (weightedAprs[_highest] / brutHighestApr) * highestApr : 0;
+            weightedAprs[_highest] = (highestLenderNav + looseAssets + lowestNav) * _potential;
+        } else weightedAprs[_highest] = (highestLenderNav + looseAssets) * highestApr;
 
         uint256 weightedAPR;
-        for (uint256 i = 0; i < lendersList.length; i++) {
-            weightedAPR = weightedAPR + weightedAprs[i];
-        }
-
+        for (uint256 i = 0; i < lendersList.length; i++) weightedAPR += weightedAprs[i];
         _totalApr = (bal == 0) ? 0 : weightedAPR / bal;
     }
 
@@ -254,6 +246,8 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
             uint256 _totalApr
         ) = _estimateGreedyAdjustPosition(lendersList);
 
+        console.log("greedy totalApr ", _totalApr);
+        console.log("estimatedAprHint ", estimatedAprHint);
         // The hint was successful --> we find a better allocation than the current one
         if (_totalApr < estimatedAprHint) {
             // not optimal currently, we should better withdraw from excess lenders and then deposit reducing the number of withdraw to be done
