@@ -292,6 +292,60 @@ contract OptimizerAPRStrategyTest is BaseTest {
     // }
     // // ================================== DEPOSIT ==================================
 
+    function testDepositInvalidLength() public {
+        uint256 amount = maxTokenAmount;
+
+        lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, maxTokenAmount, 0);
+        lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, maxTokenAmount, 0);
+        lender3.setLenderPoolVariables(0, _BASE_APR / 2, maxTokenAmount, 0);
+
+        deal(address(token), address(manager), 2 * amount);
+        uint64[] memory lenderShares = new uint64[](2);
+        lenderShares[0] = _BPS / 2;
+        lenderShares[1] = _BPS / 2;
+        vm.expectRevert(OptimizerAPRStrategy.IncorrectListLength.selector);
+        strat.harvest(abi.encode(lenderShares));
+    }
+
+    function testDepositWrongAddsUpHint() public {
+        uint256 amount = maxTokenAmount;
+
+        lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, maxTokenAmount, 0);
+        lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, maxTokenAmount, 0);
+        lender3.setLenderPoolVariables(0, _BASE_APR / 2, maxTokenAmount, 0);
+
+        deal(address(token), address(manager), 2 * amount);
+        uint64[] memory lenderShares = new uint64[](3);
+        lenderShares[0] = _BPS / 2;
+        lenderShares[1] = _BPS / 3;
+        lenderShares[2] = 0;
+        vm.expectRevert(OptimizerAPRStrategy.InvalidShares.selector);
+        strat.harvest(abi.encode(lenderShares));
+    }
+
+    function testDepositNoFundsWithHintSuccess(uint256 borrow) public {
+        // MockLender[3] memory listLender = [lender1, lender2, lender3];
+        lender1.setLenderPoolVariables(0, _BASE_APR, borrow, 0);
+        lender2.setLenderPoolVariables(0, _BASE_APR / 2, borrow, 0);
+        lender3.setLenderPoolVariables(0, _BASE_APR / 2, borrow, 0);
+
+        uint64[] memory lenderShares = new uint64[](3);
+        lenderShares[0] = _BPS / 2;
+        lenderShares[1] = _BPS / 2;
+        lenderShares[2] = 0;
+        strat.harvest(abi.encode(lenderShares));
+        {
+            assertEq(lender1.nav(), 0);
+            assertEq(lender2.nav(), 0);
+            assertEq(lender3.nav(), 0);
+            assertEq(lender1.apr(), 0);
+            assertEq(lender2.apr(), 0);
+            assertEq(lender3.apr(), 0);
+            assertEq(strat.estimatedTotalAssets(), 0);
+            assertEq(strat.estimatedAPR(), 0);
+        }
+    }
+
     function testDepositAllInOneSuccess(uint256 amount, uint256[3] memory borrows) public {
         amount = bound(amount, 1, maxTokenAmount);
         borrows[0] = bound(borrows[0], 0, amount);
