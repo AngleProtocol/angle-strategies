@@ -3,6 +3,7 @@
 pragma solidity ^0.8.17;
 
 import "./../strategies/OptimizerAPR/genericLender/GenericLenderBaseUpgradeable.sol";
+import "hardhat/console.sol";
 
 /// @title GenericEuler
 /// @author Angle Core Team

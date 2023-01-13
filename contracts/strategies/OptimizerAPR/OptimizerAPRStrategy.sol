@@ -166,7 +166,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         uint256 lowestNav;
         uint256 highestApr;
         uint256 highestLenderNav;
-        uint256 totalNav;
+        uint256 totalNav = looseAssets;
         uint256[] memory weightedAprs = new uint256[](lendersList.length);
         {
             uint256 lowestApr = type(uint256).max;
@@ -214,7 +214,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
                     weightedApr2 += weightedAprs[i];
                 }
             }
-
+            console.log("totalNav ", totalNav);
             if (weightedApr2 > weightedApr1 && lendersList.length > 1) {
                 _investmentStrategy = true;
                 _totalApr = weightedApr2 / totalNav;
@@ -241,6 +241,8 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         (uint256 lowest, uint256 highest, bool _investmentStrategy, uint256 _totalApr) = _estimateGreedyAdjustPosition(
             lendersList
         );
+        console.log("_totalApr ", _totalApr);
+        console.log("estimatedAprHint ", estimatedAprHint);
 
         // The hint was successful --> we find a better allocation than the current one
         if (_totalApr < estimatedAprHint) {
