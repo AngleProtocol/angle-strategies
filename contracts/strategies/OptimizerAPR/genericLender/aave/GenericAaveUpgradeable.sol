@@ -175,7 +175,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         ) = _protocolDataProvider.getReserveData(address(want));
 
         uint256 newLiquidity = availableLiquidity;
-        if (amount > 0) newLiquidity += uint256(amount);
+        if (amount != 0) newLiquidity += uint256(amount);
         else newLiquidity -= uint256(-amount);
 
         (, , , , uint256 reserveFactor, , , , , ) = _protocolDataProvider.getReserveConfigurationData(address(want));
@@ -201,7 +201,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     function _claimRewards() internal returns (uint256 stkAaveBalance) {
         stkAaveBalance = _balanceOfStkAave();
         // If it's the claim period claim
-        if (stkAaveBalance > 0 && _checkCooldown() == 1) {
+        if (stkAaveBalance != 0 && _checkCooldown() == 1) {
             // redeem AAVE from _stkAave
             _stkAave.claimRewards(address(this), type(uint256).max);
             _stkAave.redeem(address(this), stkAaveBalance);
@@ -215,7 +215,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         stkAaveBalance = _balanceOfStkAave();
 
         // request start of cooldown period, if there's no cooldown in progress
-        if (cooldownStkAave && stkAaveBalance > 0 && _checkCooldown() == 0) {
+        if (cooldownStkAave && stkAaveBalance != 0 && _checkCooldown() == 0) {
             _stkAave.cooldown();
         }
     }
@@ -265,10 +265,10 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     function _incentivesRate(uint256 totalLiquidity) internal view returns (uint256) {
         // only returns != 0 if the incentives are in place at the moment.
         // it will fail if the isIncentivised is set to true but there are no incentives
-        if (isIncentivised && block.timestamp < _incentivesController.getDistributionEnd() && totalLiquidity > 0) {
+        if (isIncentivised && block.timestamp < _incentivesController.getDistributionEnd() && totalLiquidity != 0) {
             uint256 _emissionsPerSecond;
             (, _emissionsPerSecond, ) = _incentivesController.getAssetData(address(_aToken));
-            if (_emissionsPerSecond > 0) {
+            if (_emissionsPerSecond != 0) {
                 uint256 emissionsInWant = _estimatedStkAaveToWant(_emissionsPerSecond); // amount of emissions in want
                 uint256 incentivesRate = (emissionsInWant * _SECONDS_IN_YEAR * 1e18) / totalLiquidity; // APRs are in 1e18
 

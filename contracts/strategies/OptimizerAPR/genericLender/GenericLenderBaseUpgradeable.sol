@@ -72,12 +72,14 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
         lenderName = _name;
 
         _setupRole(GUARDIAN_ROLE, address(poolManager));
-        for (uint256 i = 0; i < governorList.length; i++) {
+        uint256 governorListLength = governorList.length;
+        for (uint256 i; i < governorListLength; ++i) {
             _setupRole(GUARDIAN_ROLE, governorList[i]);
         }
 
         _setupRole(KEEPER_ROLE, guardian);
-        for (uint256 i = 0; i < keeperList.length; i++) {
+        uint256 keeperListLength = keeperList.length;
+        for (uint256 i; i < keeperListLength; ++i) {
             _setupRole(KEEPER_ROLE, keeperList[i]);
         }
 
@@ -149,9 +151,8 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
     /// @inheritdoc IGenericLender
     function sweep(address _token, address to) external override onlyRole(GUARDIAN_ROLE) {
         address[] memory __protectedTokens = _protectedTokens();
-
-        for (uint256 i = 0; i < __protectedTokens.length; i++)
-            if (_token == __protectedTokens[i]) revert ProtectedToken();
+        uint256 protectedTokensLength = __protectedTokens.length;
+        for (uint256 i; i < protectedTokensLength; ++i) if (_token == __protectedTokens[i]) revert ProtectedToken();
 
         IERC20(_token).safeTransfer(to, IERC20(_token).balanceOf(address(this)));
     }
@@ -166,7 +167,8 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
         uint256[] calldata amounts
     ) external onlyRole(GUARDIAN_ROLE) {
         if (tokens.length != spenders.length || tokens.length != amounts.length) revert IncompatibleLengths();
-        for (uint256 i = 0; i < tokens.length; i++) {
+        uint256 tokensLength = tokens.length;
+        for (uint256 i; i < tokensLength; ++i) {
             _changeAllowance(tokens[i], spenders[i], amounts[i]);
         }
     }
@@ -186,7 +188,7 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
 
     /// @notice Internal function used for error handling
     function _revertBytes(bytes memory errMsg) internal pure {
-        if (errMsg.length > 0) {
+        if (errMsg.length != 0) {
             //solhint-disable-next-line
             assembly {
                 revert(add(32, errMsg), mload(errMsg))

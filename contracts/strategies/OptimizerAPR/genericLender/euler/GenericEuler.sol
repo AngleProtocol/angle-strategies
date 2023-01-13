@@ -132,11 +132,11 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         // Total supply is current supply + added liquidity
 
         uint256 totalSupply = eToken.totalSupplyUnderlying();
-        if (amount > 0) totalSupply += uint256(amount);
+        if (amount != 0) totalSupply += uint256(amount);
         else totalSupply -= uint256(-amount);
 
         uint256 supplyAPY;
-        if (totalSupply > 0) {
+        if (totalSupply != 0) {
             uint32 futureUtilisationRate = uint32(
                 (totalBorrows * (uint256(type(uint32).max) * 1e18)) / totalSupply / 1e18
             );
@@ -201,7 +201,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
                 toUnstake = availableLiquidity > balanceUnderlying ? availableLiquidity - balanceUnderlying : 0;
                 toWithdraw = availableLiquidity;
             }
-            if (toUnstake > 0) _unstake(toUnstake);
+            if (toUnstake != 0) _unstake(toUnstake);
             eToken.withdraw(0, toWithdraw);
         }
 

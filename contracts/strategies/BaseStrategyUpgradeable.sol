@@ -112,7 +112,8 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
         _setRoleAdmin(GUARDIAN_ROLE, POOLMANAGER_ROLE);
 
         // Initializing roles first
-        for (uint256 i = 0; i < keepers.length; i++) {
+        uint256 keepersLength = keepers.length;
+        for (uint256 i; i < keepersLength; ++i) {
             if (keepers[i] == address(0)) revert ZeroAddress();
             _setupRole(KEEPER_ROLE, keepers[i]);
         }
@@ -189,7 +190,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     /// events can be tracked externally by indexing agents.
     /// @return True if the strategy is actively managing a position.
     function isActive() public view returns (bool) {
-        return estimatedTotalAssets() > 0;
+        return estimatedTotalAssets() != 0;
     }
 
     // ============================= INTERNAL FUNCTIONS ============================
@@ -207,10 +208,10 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     /// we may have to put an access control logic for this function to only allow white-listed addresses to act
     /// as keepers for the protocol
     function _report() internal {
-        uint256 profit = 0;
-        uint256 loss = 0;
+        uint256 profit;
+        uint256 loss;
         uint256 debtOutstanding = poolManager.debtOutstanding();
-        uint256 debtPayment = 0;
+        uint256 debtPayment;
         if (emergencyExit) {
             // Free up as much capital as possible
             uint256 amountFreed = _liquidateAllPositions();
@@ -357,7 +358,8 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
         if (_token == address(want)) revert InvalidToken();
 
         address[] memory __protectedTokens = _protectedTokens();
-        for (uint256 i = 0; i < __protectedTokens.length; i++)
+        uint256 protectedTokensLength = __protectedTokens.length;
+        for (uint256 i; i < protectedTokensLength; ++i)
             // In the strategy we use so far, the only protectedToken is the want token
             // and this has been checked above
             if (_token == __protectedTokens[i]) revert InvalidToken();
