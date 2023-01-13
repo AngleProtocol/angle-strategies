@@ -14,11 +14,6 @@ struct LendStatus {
     address add;
 }
 
-struct LenderRatio {
-    address lender;
-    uint16 share; // basis point
-}
-
 /// @title OptimizerAPRStrategy
 /// @author Angle Labs, Inc.
 /// @notice A lender optimisation strategy for any ERC20 asset, leveraging multiple lenders at once
@@ -149,9 +144,8 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
     /// @notice Estimates highest and lowest apr lenders among a `lendersList`
     /// @param lendersList List of all the lender contracts associated to this strategy
     /// @return _lowest The index of the lender in the `lendersList` with lowest apr
-    /// @return _lowestApr The lowest apr
     /// @return _highest The index of the lender with highest apr
-    /// @return _potential The potential apr of this lender if funds are moved from lowest to highest
+    /// @return _investmentStrategy Whether we should invest from the lowest to the highest yielding strategy or simply invest loose assets
     /// @dev `lendersList` is kept as a parameter to avoid multiplying reads in storage to the `lenders`
     /// array
     function _estimateGreedyAdjustPosition(IGenericLender[] memory lendersList)
@@ -159,9 +153,8 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         view
         returns (
             uint256 _lowest,
-            uint256 _lowestApr,
             uint256 _highest,
-            uint256 _potential,
+            bool _investmentStrategy,
             uint256 _totalApr
         )
     {
@@ -169,47 +162,64 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         uint256 looseAssets = want.balanceOf(address(this));
 
         // Simple greedy algo: get the lowest apr strat and cycle through and see who
-        // could take its funds plus want for the highest apr
-        _lowestApr = type(uint256).max;
-
+        // could take its funds to improve the overall highest APR
         uint256 lowestNav;
         uint256 highestApr;
         uint256 highestLenderNav;
-        uint256 bal;
+        uint256 totalNav;
         uint256[] memory weightedAprs = new uint256[](lendersList.length);
-        for (uint256 i; i < lendersList.length; ++i) {
-            uint256 aprAfterDeposit = lendersList[i].aprAfterDeposit(int256(looseAssets));
-            if (aprAfterDeposit > highestApr) {
-                highestApr = aprAfterDeposit;
-                _highest = i;
-            }
+        {
+            uint256 lowestApr = type(uint256).max;
+            for (uint256 i; i < lendersList.length; ++i) {
+                uint256 aprAfterDeposit = lendersList[i].aprAfterDeposit(int256(looseAssets));
+                if (aprAfterDeposit > highestApr) {
+                    highestApr = aprAfterDeposit;
+                    _highest = i;
+                }
 
-            if (lendersList[i].hasAssets()) {
-                uint256 apr = lendersList[i].apr();
-                uint256 nav = lendersList[i].nav();
-                bal += nav;
-                weightedAprs[i] = apr * nav;
-                if (_highest == i) highestLenderNav == nav;
-                if (apr < _lowestApr) {
-                    _lowestApr = apr;
-                    _lowest = i;
-                    lowestNav = nav;
+                if (lendersList[i].hasAssets()) {
+                    uint256 apr = lendersList[i].apr();
+                    uint256 nav = lendersList[i].nav();
+                    totalNav += nav;
+                    weightedAprs[i] = apr * nav;
+                    if (_highest == i) highestLenderNav == nav;
+                    if (apr < lowestApr) {
+                        lowestApr = apr;
+                        _lowest = i;
+                        lowestNav = nav;
+                    }
                 }
             }
         }
 
-        // If we can improve apr by withdrawing we do so
-        _potential = lendersList[_highest].aprAfterDeposit(int256(lowestNav + looseAssets));
+        // Comparing if we are better off removing from the lowest APR yielding strategy to invest in the highest or just invest
+        // the loose assets in the highest yielding strategy
+        if (totalNav > 0) {
+            // Case where only loose assets are invested
+            uint256 weightedApr1;
+            // Case where funds are divested from the strategy with the lowest APR to be invested in the one with the highest APR
+            uint256 weightedApr2;
+            for (uint256 i; i < lendersList.length; ++i) {
+                if (i == _highest) {
+                    weightedApr1 += (highestLenderNav + looseAssets) * highestApr;
+                    if (lowestNav != 0 && lendersList.length > 1)
+                        weightedApr2 +=
+                            (highestLenderNav + looseAssets + lowestNav) *
+                            lendersList[_highest].aprAfterDeposit(int256(lowestNav + looseAssets));
+                } else if (i == _lowest) {
+                    weightedApr1 += weightedAprs[i];
+                    // In the second case funds are divested so the lowest strat does not contribute to the highest APR case
+                } else {
+                    weightedApr1 += weightedAprs[i];
+                    weightedApr2 += weightedAprs[i];
+                }
+            }
 
-        // We will deposit into a lender without funds currently
-        if (_potential > _lowestApr) {
-            weightedAprs[_lowest] = 0;
-            weightedAprs[_highest] = (highestLenderNav + looseAssets + lowestNav) * _potential;
-        } else weightedAprs[_highest] = (highestLenderNav + looseAssets) * highestApr;
-
-        uint256 weightedAPR;
-        for (uint256 i; i < lendersList.length; ++i) weightedAPR += weightedAprs[i];
-        if (bal > 0) _totalApr = weightedAPR / bal;
+            if (weightedApr2 > weightedApr1 && lendersList.length > 1) {
+                _investmentStrategy = true;
+                _totalApr = weightedApr2 / totalNav;
+            } else _totalApr = weightedApr1 / totalNav;
+        }
     }
 
     /// @inheritdoc BaseStrategyUpgradeable
@@ -228,17 +238,13 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         uint256 estimatedAprHint;
         int256[] memory lenderAdjustedAmounts;
         if (lenderSharesHint.length != 0) (estimatedAprHint, lenderAdjustedAmounts) = estimatedAPR(lenderSharesHint);
-        (
-            uint256 lowest,
-            uint256 lowestApr,
-            uint256 highest,
-            uint256 potential,
-            uint256 _totalApr
-        ) = _estimateGreedyAdjustPosition(lendersList);
+        (uint256 lowest, uint256 highest, bool _investmentStrategy, uint256 _totalApr) = _estimateGreedyAdjustPosition(
+            lendersList
+        );
 
         // The hint was successful --> we find a better allocation than the current one
         if (_totalApr < estimatedAprHint) {
-            // not optimal currently, we should better withdraw from excess lenders and then deposit reducing the number of withdrawals to be done
+            // Not optimal currently, we should better withdraw from excess lenders and then deposit reducing the number of withdrawals to be done
             for (uint256 i; i < lendersListLength; ++i) {
                 if (lenderAdjustedAmounts[i] < 0) lendersList[i].withdraw(uint256(-lenderAdjustedAmounts[i]));
             }
@@ -250,8 +256,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
                 }
             }
         } else {
-            if (potential > lowestApr) {
-                // Apr should go down after deposit so won't be withdrawing from self
+            if (_investmentStrategy) {
                 lendersList[lowest].withdrawAll();
             }
 
@@ -375,7 +380,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         uint256 nav;
         uint256 lendersLength = lenders.length;
         for (uint256 i; i < lendersLength; ++i) {
-            nav = nav + lenders[i].nav();
+            nav += lenders[i].nav();
         }
         return nav;
     }
