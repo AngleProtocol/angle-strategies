@@ -434,7 +434,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
             share += shares[i];
             uint256 futureDeposit = (bal * shares[i]) / _BPS;
             // It won't overflow for `decimals <= 18`, as it would mean gigantic amounts
-            int256 adjustedAmount = int256(futureDeposit) - int256(lenders[i].underlyingBalanceStored());
+            int256 adjustedAmount = int256(futureDeposit) - int256(lenders[i].nav());
             lenderAdjustedAmounts[i] = adjustedAmount;
             weightedAPR += futureDeposit * lenders[i].aprAfterDeposit(adjustedAmount);
         }
