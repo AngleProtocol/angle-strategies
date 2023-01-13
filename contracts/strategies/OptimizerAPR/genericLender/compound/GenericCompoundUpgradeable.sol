@@ -25,13 +25,13 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     // solhint-disable-next-line
     address public constant comp = 0xc00e94Cb662C3520282E6f5717214004A7f26888;
 
-    // ======================== References to contracts ============================
+    // ================================= REFERENCES ================================
 
     CErc20I public cToken;
     // solhint-disable-next-line
     uint256 private dust;
 
-    // =============================== Errors ======================================
+    // =================================== ERRORS ==================================
 
     error FailedToMint();
     error FailedToRecoverETH();
@@ -64,7 +64,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         IERC20(comp).safeApprove(oneInch, type(uint256).max);
     }
 
-    // ===================== External Strategy Functions ===========================
+    // ======================== EXTERNAL STRATEGY FUNCTIONS ========================
 
     /// @inheritdoc IGenericLender
     function deposit() external override onlyRole(STRATEGY_ROLE) {
@@ -84,7 +84,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         return returned >= invested;
     }
 
-    // ========================== External View Functions ==========================
+    // ========================== EXTERNAL VIEW FUNCTIONS ==========================
 
     /// @inheritdoc GenericLenderBaseUpgradeable
     function underlyingBalanceStored() public view override returns (uint256 balance) {
@@ -124,7 +124,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         return supplyRate * BLOCKS_PER_YEAR + _incentivesRate(totalSupplyInWant);
     }
 
-    // ================================= Governance ================================
+    // ================================= GOVERNANCE ================================
 
     /// @inheritdoc IGenericLender
     function emergencyWithdraw(uint256 amount) external override onlyRole(GUARDIAN_ROLE) {
@@ -141,7 +141,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         dust = dust_;
     }
 
-    // ============================= Internal Functions ============================
+    // ============================= INTERNAL FUNCTIONS ============================
 
     /// @notice See `apr`
     function _apr() internal view override returns (uint256) {

@@ -23,12 +23,12 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
     bytes32 public constant STRATEGY_ROLE = keccak256("STRATEGY_ROLE");
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
-    // ======================= References to contracts =============================
+    // ========================== REFERENCES TO CONTRACTS ==========================
 
     // solhint-disable-next-line
     address internal constant oneInch = 0x1111111254EEB25477B68fb85Ed929f73A960582;
 
-    // ========================= References and Parameters =========================
+    // ========================= REFERENCES AND PARAMETERS =========================
 
     /// @inheritdoc IGenericLender
     string public override lenderName;
@@ -43,14 +43,14 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
 
     uint256[45] private __gapBaseLender;
 
-    // ================================ Errors =====================================
+    // =================================== ERRORS ==================================
 
     error ErrorSwap();
     error IncompatibleLengths();
     error ProtectedToken();
     error TooSmallAmount();
 
-    // ================================ Initializer ================================
+    // ================================ INITIALIZER ================================
 
     /// @notice Initalizer of the `GenericLenderBase`
     /// @param _strategy Reference to the strategy using this lender
@@ -72,12 +72,14 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
         lenderName = _name;
 
         _setupRole(GUARDIAN_ROLE, address(poolManager));
-        for (uint256 i = 0; i < governorList.length; i++) {
+        uint256 governorListLength = governorList.length;
+        for (uint256 i; i < governorListLength; ++i) {
             _setupRole(GUARDIAN_ROLE, governorList[i]);
         }
 
         _setupRole(KEEPER_ROLE, guardian);
-        for (uint256 i = 0; i < keeperList.length; i++) {
+        uint256 keeperListLength = keeperList.length;
+        for (uint256 i; i < keeperListLength; ++i) {
             _setupRole(KEEPER_ROLE, keeperList[i]);
         }
 
@@ -94,7 +96,7 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}
 
-    // ============================ View Functions =================================
+    // =============================== VIEW FUNCTIONS ==============================
 
     /// @inheritdoc IGenericLender
     function apr() external view override returns (uint256) {
@@ -128,7 +130,7 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
     /// @notice Returns the current balance invested on the lender and related staking contracts
     function underlyingBalanceStored() public view virtual returns (uint256 balance);
 
-    // ============================ Governance Functions ===========================
+    // ================================= GOVERNANCE ================================
 
     /// @notice Override this to add all tokens/tokenized positions this contract
     /// manages on a *persistent* basis (e.g. not just for swapping back to
@@ -149,9 +151,8 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
     /// @inheritdoc IGenericLender
     function sweep(address _token, address to) external override onlyRole(GUARDIAN_ROLE) {
         address[] memory __protectedTokens = _protectedTokens();
-
-        for (uint256 i = 0; i < __protectedTokens.length; i++)
-            if (_token == __protectedTokens[i]) revert ProtectedToken();
+        uint256 protectedTokensLength = __protectedTokens.length;
+        for (uint256 i; i < protectedTokensLength; ++i) if (_token == __protectedTokens[i]) revert ProtectedToken();
 
         IERC20(_token).safeTransfer(to, IERC20(_token).balanceOf(address(this)));
     }
@@ -166,7 +167,8 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
         uint256[] calldata amounts
     ) external onlyRole(GUARDIAN_ROLE) {
         if (tokens.length != spenders.length || tokens.length != amounts.length) revert IncompatibleLengths();
-        for (uint256 i = 0; i < tokens.length; i++) {
+        uint256 tokensLength = tokens.length;
+        for (uint256 i; i < tokensLength; ++i) {
             _changeAllowance(tokens[i], spenders[i], amounts[i]);
         }
     }
@@ -186,7 +188,7 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
 
     /// @notice Internal function used for error handling
     function _revertBytes(bytes memory errMsg) internal pure {
-        if (errMsg.length > 0) {
+        if (errMsg.length != 0) {
             //solhint-disable-next-line
             assembly {
                 revert(add(32, errMsg), mload(errMsg))

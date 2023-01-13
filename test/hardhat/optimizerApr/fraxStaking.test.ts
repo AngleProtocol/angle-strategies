@@ -35,7 +35,9 @@ async function initStrategy(
 ): Promise<{
   strategy: OptimizerAPRGreedyStrategy;
 }> {
-  const strategy = (await deployUpgradeable(new OptimizerAPRGreedyStrategy__factory(guardian))) as OptimizerAPRGreedyStrategy;
+  const strategy = (await deployUpgradeable(
+    new OptimizerAPRGreedyStrategy__factory(guardian),
+  )) as OptimizerAPRGreedyStrategy;
   await strategy.initialize(manager.address, governor.address, guardian.address, [keeper.address]);
   await manager.connect(governor).addStrategy(strategy.address, gwei('0.99999'));
   return { strategy };
@@ -70,7 +72,6 @@ let governor: SignerWithAddress, guardian: SignerWithAddress, user: SignerWithAd
 let strategy: OptimizerAPRGreedyStrategy;
 let token: ERC20;
 let aToken: ERC20;
-let frax: ERC20;
 let nativeRewardToken: MockToken;
 let tokenDecimal: number;
 let manager: PoolManager;
@@ -109,7 +110,6 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
 
     token = (await ethers.getContractAt(ERC20__factory.abi, '0x853d955aCEf822Db058eb8505911ED77F175b99e')) as ERC20;
     aToken = (await ethers.getContractAt(ERC20__factory.abi, '0xd4937682df3C8aEF4FE912A96A74121C0829E664')) as ERC20;
-    frax = (await ethers.getContractAt(ERC20__factory.abi, '0x853d955aCEf822Db058eb8505911ED77F175b99e')) as ERC20;
     nativeRewardToken = (await ethers.getContractAt(
       MockToken__factory.abi,
       '0x3432B6A60D23Ca0dFCa7761B7ab56459D9C964D0',

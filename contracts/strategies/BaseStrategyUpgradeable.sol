@@ -57,7 +57,8 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     /// @notice Role for keepers
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
-    // ======================== References to contracts ============================
+    // ================================= REFERENCES ================================
+
     /// @notice See note on `setEmergencyExit()`
     bool public emergencyExit;
 
@@ -70,7 +71,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     /// @notice Base of the ERC20 token farmed by this strategy
     uint256 public wantBase;
 
-    // ============================ Parameters =====================================
+    // ================================= PARAMETERS ================================
 
     /// @notice Use this to adjust the threshold at which running a debt causes a
     /// harvest trigger. See `setDebtThreshold()` for more details
@@ -78,12 +79,12 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
 
     uint256[46] private __gapBaseStrategy;
 
-    // ============================ Errors =========================================
+    // =================================== ERRORS ==================================
 
     error InvalidToken();
     error ZeroAddress();
 
-    // ============================ Constructor ====================================
+    // ================================ CONSTRUCTOR ================================
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}
@@ -111,7 +112,8 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
         _setRoleAdmin(GUARDIAN_ROLE, POOLMANAGER_ROLE);
 
         // Initializing roles first
-        for (uint256 i = 0; i < keepers.length; i++) {
+        uint256 keepersLength = keepers.length;
+        for (uint256 i; i < keepersLength; ++i) {
             if (keepers[i] == address(0)) revert ZeroAddress();
             _setupRole(KEEPER_ROLE, keepers[i]);
         }
@@ -123,7 +125,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
         want.safeIncreaseAllowance(address(poolManager), type(uint256).max);
     }
 
-    // ========================== Core functions ===================================
+    // =============================== CORE FUNCTIONS ==============================
 
     /// @notice Harvests the Strategy, recognizing any profits or losses and adjusting
     /// the Strategy's position.
@@ -133,22 +135,18 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
         _adjustPosition();
     }
 
-    /// @notice Harvests the Strategy, recognizing any profits or losses and adjusting
-    /// the Strategy's position.
-    /// @param data Any data that can help adjust the position
-    /// @dev Permisionnless so the implementation should be safe in adverserial context
+    /// @notice Same as the funciton above with a `data` parameter to help adjust the position
+    /// @dev Since this function is permissionless, strategy implementations should be made
+    /// to remain safe regardless of the data that is passed in the call
     function harvest(bytes memory data) external {
         _report();
         _adjustPosition(data);
     }
 
-    /// @notice Harvests the Strategy, recognizing any profits or losses and adjusting
-    /// the Strategy's position.
-    /// @param borrowInit Approximate optimal borrows to have faster convergence on the NR method
+    /// @notice Same as above with a `borrowInit` parameter to help in case of the convergence of the `adjustPosition`
+    /// method
     function harvest(uint256 borrowInit) external onlyRole(KEEPER_ROLE) {
         _report();
-        // Check if free returns are left, and re-invest them, gives an hint on the borrow amount to the NR method
-        // to maximise revenue
         _adjustPosition(borrowInit);
     }
 
@@ -169,7 +167,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
         // NOTE: Reinvest anything leftover on next `tend`/`harvest`
     }
 
-    // ============================ View functions =================================
+    // =============================== VIEW FUNCTIONS ==============================
 
     /// @notice Provides an accurate estimate for the total amount of assets
     /// (principle + return) that this Strategy is currently managing,
@@ -192,10 +190,10 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     /// events can be tracked externally by indexing agents.
     /// @return True if the strategy is actively managing a position.
     function isActive() public view returns (bool) {
-        return estimatedTotalAssets() > 0;
+        return estimatedTotalAssets() != 0;
     }
 
-    // ============================ Internal Functions =============================
+    // ============================= INTERNAL FUNCTIONS ============================
 
     /// @notice PrepareReturn the Strategy, recognizing any profits or losses
     /// @dev In the rare case the Strategy is in emergency shutdown, this will exit
@@ -210,10 +208,10 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     /// we may have to put an access control logic for this function to only allow white-listed addresses to act
     /// as keepers for the protocol
     function _report() internal {
-        uint256 profit = 0;
-        uint256 loss = 0;
+        uint256 profit;
+        uint256 loss;
         uint256 debtOutstanding = poolManager.debtOutstanding();
-        uint256 debtPayment = 0;
+        uint256 debtPayment;
         if (emergencyExit) {
             // Free up as much capital as possible
             uint256 amountFreed = _liquidateAllPositions();
@@ -317,7 +315,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     /// ```
     function _protectedTokens() internal view virtual returns (address[] memory);
 
-    // ============================== Governance ===================================
+    // ================================= GOVERNANCE ================================
 
     /// @notice Activates emergency exit. Once activated, the Strategy will exit its
     /// position upon the next harvest, depositing all funds into the Manager as
@@ -360,7 +358,8 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
         if (_token == address(want)) revert InvalidToken();
 
         address[] memory __protectedTokens = _protectedTokens();
-        for (uint256 i = 0; i < __protectedTokens.length; i++)
+        uint256 protectedTokensLength = __protectedTokens.length;
+        for (uint256 i; i < protectedTokensLength; ++i)
             // In the strategy we use so far, the only protectedToken is the want token
             // and this has been checked above
             if (_token == __protectedTokens[i]) revert InvalidToken();
@@ -368,7 +367,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
         IERC20(_token).safeTransfer(to, IERC20(_token).balanceOf(address(this)));
     }
 
-    // ============================ Manager functions ==============================
+    // ============================= MANAGER FUNCTIONS =============================
 
     /// @notice Adds a new guardian address and echoes the change to the contracts
     /// that interact with this collateral `PoolManager`

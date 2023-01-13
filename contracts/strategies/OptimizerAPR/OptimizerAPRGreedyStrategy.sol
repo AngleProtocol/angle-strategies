@@ -16,11 +16,11 @@ contract OptimizerAPRGreedyStrategy is BaseStrategyUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
-    // ======================== References to contracts ============================
+    // ================================= REFERENCES ================================
 
     IGenericLender[] public lenders;
 
-    // ======================== Parameters =========================================
+    // ================================= PARAMETERS ================================
 
     uint256 public withdrawalThreshold;
 
@@ -28,7 +28,7 @@ contract OptimizerAPRGreedyStrategy is BaseStrategyUpgradeable {
 
     event RemoveLender(address indexed lender);
 
-    // ============================== Constructor ==================================
+    // ================================ CONSTRUCTOR ================================
 
     /// @notice Constructor of the `Strategy`
     /// @param _poolManager Address of the `PoolManager` lending to this strategy
@@ -44,7 +44,7 @@ contract OptimizerAPRGreedyStrategy is BaseStrategyUpgradeable {
         withdrawalThreshold = 1000 * wantBase;
     }
 
-    // ========================== Internal Mechanics ===============================
+    // ============================= INTERNAL MECHANICS ============================
 
     /// @notice Frees up profit plus `_debtOutstanding`.
     /// @param _debtOutstanding Amount to withdraw
@@ -292,7 +292,7 @@ contract OptimizerAPRGreedyStrategy is BaseStrategyUpgradeable {
         (_amountFreed, ) = _liquidatePosition(estimatedTotalAssets());
     }
 
-    // ========================== View Functions ===================================
+    // =============================== VIEW FUNCTIONS ==============================
 
     struct LendStatus {
         string name;
@@ -359,7 +359,7 @@ contract OptimizerAPRGreedyStrategy is BaseStrategyUpgradeable {
         return protected;
     }
 
-    // ============================ Governance =====================================
+    // ================================= GOVERNANCE ================================
 
     struct LenderRatio {
         address lender;
@@ -468,7 +468,7 @@ contract OptimizerAPRGreedyStrategy is BaseStrategyUpgradeable {
         require(false, "94");
     }
 
-    // ========================== Manager functions ================================
+    // ============================= MANAGER FUNCTIONS =============================
 
     /// @notice Adds a new guardian address and echoes the change to the contracts
     /// that interact with this collateral `PoolManager`

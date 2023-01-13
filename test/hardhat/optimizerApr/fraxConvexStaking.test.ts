@@ -35,7 +35,9 @@ async function initStrategy(
 ): Promise<{
   strategy: OptimizerAPRGreedyStrategy;
 }> {
-  const strategy = (await deployUpgradeable(new OptimizerAPRGreedyStrategy__factory(guardian))) as OptimizerAPRGreedyStrategy;
+  const strategy = (await deployUpgradeable(
+    new OptimizerAPRGreedyStrategy__factory(guardian),
+  )) as OptimizerAPRGreedyStrategy;
   await strategy.initialize(manager.address, governor.address, guardian.address, [keeper.address]);
   await manager.connect(governor).addStrategy(strategy.address, gwei('0.99999'));
   return { strategy };
