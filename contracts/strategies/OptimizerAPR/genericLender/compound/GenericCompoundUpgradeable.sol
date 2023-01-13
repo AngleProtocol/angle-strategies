@@ -111,7 +111,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
         uint256 newCashPrior = cashPrior;
         uint256 totalSupplyInWant = (cToken.totalSupply() * cToken.exchangeRateStored()) / 1e18;
-        if (amount != 0) {
+        if (amount > 0) {
             newCashPrior += uint256(amount);
             totalSupplyInWant += uint256(amount);
         } else {

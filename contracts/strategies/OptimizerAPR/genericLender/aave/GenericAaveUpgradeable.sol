@@ -175,7 +175,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         ) = _protocolDataProvider.getReserveData(address(want));
 
         uint256 newLiquidity = availableLiquidity;
-        if (amount != 0) newLiquidity += uint256(amount);
+        if (amount > 0) newLiquidity += uint256(amount);
         else newLiquidity -= uint256(-amount);
 
         (, , , , uint256 reserveFactor, , , , , ) = _protocolDataProvider.getReserveConfigurationData(address(want));
@@ -263,8 +263,8 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     /// @notice Calculates APR from Liquidity Mining Program
     /// @param totalLiquidity Total liquidity available in the pool
     function _incentivesRate(uint256 totalLiquidity) internal view returns (uint256) {
-        // only returns != 0 if the incentives are in place at the moment.
-        // it will fail if the isIncentivised is set to true but there are no incentives
+        // Only returns != 0 if the incentives are in place at the moment.
+        // It will fail if `isIncentivised` is set to true but there are no incentives
         if (isIncentivised && block.timestamp < _incentivesController.getDistributionEnd() && totalLiquidity != 0) {
             uint256 _emissionsPerSecond;
             (, _emissionsPerSecond, ) = _incentivesController.getAssetData(address(_aToken));

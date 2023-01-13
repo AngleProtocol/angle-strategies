@@ -132,7 +132,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         // Total supply is current supply + added liquidity
 
         uint256 totalSupply = eToken.totalSupplyUnderlying();
-        if (amount != 0) totalSupply += uint256(amount);
+        if (amount > 0) totalSupply += uint256(amount);
         else totalSupply -= uint256(-amount);
 
         uint256 supplyAPY;
