@@ -23,12 +23,12 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
     bytes32 public constant STRATEGY_ROLE = keccak256("STRATEGY_ROLE");
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
-    // ======================= References to contracts =============================
+    // ========================== REFERENCES TO CONTRACTS ==========================
 
     // solhint-disable-next-line
     address internal constant oneInch = 0x1111111254EEB25477B68fb85Ed929f73A960582;
 
-    // ========================= References and Parameters =========================
+    // ========================= REFERENCES AND PARAMETERS =========================
 
     /// @inheritdoc IGenericLender
     string public override lenderName;
@@ -43,14 +43,14 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
 
     uint256[45] private __gapBaseLender;
 
-    // ================================ Errors =====================================
+    // =================================== ERRORS ==================================
 
     error ErrorSwap();
     error IncompatibleLengths();
     error ProtectedToken();
     error TooSmallAmount();
 
-    // ================================ Initializer ================================
+    // ================================ INITIALIZER ================================
 
     /// @notice Initalizer of the `GenericLenderBase`
     /// @param _strategy Reference to the strategy using this lender
@@ -94,7 +94,7 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}
 
-    // ============================ View Functions =================================
+    // =============================== VIEW FUNCTIONS ==============================
 
     /// @inheritdoc IGenericLender
     function apr() external view override returns (uint256) {
@@ -128,7 +128,7 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
     /// @notice Returns the current balance invested on the lender and related staking contracts
     function underlyingBalanceStored() public view virtual returns (uint256 balance);
 
-    // ============================ Governance Functions ===========================
+    // ================================= GOVERNANCE ================================
 
     /// @notice Override this to add all tokens/tokenized positions this contract
     /// manages on a *persistent* basis (e.g. not just for swapping back to

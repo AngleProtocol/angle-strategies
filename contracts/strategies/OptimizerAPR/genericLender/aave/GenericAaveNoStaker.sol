@@ -10,7 +10,7 @@ import "./GenericAaveUpgradeable.sol";
 /// @dev In this implementation, we just have to override the base functions with constant amounts as nothing is
 /// staked in an external contract
 contract GenericAaveNoStaker is GenericAaveUpgradeable {
-    // ================================ Constructor ================================
+    // ================================ CONSTRUCTOR ================================
 
     /// @notice Wrapper on top of the `initializeAave` method
     function initialize(
@@ -24,7 +24,7 @@ contract GenericAaveNoStaker is GenericAaveUpgradeable {
         initializeAave(_strategy, name, _isIncentivised, governorList, guardian, keeperList);
     }
 
-    // =========================== Virtual Functions ===============================
+    // ============================= VIRTUAL FUNCTIONS =============================
 
     function _stake(uint256) internal override returns (uint256) {}
 

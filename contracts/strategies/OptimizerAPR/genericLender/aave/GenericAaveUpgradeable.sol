@@ -21,11 +21,10 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
-    // ======================== Reference to contract ==============================
+    // ================================= REFERENCES ================================
+
     // solhint-disable-next-line
     AggregatorV3Interface private constant oracle = AggregatorV3Interface(0x547a514d5e3769680Ce22B2361c10Ea13619e8a9);
-
-    // ========================== Aave Protocol Addresses ==========================
 
     // solhint-disable-next-line
     address private constant _aave = 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9;
@@ -40,7 +39,8 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
     IProtocolDataProvider private constant _protocolDataProvider =
         IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
 
-    // ========================= Constants and Parameters ==========================
+    // ================================= CONSTANTS =================================
+
     uint256 internal constant _SECONDS_IN_YEAR = 365 days;
     uint256 public cooldownSeconds;
     uint256 public unstakeWindow;
@@ -50,15 +50,15 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
     uint256[47] private __gapAaveLender;
 
-    // =================================== Event ===================================
+    // =================================== EVENT ===================================
 
     event IncentivisedUpdated(bool _isIncentivised);
 
-    // =================================== Error ===================================
+    // =================================== ERROR ===================================
 
     error PoolNotIncentivized();
 
-    // ================================ Constructor ================================
+    // ================================ CONSTRUCTOR ================================
 
     /// @notice Initializer of the `GenericAave`
     /// @param _strategy Reference to the strategy using this lender
@@ -87,7 +87,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         IERC20(address(_aave)).safeApprove(oneInch, type(uint256).max);
     }
 
-    // ============================= External Functions ============================
+    // ============================= EXTERNAL FUNCTIONS ============================
 
     /// @inheritdoc IGenericLender
     function deposit() external override onlyRole(STRATEGY_ROLE) {
@@ -137,7 +137,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         _setAavePoolVariables();
     }
 
-    // ========================== External Setter Functions ========================
+    // ================================== SETTERS ==================================
 
     /// @notice Toggle isIncentivised state, to let know the lender if it should harvest aave rewards
     function toggleIsIncentivised() external onlyRole(GUARDIAN_ROLE) {
@@ -149,7 +149,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         cooldownStkAave = !cooldownStkAave;
     }
 
-    // =========================== External View Functions =========================
+    // ========================== EXTERNAL VIEW FUNCTIONS ==========================
 
     /// @inheritdoc GenericLenderBaseUpgradeable
     function underlyingBalanceStored() public view override returns (uint256 balance) {
@@ -195,7 +195,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         return newLiquidityRate / 1e9 + incentivesRate + stakingApr; // divided by 1e9 to go from Ray to Wad
     }
 
-    // =========================== Internal Functions ==============================
+    // ============================= INTERNAL FUNCTIONS ============================
 
     /// @notice Internal version of the `claimRewards` function
     function _claimRewards() internal returns (uint256 stkAaveBalance) {
@@ -363,7 +363,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         return protected;
     }
 
-    // ========================= Virtual Functions ===========================
+    // ============================= VIRTUAL FUNCTIONS =============================
 
     /// @notice Allows the lender to stake its aTokens in an external staking contract
     /// @param amount Amount of aTokens to stake

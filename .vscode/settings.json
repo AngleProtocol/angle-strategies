@@ -1,6 +1,12 @@
 {
-  "python.terminal.activateEnvironment": true,
-  "python.defaultInterpreterPath": "/opt/anaconda3/envs/angle/bin/python",
-  "python.terminal.activateEnvInCurrentTerminal": false,
-  "python.terminal.executeInFileDir": false
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[typescript]": {
+    "editor.defaultFormatter": "rvest.vs-code-prettier-eslint"
+  },
+  "[solidity]": {
+    "editor.defaultFormatter": "JuanBlanco.solidity"
+  },
+  "editor.codeActionsOnSave": {
+    "source.fixAll": true
+  }
 }

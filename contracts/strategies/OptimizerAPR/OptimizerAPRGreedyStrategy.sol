@@ -16,6 +16,8 @@ contract OptimizerAPRGreedyStrategy is BaseStrategyUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
+    
+
     // ======================== References to contracts ============================
 
     IGenericLender[] public lenders;

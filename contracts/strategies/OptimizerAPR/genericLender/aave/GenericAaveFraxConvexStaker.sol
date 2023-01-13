@@ -17,7 +17,8 @@ import "./GenericAaveUpgradeable.sol";
 contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
     using SafeERC20 for IERC20;
 
-    // ============================= Protocols Addresses ============================
+    // ============================= PROTOCOL ADDRESSES ============================
+
     // solhint-disable-next-line
     AggregatorV3Interface private constant oracleFXS =
         AggregatorV3Interface(0x6Ebc52C8C1089be9eB3945C4350B68B8E4C2233f);
@@ -37,7 +38,7 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
     // solhint-disable-next-line
     uint256 internal constant RAY = 1e27;
 
-    // ================================ Variables ==================================
+    // ================================= VARIABLES =================================
 
     IStakingProxyERC20 public vault;
     /// @notice Hash representing the position on Frax staker
@@ -51,7 +52,7 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
     /// @notice Last time a staker has been created
     uint256 public lastCreatedStake;
 
-    // ================================ Parameters =================================
+    // ================================= PARAMETERS ================================
 
     /// @notice Minimum amount of aFRAX to stake
     // solhint-disable-next-line
@@ -59,12 +60,12 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
     /// @notice Staking duration
     uint256 public stakingPeriod;
 
-    // ==================================== Errors =================================
+    // =================================== ERRORS ==================================
 
     error NoLockedLiquidity();
     error TooSmallStakingPeriod();
 
-    // ============================= Constructor ===================================
+    // ================================ CONSTRUCTOR ================================
 
     /// @notice Wrapper built on top of the `initializeAave` method to initialize the contract
     /// @param _stakingPeriod Amount of time aFRAX must remain staked
@@ -88,7 +89,7 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         vault = IStakingProxyERC20(poolRegistry.vaultMap(convexPid, address(this)));
     }
 
-    // =========================== External Function ===============================
+    // ============================= EXTERNAL FUNCTION =============================
 
     /// @notice Can be called before `claimRewardsExternal` to check the available rewards to be claimed
     function earned() external view returns (address[] memory tokenAddresses, uint256[] memory totalEarned) {
@@ -101,7 +102,7 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         return vault.getReward(true);
     }
 
-    // =========================== Governance Functions ============================
+    // ============================ GOVERNANCE FUNCTIONS ===========================
 
     /// @notice Updates the staking period on the aFRAX staking contract
     function setLockTime(uint256 _stakingPeriod) external onlyRole(GUARDIAN_ROLE) {
@@ -109,7 +110,7 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         stakingPeriod = _stakingPeriod;
     }
 
-    // ============================ Virtual Functions ==============================
+    // ============================= VIRTUAL FUNCTIONS =============================
 
     /// @notice Implementation of the `_stake` function to stake aFRAX in the FRAX staking contract
     /// @dev If there is an existent locker already on Frax/Convex staking contract (keckId != null), then this function adds to it
@@ -232,7 +233,7 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         apr = (_estimatedFXSToWant(rewardRate * _SECONDS_IN_YEAR) * 9500 * 1 ether) / 10000 / newBalance;
     }
 
-    // ============================ Internal Functions =============================
+    // ============================= INTERNAL FUNCTION =============================
 
     /// @notice Estimates the amount of `want` we will get out by swapping it for FXS
     /// @param amount Amount of FXS we want to exchange (in base 18)

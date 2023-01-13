@@ -21,11 +21,10 @@ struct LenderRatio {
 
 /// @title OptimizerAPRStrategy
 /// @author Angle Labs, Inc.
-/// @notice A lender optimisation strategy for any ERC20 asset, leverage multiple lenders at once
-/// @dev This strategy works by taking plugins designed for standard lending platforms
-/// It automatically chooses the best yield generating platform and adjusts accordingly
-/// The adjustment is sub optimal so there is an additional option to manually set position if the
-/// manual allocation is better than the greedy one
+/// @notice A lender optimisation strategy for any ERC20 asset, leveraging multiple lenders at once
+/// @dev This strategy works by taking plugins designed for standard lending platforms and automatically
+/// chooses to invest its funds in the best platforms to generate yield.
+/// The allocation is greedy and may be sub-optimal so there is an additional option to manually set positions
 contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
@@ -183,8 +182,9 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
 
         uint256 highestLenderNav;
         uint256 bal = looseAssets;
-        uint256[] memory weightedAprs = new uint256[](lendersList.length);
-        for (uint256 i = 0; i < lendersList.length; i++) {
+        uint256 lendersListLength = lendersList.length;
+        uint256[] memory weightedAprs = new uint256[](lendersListLength);
+        for (uint256 i; i < lendersListLength; ++i) {
             uint256 aprAfterDeposit = lendersList[i].aprAfterDeposit(int256(looseAssets));
             if (aprAfterDeposit > highestApr) {
                 highestApr = aprAfterDeposit;
@@ -218,9 +218,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         _totalApr = (bal == 0) ? 0 : weightedAPR / bal;
     }
 
-    /// @notice Function called by keepers to adjust the position
-    /// @dev The algorithm moves assets from lowest return to highest
-    /// like a very slow idiot bubble sort
+    /// @inheritdoc BaseStrategyUpgradeable
     function _adjustPosition(bytes memory data) internal override {
         // Emergency exit is dealt with at beginning of harvest
         if (emergencyExit) {
@@ -228,6 +226,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         }
         // Storing the `lenders` array in a cache variable
         IGenericLender[] memory lendersList = lenders;
+        uint256 lendersListLength = lendersList.length;
         // We just keep all money in want if we dont have any lenders
         if (lendersList.length == 0) {
             return;
@@ -246,16 +245,14 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
             uint256 _totalApr
         ) = _estimateGreedyAdjustPosition(lendersList);
 
-        console.log("greedy totalApr ", _totalApr);
-        console.log("estimatedAprHint ", estimatedAprHint);
         // The hint was successful --> we find a better allocation than the current one
         if (_totalApr < estimatedAprHint) {
-            // not optimal currently, we should better withdraw from excess lenders and then deposit reducing the number of withdraw to be done
-            for (uint256 i = 0; i < lendersList.length; i++) {
+            // not optimal currently, we should better withdraw from excess lenders and then deposit reducing the number of withdrawals to be done
+            for (uint256 i; i < lendersListLength; ++i) {
                 if (uint256(lenderAdjustedAmounts[i]) < 0) lendersList[i].withdraw(uint256(-lenderAdjustedAmounts[i]));
             }
 
-            for (uint256 i = 0; i < lendersList.length; i++) {
+            for (uint256 i; i < lendersListLength; ++i) {
                 if (uint256(lenderAdjustedAmounts[i]) > 0) {
                     want.safeTransfer(address(lendersList[i]), uint256(lenderAdjustedAmounts[i]));
                     lendersList[i].deposit();
@@ -400,7 +397,8 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         return lenders.length;
     }
 
-    /// @notice The weighted apr of all lenders. sum(nav * apr)/totalNav
+    /// @notice Returns the weighted apr of all lenders
+    /// @dev It's computed by doing: `sum(nav * apr) / totalNav`
     function estimatedAPR() external view returns (uint256) {
         uint256 bal = estimatedTotalAssets();
         if (bal == 0) {
@@ -416,8 +414,9 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         return weightedAPR / bal;
     }
 
-    /// @notice The weighted apr in an hypothetical world where the strategy split its nav in respect to shares
-    /// @param shares List of shares that should be allocated to each lender
+    /// @notice Returns the eighted apr in an hypothetical world where the strategy splits its nav
+    /// in respect to shares
+    /// @param shares List of shares (in bps of the nav) that should be allocated to each lender
     function estimatedAPR(uint64[] memory shares)
         public
         view
@@ -432,23 +431,21 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
             return (weightedAPR, lenderAdjustedAmounts);
         }
 
-        uint256 share = 0;
-        for (uint256 i = 0; i < lenderListLength; i++) {
-            share = share + shares[i];
+        uint256 share;
+        for (uint256 i; i < lenderListLength; ++i) {
+            share += shares[i];
             uint256 futureDeposit = (bal * shares[i]) / _BPS;
-            uint256 currentDeposit = lenders[i].underlyingBalanceStored();
-            // It won't overflow for decimals <= 18, as it would mean gigantic amounts
-            int256 adjustedAmount = int256(futureDeposit) - int256(currentDeposit);
+            // It won't overflow for `decimals <= 18`, as it would mean gigantic amounts
+            int256 adjustedAmount = int256(futureDeposit) - int256(lenders[i].underlyingBalanceStored());
             lenderAdjustedAmounts[i] = adjustedAmount;
-            uint256 aprAfterDelta = lenders[i].aprAfterDeposit(adjustedAmount);
-            weightedAPR = weightedAPR + futureDeposit * aprAfterDelta;
+            weightedAPR += futureDeposit * lenders[i].aprAfterDeposit(adjustedAmount);
         }
         if (share != 10000) revert InvalidShares();
 
         weightedAPR /= bal;
     }
 
-    /// @notice Prevents the governance from withdrawing want tokens
+    /// @notice Prevents governance from withdrawing `want` tokens
     function _protectedTokens() internal view override returns (address[] memory) {
         address[] memory protected = new address[](1);
         protected[0] = address(want);
@@ -458,7 +455,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
     // ================================= GOVERNANCE ================================
 
     /// @notice Changes the withdrawal threshold
-    /// @param _threshold The new withdrawal threshold
+    /// @param _threshold New withdrawal threshold
     /// @dev governor, guardian or `PoolManager` only
     function setWithdrawalThreshold(uint256 _threshold) external onlyRole(GUARDIAN_ROLE) {
         withdrawalThreshold = _threshold;
