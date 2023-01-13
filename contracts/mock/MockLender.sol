@@ -35,8 +35,8 @@ contract MockLender is GenericLenderBaseUpgradeable {
     // ======================== EXTERNAL STRATEGY FUNCTIONS ========================
 
     /// @inheritdoc IGenericLender
-    function deposit() external override onlyRole(STRATEGY_ROLE) {
-        uint256 balance = want.balanceOf(address(this));
+    function deposit() external view override onlyRole(STRATEGY_ROLE) {
+        want.balanceOf(address(this));
     }
 
     /// @inheritdoc IGenericLender

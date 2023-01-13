@@ -17,7 +17,6 @@ import {
   PoolManager,
 } from '../../../typechain';
 import { deploy, impersonate, latestTime } from '../test-utils';
-import { time } from '../test-utils/helpers';
 import { BASE_PARAMS } from '../utils';
 import { findBalancesSlot, setTokenBalanceFor } from '../utils-interaction';
 
@@ -141,7 +140,7 @@ describe('AaveFlashloanStrategy - Coverage', () => {
       // add aUSDC to strategy balance sheet to not have revert errors if the delay between blocks is to large when testing
       balanceSlot = await findBalancesSlot(aToken.address);
       await setTokenBalanceFor(aToken, user.address, 1, balanceSlot);
-      await aToken.connect(user).transfer(strategy.address, utils.parseUnits("1", await aToken.decimals()))
+      await aToken.connect(user).transfer(strategy.address, utils.parseUnits('1', await aToken.decimals()));
     });
 
     describe('adjustPosition', () => {

@@ -45,7 +45,7 @@ describe('AaveFlashloanStrategy - Main test file', () => {
   let lendingPool: ILendingPool;
   let flashMintLib: FlashMintLib;
   let stkAaveHolder: string;
-  let oneInch = "0x1111111254EEB25477B68fb85Ed929f73A960582"
+  const oneInch = '0x1111111254EEB25477B68fb85Ed929f73A960582';
 
   let strategy: AaveFlashloanStrategy;
   const impersonatedSigners: { [key: string]: Signer } = {};
@@ -185,12 +185,8 @@ describe('AaveFlashloanStrategy - Main test file', () => {
       expect(await dai.allowance(strategy.address, lendingPool.address)).to.equal(constants.MaxUint256);
       expect(await dai.allowance(strategy.address, await flashMintLib.LENDER())).to.equal(constants.MaxUint256);
 
-      expect(await aave.allowance(strategy.address, oneInch)).to.equal(
-        constants.MaxUint256,
-      );
-      expect(await stkAave.allowance(strategy.address, oneInch)).to.equal(
-        constants.MaxUint256,
-      );
+      expect(await aave.allowance(strategy.address, oneInch)).to.equal(constants.MaxUint256);
+      expect(await stkAave.allowance(strategy.address, oneInch)).to.equal(constants.MaxUint256);
     });
   });
 

@@ -7,6 +7,7 @@ pragma solidity >=0.4.0;
 /// @dev Handles "phantom overflow" i.e., allows multiplication and division where an intermediate value overflows 256 bits
 /// @dev This contract was forked from Uniswap V3's contract `FullMath.sol` available here
 /// https://github.com/Uniswap/uniswap-v3-core/blob/main/contracts/libraries/FullMath.sol
+//solhint-disable
 abstract contract FullMath {
     /// @notice Calculates floor(a×b÷denominator) with full precision. Throws if result overflows a uint256 or denominator == 0
     /// @param a The multiplicand
