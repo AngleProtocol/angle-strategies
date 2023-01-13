@@ -172,12 +172,14 @@ contract OptimizerAPRStrategyTest is BaseTest {
                 listLender[k].setLenderPoolVariables(
                     paramsLender[i * 9 + k * 3],
                     paramsLender[i * 9 + k * 3 + 1],
-                    paramsLender[i * 9 + k * 3 + 2]
+                    paramsLender[i * 9 + k * 3 + 2],
+                    0
                 );
                 listLenderTmp[k].setLenderPoolVariables(
                     paramsLender[i * 9 + k * 3],
                     paramsLender[i * 9 + k * 3 + 1],
-                    paramsLender[i * 9 + k * 3 + 2]
+                    paramsLender[i * 9 + k * 3 + 2],
+                    0
                 );
             }
             if (
@@ -237,12 +239,12 @@ contract OptimizerAPRStrategyTest is BaseTest {
     //             listLender[k].setLenderPoolVariables(
     //                 paramsLender[i * 9 + k * 3],
     //                 paramsLender[i * 9 + k * 3 + 1],
-    //                 paramsLender[i * 9 + k * 3 + 2]
+    //                 paramsLender[i * 9 + k * 3 + 2],0
     //             );
     //             listLenderTmp[k].setLenderPoolVariables(
     //                 paramsLender[i * 9 + k * 3],
     //                 paramsLender[i * 9 + k * 3 + 1],
-    //                 paramsLender[i * 9 + k * 3 + 2]
+    //                 paramsLender[i * 9 + k * 3 + 2],0
     //             );
     //         }
     //         if (
@@ -297,9 +299,9 @@ contract OptimizerAPRStrategyTest is BaseTest {
         borrows[2] = bound(borrows[2], 0, amount);
 
         // MockLender[3] memory listLender = [lender1, lender2, lender3];
-        lender1.setLenderPoolVariables(0, _BASE_APR, borrows[0]);
-        lender2.setLenderPoolVariables(0, _BASE_APR / 2, borrows[0]);
-        lender3.setLenderPoolVariables(0, _BASE_APR / 2, borrows[0]);
+        lender1.setLenderPoolVariables(0, _BASE_APR, borrows[0], 0);
+        lender2.setLenderPoolVariables(0, _BASE_APR / 2, borrows[0], 0);
+        lender3.setLenderPoolVariables(0, _BASE_APR / 2, borrows[0], 0);
 
         deal(address(token), address(manager), amount);
         uint64[] memory lenderShares = new uint64[](3);
@@ -308,7 +310,7 @@ contract OptimizerAPRStrategyTest is BaseTest {
         lenderShares[2] = 0;
         strat.harvest(abi.encode(lenderShares));
         {
-            uint256 estimatedAPR = _computeAPY(amount, borrows[0], 0, _BASE_APR);
+            uint256 estimatedAPR = _computeAPY(amount, borrows[0], 0, _BASE_APR, 0);
             assertEq(lender1.nav(), amount);
             assertEq(lender2.nav(), 0);
             assertEq(lender3.nav(), 0);
@@ -327,9 +329,9 @@ contract OptimizerAPRStrategyTest is BaseTest {
         borrows[2] = bound(borrows[2], 1, amount);
 
         // MockLender[3] memory listLender = [lender1, lender2, lender3];
-        lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0]);
-        lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0]);
-        lender3.setLenderPoolVariables(0, _BASE_APR / 2, borrows[0]);
+        lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
+        lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
+        lender3.setLenderPoolVariables(0, _BASE_APR / 2, borrows[0], 0);
 
         deal(address(token), address(manager), 2 * amount);
         uint64[] memory lenderShares = new uint64[](3);
@@ -338,7 +340,7 @@ contract OptimizerAPRStrategyTest is BaseTest {
         lenderShares[2] = 0;
         strat.harvest(abi.encode(lenderShares));
         {
-            uint256 estimatedAPR = _computeAPY(amount, borrows[0], _BASE_APR / 100, _BASE_APR);
+            uint256 estimatedAPR = _computeAPY(amount, borrows[0], _BASE_APR / 100, _BASE_APR, 0);
             assertEq(lender1.nav(), amount);
             assertEq(lender2.nav(), amount);
             assertEq(lender3.nav(), 0);
@@ -357,9 +359,9 @@ contract OptimizerAPRStrategyTest is BaseTest {
         borrows[2] = bound(borrows[2], 1, amount);
 
         // MockLender[3] memory listLender = [lender1, lender2, lender3];
-        lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0]);
-        lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0]);
-        lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0]);
+        lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
+        lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
+        lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
 
         deal(address(token), address(manager), 4 * amount);
         uint64[] memory lenderShares = new uint64[](3);
@@ -368,8 +370,8 @@ contract OptimizerAPRStrategyTest is BaseTest {
         lenderShares[2] = _BPS / 4;
         strat.harvest(abi.encode(lenderShares));
         {
-            uint256 estimatedAPRHalf = _computeAPY(2 * amount, borrows[0], _BASE_APR / 100, _BASE_APR);
-            uint256 estimatedAPRFourth = _computeAPY(amount, borrows[0], _BASE_APR / 100, _BASE_APR);
+            uint256 estimatedAPRHalf = _computeAPY(2 * amount, borrows[0], _BASE_APR / 100, _BASE_APR, 0);
+            uint256 estimatedAPRFourth = _computeAPY(amount, borrows[0], _BASE_APR / 100, _BASE_APR, 0);
             uint256 estimatedAPRGlobal = (estimatedAPRHalf + estimatedAPRFourth) / 2;
             assertEq(lender1.nav(), 2 * amount);
             assertEq(lender2.nav(), amount);
@@ -386,41 +388,99 @@ contract OptimizerAPRStrategyTest is BaseTest {
         amounts[0] = bound(amounts[0], 1, maxTokenAmount);
         amounts[1] = bound(amounts[1], 1, maxTokenAmount);
         amounts[2] = bound(amounts[2], 1, maxTokenAmount);
-        uint256 sumAmounts = amounts[0] + amounts[1] + amounts[2];
+        uint256 sumAmounts = 2 * (amounts[0] + amounts[1] + amounts[2]);
 
-        borrows[0] = bound(borrows[0], 0, amounts[0]);
-        borrows[1] = bound(borrows[1], 0, amounts[1]);
+        borrows[0] = bound(borrows[0], 1, amounts[0]);
+        borrows[1] = bound(borrows[1], 1, amounts[1]);
+        borrows[2] = sumAmounts;
 
-        lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0]);
-        lender2.setLenderPoolVariables(0, 0, borrows[0]);
-        lender3.setLenderPoolVariables(0, 0, borrows[0]);
+        lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
+        lender2.setLenderPoolVariables(0, 0, borrows[0], 0);
+        lender3.setLenderPoolVariables(0, 0, borrows[0], 0);
 
-        deal(address(token), address(manager), amounts[0]);
+        deal(address(token), address(manager), 2 * amounts[0]);
         strat.harvest();
         // to not withdraw what has been put on lender1 previously (because _potential is lower than highest)
-        lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR + 1, borrows[0]);
-        deal(address(token), address(manager), amounts[1]);
+        lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR + 1, borrows[0], 0);
+        deal(address(token), address(manager), 2 * amounts[1]);
         strat.harvest();
-        lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0]);
-        lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0]);
-        lender3.setLenderPoolVariables(0, _BASE_APR / 2, borrows[0]);
-
+        deal(address(token), address(manager), 2 * amounts[2]);
+        lender1.setLenderPoolVariables(0, 0, borrows[2], 0);
+        lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], 0);
+        lender3.setLenderPoolVariables(0, 0, borrows[2], 0);
         uint64[] memory lenderShares = new uint64[](3);
-        lenderShares[0] = _BPS / 2;
-        lenderShares[1] = _BPS / 2;
+        lenderShares[1] = _BPS;
         strat.harvest(abi.encode(lenderShares));
         {
-            uint256 estimatedAPRHalf = _computeAPY(2 * sumAmounts, borrows[0], _BASE_APR / 100, _BASE_APR);
-            uint256 estimatedAPRFourth = _computeAPY(sumAmounts, borrows[0], _BASE_APR / 100, _BASE_APR);
-            uint256 estimatedAPRGlobal = (estimatedAPRHalf + estimatedAPRFourth) / 2;
-            assertEq(lender1.nav(), 2 * sumAmounts);
+            uint256 estimatedAPRHint = _computeAPY(sumAmounts, borrows[2], _BASE_APR / 100, _BASE_APR, 0);
+            assertEq(lender1.nav(), 0);
             assertEq(lender2.nav(), sumAmounts);
-            assertEq(lender3.nav(), sumAmounts);
-            assertEq(lender1.apr(), estimatedAPRHalf);
-            assertEq(lender2.apr(), estimatedAPRFourth);
-            assertEq(lender3.apr(), estimatedAPRFourth);
-            assertEq(strat.estimatedTotalAssets(), 4 * sumAmounts);
-            assertEq(strat.estimatedAPR(), estimatedAPRGlobal);
+            assertEq(lender3.nav(), 0);
+            assertEq(lender1.apr(), 0);
+            assertEq(lender2.apr(), estimatedAPRHint);
+            assertEq(lender3.apr(), 0);
+            assertEq(strat.estimatedTotalAssets(), sumAmounts);
+            assertEq(strat.estimatedAPR(), estimatedAPRHint);
+        }
+    }
+
+    function testDeposit2HopMultiSharesSuccess(uint256[3] memory amounts, uint256[3] memory borrows) public {
+        amounts[0] = bound(amounts[0], 1, maxTokenAmount);
+        amounts[1] = bound(amounts[1], 1, maxTokenAmount);
+        amounts[2] = bound(amounts[2], 1, maxTokenAmount);
+        uint256 sumAmounts = 4 * (amounts[0] + amounts[1] + amounts[2]);
+
+        borrows[0] = bound(borrows[0], 1, amounts[0]);
+        borrows[1] = bound(borrows[1], 1, amounts[1]);
+        borrows[2] = sumAmounts;
+
+        lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
+        lender2.setLenderPoolVariables(0, 0, borrows[0], 0);
+        lender3.setLenderPoolVariables(0, 0, borrows[0], 0);
+
+        deal(address(token), address(manager), 4 * amounts[0]);
+        strat.harvest();
+        // to not withdraw what has been put on lender1 previously (because _potential is lower than highest)
+        lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR + 1, borrows[0], 0);
+        deal(address(token), address(manager), 4 * amounts[1]);
+        strat.harvest();
+        deal(address(token), address(manager), 4 * amounts[2]);
+        lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], 2 * sumAmounts);
+        lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], sumAmounts);
+        lender3.setLenderPoolVariables(0, 0, borrows[2], 0);
+        uint64[] memory lenderShares = new uint64[](3);
+        lenderShares[0] = _BPS / 4;
+        lenderShares[1] = (_BPS * 3) / 4;
+        strat.harvest(abi.encode(lenderShares));
+        {
+            uint256 estimatedAPRHintLender1 = _computeAPY(
+                sumAmounts * lenderShares[0],
+                borrows[2],
+                _BASE_APR / 100,
+                _BASE_APR,
+                2 * sumAmounts
+            );
+            uint256 estimatedAPRHintLender2 = _computeAPY(
+                sumAmounts * lenderShares[1],
+                borrows[2],
+                _BASE_APR / 100,
+                _BASE_APR,
+                sumAmounts
+            );
+            uint256 estimatedAPRHint = (sumAmounts *
+                lenderShares[1] *
+                estimatedAPRHintLender2 +
+                sumAmounts *
+                lenderShares[0] *
+                estimatedAPRHintLender1) / sumAmounts;
+            assertEq(lender1.nav(), sumAmounts * lenderShares[0]);
+            assertEq(lender2.nav(), sumAmounts * lenderShares[1]);
+            assertEq(lender3.nav(), 0);
+            assertEq(lender1.apr(), estimatedAPRHintLender1);
+            assertEq(lender2.apr(), estimatedAPRHintLender2);
+            assertEq(lender3.apr(), 0);
+            assertEq(strat.estimatedTotalAssets(), sumAmounts);
+            assertEq(strat.estimatedAPR(), estimatedAPRHint);
         }
     }
 
@@ -430,8 +490,9 @@ contract OptimizerAPRStrategyTest is BaseTest {
         uint256 supply,
         uint256 borrow,
         uint256 r0,
-        uint256 slope1
+        uint256 slope1,
+        uint256 biasSupply
     ) internal pure returns (uint256) {
-        return r0 + (slope1 * borrow) / supply;
+        return r0 + (slope1 * borrow) / (supply + biasSupply);
     }
 }

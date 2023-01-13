@@ -14,6 +14,7 @@ contract MockLender is GenericLenderBaseUpgradeable {
     uint256 public r0;
     uint256 public slope1;
     uint256 public totalBorrow;
+    uint256 public biasSupply;
 
     // ================================ CONSTRUCTOR ================================
 
@@ -90,7 +91,7 @@ contract MockLender is GenericLenderBaseUpgradeable {
     /// @return supplyAPY The annual percentage yield received as a supplier with current settings
     function _computeAPYs(uint256 totalSupply) internal view returns (uint256 supplyAPY) {
         // All rates are in base 18 on Angle strategies
-        supplyAPY = r0 + (slope1 * totalBorrow) / totalSupply;
+        supplyAPY = r0 + (slope1 * totalBorrow) / (totalSupply + biasSupply);
     }
 
     /// @notice See `withdraw`
@@ -111,14 +112,21 @@ contract MockLender is GenericLenderBaseUpgradeable {
     function setLenderPoolVariables(
         uint256 _r0,
         uint256 _slope1,
-        uint256 _totalBorrow
+        uint256 _totalBorrow,
+        uint256 _biasSupply
     ) external {
         r0 = _r0;
         slope1 = _slope1;
         totalBorrow = _totalBorrow;
+        biasSupply = _biasSupply;
     }
 
     // ============================= VIRTUAL FUNCTIONS =============================
+
+    /// @inheritdoc IGenericLender
+    function hasAssets() external view override returns (bool) {
+        return _nav() > 0;
+    }
 
     function _protectedTokens() internal pure override returns (address[] memory) {
         return new address[](0);

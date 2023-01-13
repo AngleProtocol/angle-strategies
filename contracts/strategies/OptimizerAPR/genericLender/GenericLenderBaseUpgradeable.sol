@@ -115,7 +115,7 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
     }
 
     /// @inheritdoc IGenericLender
-    function hasAssets() external view override returns (bool) {
+    function hasAssets() external view virtual override returns (bool) {
         return _nav() > 10 * wantBase;
     }
 
