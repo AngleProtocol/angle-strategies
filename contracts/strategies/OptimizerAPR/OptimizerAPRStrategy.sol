@@ -175,9 +175,9 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         uint256 lowestNav;
         uint256 highestApr;
         uint256 highestLenderNav;
-        uint256 lendersListLength = lendersList.length;
-        uint256[] memory weightedAprs = new uint256[](lendersListLength);
-        for (uint256 i; i < lendersListLength; ++i) {
+        uint256 bal;
+        uint256[] memory weightedAprs = new uint256[](lendersList.length);
+        for (uint256 i; i < lendersList.length; ++i) {
             uint256 aprAfterDeposit = lendersList[i].aprAfterDeposit(int256(looseAssets));
             if (aprAfterDeposit > highestApr) {
                 highestApr = aprAfterDeposit;
@@ -187,6 +187,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
             if (lendersList[i].hasAssets()) {
                 uint256 apr = lendersList[i].apr();
                 uint256 nav = lendersList[i].nav();
+                bal += nav;
                 weightedAprs[i] = apr * nav;
                 if (_highest == i) highestLenderNav == nav;
                 if (apr < _lowestApr) {
@@ -207,8 +208,8 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         } else weightedAprs[_highest] = (highestLenderNav + looseAssets) * highestApr;
 
         uint256 weightedAPR;
-        for (uint256 i; i < lendersListLength; ++i) weightedAPR += weightedAprs[i];
-        _totalApr = (looseAssets == 0) ? 0 : weightedAPR / looseAssets;
+        for (uint256 i; i < lendersList.length; ++i) weightedAPR += weightedAprs[i];
+        if (bal > 0) _totalApr = weightedAPR / bal;
     }
 
     /// @inheritdoc BaseStrategyUpgradeable
@@ -239,11 +240,11 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         if (_totalApr < estimatedAprHint) {
             // not optimal currently, we should better withdraw from excess lenders and then deposit reducing the number of withdrawals to be done
             for (uint256 i; i < lendersListLength; ++i) {
-                if (uint256(lenderAdjustedAmounts[i]) < 0) lendersList[i].withdraw(uint256(-lenderAdjustedAmounts[i]));
+                if (lenderAdjustedAmounts[i] < 0) lendersList[i].withdraw(uint256(-lenderAdjustedAmounts[i]));
             }
 
             for (uint256 i; i < lendersListLength; ++i) {
-                if (uint256(lenderAdjustedAmounts[i]) != 0) {
+                if (lenderAdjustedAmounts[i] > 0) {
                     want.safeTransfer(address(lendersList[i]), uint256(lenderAdjustedAmounts[i]));
                     lendersList[i].deposit();
                 }
