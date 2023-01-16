@@ -5,7 +5,6 @@ pragma solidity ^0.8.17;
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import "../BaseStrategyUpgradeable.sol";
 import "../../interfaces/IGenericLender.sol";
-import "hardhat/console.sol";
 
 struct LendStatus {
     string name;
@@ -214,7 +213,6 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
                     weightedApr2 += weightedAprs[i];
                 }
             }
-            console.log("totalNav ", totalNav);
             if (weightedApr2 > weightedApr1 && lendersList.length > 1) {
                 _investmentStrategy = true;
                 _totalApr = weightedApr2 / totalNav;
@@ -241,12 +239,10 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         (uint256 lowest, uint256 highest, bool _investmentStrategy, uint256 _totalApr) = _estimateGreedyAdjustPosition(
             lendersList
         );
-        console.log("_totalApr ", _totalApr);
-        console.log("estimatedAprHint ", estimatedAprHint);
 
         // The hint was successful --> we find a better allocation than the current one
         if (_totalApr < estimatedAprHint) {
-            // Not optimal currently, we should better withdraw from excess lenders and then deposit reducing the number of withdrawals to be done
+            // TODO add a minimum deposit/withdraw? If yes could be tricky as we need a way to remove it from another lender withdraw/deposit
             for (uint256 i; i < lendersListLength; ++i) {
                 if (lenderAdjustedAmounts[i] < 0) lendersList[i].withdraw(uint256(-lenderAdjustedAmounts[i]));
             }

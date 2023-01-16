@@ -484,40 +484,33 @@ contract OptimizerAPRStrategyTest is BaseTest {
         amounts[2] = bound(amounts[2], 1, maxTokenAmount);
         // Because in this special case my best estimate won't be better than the greedy, because the distribution
         // will be closer to te true optimum. This is just by chance for the greedy and the fuzzing is "searching for that chance"
-        uint256 sumAmounts = 4 * (amounts[0] + amounts[1] + amounts[2]);
-        if ((amounts[0] * _BPS) / sumAmounts > _BPS / 4 || (amounts[0] * _BPS) / sumAmounts < (_BPS * 5) / 12) return;
+        uint256 sumAmounts = (amounts[0] + amounts[1] + amounts[2]);
+        if ((amounts[0] * _BPS) / sumAmounts > _BPS / 4 && (amounts[0] * _BPS) / sumAmounts < (_BPS * 44) / 100) return;
         sumAmounts *= 4;
 
         borrows[0] = bound(borrows[0], 1, amounts[0]);
         borrows[1] = bound(borrows[1], 1, amounts[1]);
         borrows[2] = sumAmounts;
 
-        lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
+        lender1.setLenderPoolVariables(0, 0, borrows[0], 0);
         lender2.setLenderPoolVariables(0, 0, borrows[0], 0);
-        lender3.setLenderPoolVariables(0, 0, borrows[0], 0);
+        lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
 
         deal(address(token), address(manager), 4 * amounts[0]);
         strat.harvest();
-        // to not withdraw what has been put on lender1 previously (because _potential is lower than highest)
-        lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR + 1, borrows[0], 0);
+        // to not withdraw what has been put on lender3 previously (because _potential is lower than highest)
+        lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR + 1, borrows[0], 0);
         deal(address(token), address(manager), 4 * amounts[1]);
         strat.harvest();
         deal(address(token), address(manager), 4 * amounts[2]);
-        lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], 2 * sumAmounts);
+        lender1.setLenderPoolVariables(0, 0, borrows[2], 0);
         lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], sumAmounts);
-        lender3.setLenderPoolVariables(0, 0, borrows[2], 0);
+        lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], 2 * sumAmounts);
         uint64[] memory lenderShares = new uint64[](3);
-        lenderShares[0] = _BPS / 4;
         lenderShares[1] = (_BPS * 3) / 4;
+        lenderShares[2] = _BPS / 4;
         strat.harvest(abi.encode(lenderShares));
         {
-            uint256 estimatedAPRHintLender1 = _computeAPY(
-                (sumAmounts * lenderShares[0]) / _BPS,
-                borrows[2],
-                _BASE_APR / 100,
-                _BASE_APR,
-                2 * sumAmounts
-            );
             uint256 estimatedAPRHintLender2 = _computeAPY(
                 (sumAmounts * lenderShares[1]) / _BPS,
                 borrows[2],
@@ -525,18 +518,105 @@ contract OptimizerAPRStrategyTest is BaseTest {
                 _BASE_APR,
                 sumAmounts
             );
+            uint256 estimatedAPRHintLender3 = _computeAPY(
+                (sumAmounts * lenderShares[2]) / _BPS,
+                borrows[2],
+                _BASE_APR / 100,
+                _BASE_APR,
+                2 * sumAmounts
+            );
             uint256 estimatedAPRHint = (sumAmounts *
                 lenderShares[1] *
                 estimatedAPRHintLender2 +
                 sumAmounts *
-                lenderShares[0] *
-                estimatedAPRHintLender1) / (_BPS * sumAmounts);
-            assertEq(lender1.nav(), (sumAmounts * lenderShares[0]) / _BPS);
+                lenderShares[2] *
+                estimatedAPRHintLender3) / (_BPS * sumAmounts);
+            assertEq(lender1.nav(), 0);
             assertEq(lender2.nav(), (sumAmounts * lenderShares[1]) / _BPS);
-            assertEq(lender3.nav(), 0);
-            assertEq(lender1.apr(), estimatedAPRHintLender1);
+            assertEq(lender3.nav(), (sumAmounts * lenderShares[2]) / _BPS);
+            assertEq(lender1.apr(), 0);
             assertEq(lender2.apr(), estimatedAPRHintLender2);
-            assertEq(lender3.apr(), 0);
+            assertEq(lender3.apr(), estimatedAPRHintLender3);
+            assertEq(strat.estimatedTotalAssets(), sumAmounts);
+            assertEq(strat.estimatedAPR(), estimatedAPRHint);
+        }
+    }
+
+    function testHarvest2SharesWithLossSuccess(uint256[5] memory amounts, uint256[3] memory borrows) public {
+        amounts[0] = bound(amounts[0], 1, maxTokenAmount);
+        amounts[1] = bound(amounts[1], 1, maxTokenAmount);
+        amounts[2] = bound(amounts[2], 1, maxTokenAmount);
+        // Because in this special case my best estimate won't be better than the greedy, because the distribution
+        // will be closer to te true optimum. This is just by chance for the greedy and the fuzzing is "searching for that chance"
+        uint256 sumAmounts = (amounts[0] + amounts[1] + amounts[2]);
+
+        borrows[0] = bound(borrows[0], 1, amounts[0]);
+        borrows[1] = bound(borrows[1], 1, amounts[1]);
+        borrows[2] = sumAmounts;
+
+        lender1.setLenderPoolVariables(0, 0, borrows[0], 0);
+        lender2.setLenderPoolVariables(0, 0, borrows[0], 0);
+        lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
+
+        deal(address(token), address(manager), 4 * amounts[0]);
+        strat.harvest();
+        // to not withdraw what has been put on lender1 previously (because _potential is lower than highest)
+        lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR + 1, borrows[0], 0);
+        deal(address(token), address(manager), 4 * amounts[1]);
+        strat.harvest();
+        // make loss or gain on lenders
+        // on lender1
+        {
+            int256 delta1 = _makeLossGainLender(lender1, amounts[3]);
+            int256 delta2 = _makeLossGainLender(lender2, amounts[4]);
+            sumAmounts = uint256(int256(4 * sumAmounts) + delta1 + delta2);
+
+            // Because in this special case my best estimate won't be better than the greedy, because the distribution
+            // will be closer to te true optimum. This is just by chance for the greedy and the fuzzing is "searching for that chance"
+            if (
+                ((uint256(int256(4 * amounts[0]) + delta1)) * _BPS) / sumAmounts > _BPS / 4 ||
+                ((uint256(int256(4 * amounts[0]) + delta1)) * _BPS) / sumAmounts < (_BPS * 44) / 100
+            ) return;
+
+            // sumAmounts *= 4;
+        }
+
+        deal(address(token), address(manager), 4 * amounts[2]);
+        lender1.setLenderPoolVariables(0, 0, borrows[2], 0);
+        lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], sumAmounts);
+        lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], 2 * sumAmounts);
+        uint64[] memory lenderShares = new uint64[](3);
+        lenderShares[1] = (_BPS * 3) / 4;
+        lenderShares[2] = _BPS / 4;
+        {
+            uint256 estimatedAPRHintLender2 = _computeAPY(
+                (sumAmounts * lenderShares[1]) / _BPS,
+                borrows[2],
+                _BASE_APR / 100,
+                _BASE_APR,
+                sumAmounts
+            );
+
+            uint256 estimatedAPRHintLender3 = _computeAPY(
+                (sumAmounts * lenderShares[2]) / _BPS,
+                borrows[2],
+                _BASE_APR / 100,
+                _BASE_APR,
+                2 * sumAmounts
+            );
+
+            uint256 estimatedAPRHint = (sumAmounts *
+                lenderShares[1] *
+                estimatedAPRHintLender2 +
+                sumAmounts *
+                lenderShares[3] *
+                estimatedAPRHintLender3) / (_BPS * sumAmounts);
+            assertEq(lender1.nav(), 0);
+            assertEq(lender2.nav(), (sumAmounts * lenderShares[1]) / _BPS);
+            assertEq(lender3.nav(), (sumAmounts * lenderShares[2]) / _BPS);
+            assertEq(lender1.apr(), 0);
+            assertEq(lender2.apr(), estimatedAPRHintLender2);
+            assertEq(lender3.apr(), estimatedAPRHintLender3);
             assertEq(strat.estimatedTotalAssets(), sumAmounts);
             assertEq(strat.estimatedAPR(), estimatedAPRHint);
         }
@@ -552,5 +632,18 @@ contract OptimizerAPRStrategyTest is BaseTest {
         uint256 biasSupply
     ) internal pure returns (uint256) {
         return r0 + (slope1 * borrow) / (supply + biasSupply);
+    }
+
+    function _makeLossGainLender(MockLender lender, uint256 amount) internal returns (int256 delta) {
+        amount = bound(amount, 0, 2 * _BASE_TOKEN);
+        if (amount <= _BASE_TOKEN) {
+            uint256 toBurn = (amount * lender.nav()) / _BASE_TOKEN;
+            token.burn(address(lender), toBurn);
+            delta = -int256(toBurn);
+        } else {
+            uint256 toMint = ((amount - _BASE_TOKEN) * lender.nav()) / _BASE_TOKEN;
+            token.mint(address(lender), toMint);
+            delta = int256(toMint);
+        }
     }
 }
