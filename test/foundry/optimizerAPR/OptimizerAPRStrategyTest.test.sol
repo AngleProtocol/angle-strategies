@@ -35,8 +35,6 @@ contract OptimizerAPRStrategyTest is BaseTest {
 
     uint256 public constant BACKTEST_LENGTH = 30;
     uint256 public constant IMPROVE_LENGTH = 2;
-    uint256 public constant WITHDRAW_LENGTH = 30;
-    uint256 public constant REWARDS_LENGTH = 30;
 
     function setUp() public override {
         super.setUp();
@@ -189,8 +187,8 @@ contract OptimizerAPRStrategyTest is BaseTest {
             ) isWithdraw[i] = 0;
             if (isWithdraw[i] == 0) {
                 uint256 amount = bound(amounts[i], minTokenAmount, maxTokenAmount);
-                deal(address(token), address(manager), amount);
-                deal(address(token), address(managerTmp), amount);
+                token.mint(address(manager), amount);
+                token.mint(address(managerTmp), amount);
             } else if (isWithdraw[i] == 1) {
                 uint256 amount = bound(amounts[i], 0, _BASE_TOKEN);
                 uint256 toBurn = (amount * lender1.nav()) / _BASE_TOKEN;
@@ -226,70 +224,6 @@ contract OptimizerAPRStrategyTest is BaseTest {
         }
     }
 
-    // function testImprovementPreviouOptimizerSuccess(
-    //     uint256[IMPROVE_LENGTH] memory amounts,
-    //     uint256[IMPROVE_LENGTH] memory isWithdraw,
-    //     uint32[3 * 3 * IMPROVE_LENGTH] memory paramsLender,
-    //     uint64[IMPROVE_LENGTH] memory elapseTime
-    // ) public {
-    //     for (uint256 i = 0; i < amounts.length; ++i) {
-    //         MockLender[3] memory listLender = [lender1, lender2, lender3];
-    //         MockLender[3] memory listLenderTmp = [lenderTmp1, lenderTmp2, lenderTmp3];
-    //         for (uint256 k = 0; k < listLender.length; ++k) {
-    //             listLender[k].setLenderPoolVariables(
-    //                 paramsLender[i * 9 + k * 3],
-    //                 paramsLender[i * 9 + k * 3 + 1],
-    //                 paramsLender[i * 9 + k * 3 + 2],0
-    //             );
-    //             listLenderTmp[k].setLenderPoolVariables(
-    //                 paramsLender[i * 9 + k * 3],
-    //                 paramsLender[i * 9 + k * 3 + 1],
-    //                 paramsLender[i * 9 + k * 3 + 2],0
-    //             );
-    //         }
-    //         if (
-    //             (isWithdraw[i] == 1 && lender1.nav() == 0) ||
-    //             (isWithdraw[i] == 2 && lender2.nav() == 0) ||
-    //             (isWithdraw[i] == 3 && lender3.nav() == 0)
-    //         ) isWithdraw[i] = 0;
-    //         if (isWithdraw[i] == 0) {
-    //             uint256 amount = bound(amounts[i], minTokenAmount, maxTokenAmount);
-    //             deal(address(token), address(manager), amount);
-    //             deal(address(token), address(managerTmp), amount);
-    //         } else if (isWithdraw[i] == 1) {
-    //             uint256 amount = bound(amounts[i], 0, _BASE_TOKEN);
-    //             uint256 toBurn = (amount * lender1.nav()) / _BASE_TOKEN;
-    //             token.burn(address(lender1), toBurn);
-    //             token.burn(address(lenderTmp1), toBurn);
-    //         } else if (isWithdraw[i] == 2) {
-    //             uint256 amount = bound(amounts[i], 0, _BASE_TOKEN);
-    //             uint256 toBurn = (amount * lender2.nav()) / _BASE_TOKEN;
-    //             token.burn(address(lender2), toBurn);
-    //             token.burn(address(lenderTmp2), toBurn);
-    //         } else if (isWithdraw[i] == 3) {
-    //             uint256 amount = bound(amounts[i], 0, _BASE_TOKEN);
-    //             uint256 toBurn = (amount * lender3.nav()) / _BASE_TOKEN;
-    //             token.burn(address(lender3), toBurn);
-    //             token.burn(address(lenderTmp3), toBurn);
-    //         }
-    //         strat.harvest();
-    //         uint64[] memory lenderShares = new uint64[](3);
-    //         lenderShares[0] = 3333;
-    //         lenderShares[1] = 3333;
-    //         lenderShares[2] = 3334;
-    //         stratTmp.harvest(abi.encode(lenderShares));
-    //         // advance in time for rewards to be taken into account
-    //         elapseTime[i] = uint64(bound(elapseTime[i], 1, 86400 * 7));
-    //         elapseTime[i] = 86400 * 14;
-    //         vm.warp(block.timestamp + elapseTime[i]);
-    //         {
-    //             assertLe(lender1.apr(), lenderTmp1.apr());
-    //             assertLe(lender2.apr(), lenderTmp2.apr());
-    //             assertLe(lender3.apr(), lenderTmp3.apr());
-    //             assertLe(strat.estimatedAPR(), stratTmp.estimatedAPR());
-    //         }
-    //     }
-    // }
     // // ================================== DEPOSIT ==================================
 
     function testDepositInvalidLength() public {
@@ -299,7 +233,7 @@ contract OptimizerAPRStrategyTest is BaseTest {
         lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, maxTokenAmount, 0);
         lender3.setLenderPoolVariables(0, _BASE_APR / 2, maxTokenAmount, 0);
 
-        deal(address(token), address(manager), 2 * amount);
+        token.mint(address(manager), 2 * amount);
         uint64[] memory lenderShares = new uint64[](2);
         lenderShares[0] = _BPS / 2;
         lenderShares[1] = _BPS / 2;
@@ -314,7 +248,7 @@ contract OptimizerAPRStrategyTest is BaseTest {
         lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, maxTokenAmount, 0);
         lender3.setLenderPoolVariables(0, _BASE_APR / 2, maxTokenAmount, 0);
 
-        deal(address(token), address(manager), 2 * amount);
+        token.mint(address(manager), 2 * amount);
         uint64[] memory lenderShares = new uint64[](3);
         lenderShares[0] = _BPS / 2;
         lenderShares[1] = _BPS / 3;
@@ -357,7 +291,7 @@ contract OptimizerAPRStrategyTest is BaseTest {
         lender2.setLenderPoolVariables(0, _BASE_APR / 2, borrows[0], 0);
         lender3.setLenderPoolVariables(0, _BASE_APR / 2, borrows[0], 0);
 
-        deal(address(token), address(manager), amount);
+        token.mint(address(manager), amount);
         uint64[] memory lenderShares = new uint64[](3);
         lenderShares[0] = _BPS;
         lenderShares[1] = 0;
@@ -387,7 +321,7 @@ contract OptimizerAPRStrategyTest is BaseTest {
         lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
         lender3.setLenderPoolVariables(0, _BASE_APR / 2, borrows[0], 0);
 
-        deal(address(token), address(manager), 2 * amount);
+        token.mint(address(manager), 2 * amount);
         uint64[] memory lenderShares = new uint64[](3);
         lenderShares[0] = _BPS / 2;
         lenderShares[1] = _BPS / 2;
@@ -417,7 +351,7 @@ contract OptimizerAPRStrategyTest is BaseTest {
         lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
         lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
 
-        deal(address(token), address(manager), 4 * amount);
+        token.mint(address(manager), 4 * amount);
         uint64[] memory lenderShares = new uint64[](3);
         lenderShares[0] = _BPS / 2;
         lenderShares[1] = _BPS / 4;
@@ -452,13 +386,13 @@ contract OptimizerAPRStrategyTest is BaseTest {
         lender2.setLenderPoolVariables(0, 0, borrows[0], 0);
         lender3.setLenderPoolVariables(0, 0, borrows[0], 0);
 
-        deal(address(token), address(manager), 2 * amounts[0]);
+        token.mint(address(manager), 2 * amounts[0]);
         strat.harvest();
         // to not withdraw what has been put on lender1 previously (because _potential is lower than highest)
         lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR + 1, borrows[0], 0);
-        deal(address(token), address(manager), 2 * amounts[1]);
+        token.mint(address(manager), 2 * amounts[1]);
         strat.harvest();
-        deal(address(token), address(manager), 2 * amounts[2]);
+        token.mint(address(manager), 2 * amounts[2]);
         lender1.setLenderPoolVariables(0, 0, borrows[2], 0);
         lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], 0);
         lender3.setLenderPoolVariables(0, 0, borrows[2], 0);
@@ -496,13 +430,13 @@ contract OptimizerAPRStrategyTest is BaseTest {
         lender2.setLenderPoolVariables(0, 0, borrows[0], 0);
         lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
 
-        deal(address(token), address(manager), 4 * amounts[0]);
+        token.mint(address(manager), 4 * amounts[0]);
         strat.harvest();
         // to not withdraw what has been put on lender3 previously (because _potential is lower than highest)
         lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR + 1, borrows[0], 0);
-        deal(address(token), address(manager), 4 * amounts[1]);
+        token.mint(address(manager), 4 * amounts[1]);
         strat.harvest();
-        deal(address(token), address(manager), 4 * amounts[2]);
+        token.mint(address(manager), 4 * amounts[2]);
         lender1.setLenderPoolVariables(0, 0, borrows[2], 0);
         lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], sumAmounts);
         lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], 2 * sumAmounts);
@@ -549,6 +483,7 @@ contract OptimizerAPRStrategyTest is BaseTest {
         // Because in this special case my best estimate won't be better than the greedy, because the distribution
         // will be closer to te true optimum. This is just by chance for the greedy and the fuzzing is "searching for that chance"
         uint256 sumAmounts = (amounts[0] + amounts[1] + amounts[2]);
+        sumAmounts *= 4;
 
         borrows[0] = bound(borrows[0], 1, amounts[0]);
         borrows[1] = bound(borrows[1], 1, amounts[1]);
@@ -558,36 +493,40 @@ contract OptimizerAPRStrategyTest is BaseTest {
         lender2.setLenderPoolVariables(0, 0, borrows[0], 0);
         lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
 
-        deal(address(token), address(manager), 4 * amounts[0]);
+        token.mint(address(manager), 4 * amounts[0]);
         strat.harvest();
-        // to not withdraw what has been put on lender1 previously (because _potential is lower than highest)
-        lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR + 1, borrows[0], 0);
-        deal(address(token), address(manager), 4 * amounts[1]);
+        // to not withdraw what has been put on lender3 previously (because _potential is lower than highest)
+        lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR + 1, borrows[0], 0);
+        token.mint(address(manager), 4 * amounts[1]);
         strat.harvest();
-        // make loss or gain on lenders
-        // on lender1
         {
-            int256 delta1 = _makeLossGainLender(lender1, amounts[3]);
-            int256 delta2 = _makeLossGainLender(lender2, amounts[4]);
-            sumAmounts = uint256(int256(4 * sumAmounts) + delta1 + delta2);
+            int256 delta1 = _makeLossGainLender(lender1, amounts[3], 4);
+            int256 delta3 = _makeLossGainLender(lender3, amounts[4], 4);
+            sumAmounts = uint256(int256(sumAmounts) + delta1 + delta3);
+
+            uint256 amountOnLender3AfterPrepareReturn = uint256(int256(4 * amounts[0]) + delta3);
+            uint256 toWithdraw = (delta1 + delta3 >= 0) ? uint256(delta1 + delta3) : uint256(-(delta1 + delta3));
+            if (uint256(int256(4 * amounts[1]) + delta1) < toWithdraw)
+                amountOnLender3AfterPrepareReturn = uint256(int256(4 * amounts[0]) + delta3) >
+                    (toWithdraw - uint256(int256(4 * amounts[1]) + delta1))
+                    ? uint256(int256(4 * amounts[0]) + delta3) - (toWithdraw - uint256(int256(4 * amounts[1]) + delta1))
+                    : 0;
 
             // Because in this special case my best estimate won't be better than the greedy, because the distribution
             // will be closer to te true optimum. This is just by chance for the greedy and the fuzzing is "searching for that chance"
             if (
-                ((uint256(int256(4 * amounts[0]) + delta1)) * _BPS) / sumAmounts > _BPS / 4 ||
-                ((uint256(int256(4 * amounts[0]) + delta1)) * _BPS) / sumAmounts < (_BPS * 44) / 100
+                (amountOnLender3AfterPrepareReturn * _BPS) / sumAmounts > _BPS / 4 &&
+                (amountOnLender3AfterPrepareReturn * _BPS) / sumAmounts < (_BPS * 44) / 100
             ) return;
-
-            // sumAmounts *= 4;
         }
-
-        deal(address(token), address(manager), 4 * amounts[2]);
+        token.mint(address(manager), 4 * amounts[2]);
         lender1.setLenderPoolVariables(0, 0, borrows[2], 0);
         lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], sumAmounts);
         lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], 2 * sumAmounts);
         uint64[] memory lenderShares = new uint64[](3);
         lenderShares[1] = (_BPS * 3) / 4;
         lenderShares[2] = _BPS / 4;
+        strat.harvest(abi.encode(lenderShares));
         {
             uint256 estimatedAPRHintLender2 = _computeAPY(
                 (sumAmounts * lenderShares[1]) / _BPS,
@@ -596,7 +535,6 @@ contract OptimizerAPRStrategyTest is BaseTest {
                 _BASE_APR,
                 sumAmounts
             );
-
             uint256 estimatedAPRHintLender3 = _computeAPY(
                 (sumAmounts * lenderShares[2]) / _BPS,
                 borrows[2],
@@ -604,12 +542,11 @@ contract OptimizerAPRStrategyTest is BaseTest {
                 _BASE_APR,
                 2 * sumAmounts
             );
-
             uint256 estimatedAPRHint = (sumAmounts *
                 lenderShares[1] *
                 estimatedAPRHintLender2 +
                 sumAmounts *
-                lenderShares[3] *
+                lenderShares[2] *
                 estimatedAPRHintLender3) / (_BPS * sumAmounts);
             assertEq(lender1.nav(), 0);
             assertEq(lender2.nav(), (sumAmounts * lenderShares[1]) / _BPS);
@@ -634,14 +571,18 @@ contract OptimizerAPRStrategyTest is BaseTest {
         return r0 + (slope1 * borrow) / (supply + biasSupply);
     }
 
-    function _makeLossGainLender(MockLender lender, uint256 amount) internal returns (int256 delta) {
+    function _makeLossGainLender(
+        MockLender lender,
+        uint256 amount,
+        uint256 multiplier
+    ) internal returns (int256 delta) {
         amount = bound(amount, 0, 2 * _BASE_TOKEN);
         if (amount <= _BASE_TOKEN) {
-            uint256 toBurn = (amount * lender.nav()) / _BASE_TOKEN;
+            uint256 toBurn = multiplier * ((amount * lender.nav()) / (multiplier * _BASE_TOKEN));
             token.burn(address(lender), toBurn);
             delta = -int256(toBurn);
         } else {
-            uint256 toMint = ((amount - _BASE_TOKEN) * lender.nav()) / _BASE_TOKEN;
+            uint256 toMint = multiplier * (((amount - _BASE_TOKEN) * lender.nav()) / (multiplier * _BASE_TOKEN));
             token.mint(address(lender), toMint);
             delta = int256(toMint);
         }

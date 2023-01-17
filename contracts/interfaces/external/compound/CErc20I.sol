@@ -14,4 +14,6 @@ interface CErc20I is CTokenI {
     function borrow(uint256 borrowAmount) external returns (uint256);
 
     function decimals() external returns (uint8);
+
+    function accrueInterest() external returns (uint256);
 }
