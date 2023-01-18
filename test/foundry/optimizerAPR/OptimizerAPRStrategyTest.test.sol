@@ -474,6 +474,38 @@ contract OptimizerAPRStrategyTest is BaseTest {
             assertEq(strat.estimatedTotalAssets(), sumAmounts);
             assertEq(strat.estimatedAPR(), estimatedAPRHint);
         }
+        // should stay the same
+        strat.harvest();
+        {
+            uint256 estimatedAPRHintLender2 = _computeAPY(
+                (sumAmounts * lenderShares[1]) / _BPS,
+                borrows[2],
+                _BASE_APR / 100,
+                _BASE_APR,
+                sumAmounts
+            );
+            uint256 estimatedAPRHintLender3 = _computeAPY(
+                (sumAmounts * lenderShares[2]) / _BPS,
+                borrows[2],
+                _BASE_APR / 100,
+                _BASE_APR,
+                2 * sumAmounts
+            );
+            uint256 estimatedAPRHint = (sumAmounts *
+                lenderShares[1] *
+                estimatedAPRHintLender2 +
+                sumAmounts *
+                lenderShares[2] *
+                estimatedAPRHintLender3) / (_BPS * sumAmounts);
+            assertEq(lender1.nav(), 0);
+            assertEq(lender2.nav(), (sumAmounts * lenderShares[1]) / _BPS);
+            assertEq(lender3.nav(), (sumAmounts * lenderShares[2]) / _BPS);
+            assertEq(lender1.apr(), 0);
+            assertEq(lender2.apr(), estimatedAPRHintLender2);
+            assertEq(lender3.apr(), estimatedAPRHintLender3);
+            assertEq(strat.estimatedTotalAssets(), sumAmounts);
+            assertEq(strat.estimatedAPR(), estimatedAPRHint);
+        }
     }
 
     function testHarvest2SharesWithLossSuccess(uint256[5] memory amounts, uint256[3] memory borrows) public {
