@@ -135,7 +135,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
         _adjustPosition();
     }
 
-    /// @notice Same as the funciton above with a `data` parameter to help adjust the position
+    /// @notice Same as the function above with a `data` parameter to help adjust the position
     /// @dev Since this function is permissionless, strategy implementations should be made
     /// to remain safe regardless of the data that is passed in the call
     function harvest(bytes memory data) external {

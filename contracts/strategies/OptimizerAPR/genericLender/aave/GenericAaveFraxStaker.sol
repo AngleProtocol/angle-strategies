@@ -172,7 +172,7 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
                 1 ether;
         } else {
             newBalance = _stakedBalance();
-            if (amount > 0) newBalance += uint256(amount);
+            if (amount >= 0) newBalance += uint256(amount);
             else newBalance -= uint256(-amount);
             newCombinedWeight = (newBalance * newCombinedWeight) / lastLiquidity;
         }

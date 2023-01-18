@@ -175,7 +175,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         ) = _protocolDataProvider.getReserveData(address(want));
 
         uint256 newLiquidity = availableLiquidity;
-        if (amount > 0) newLiquidity += uint256(amount);
+        if (amount >= 0) newLiquidity += uint256(amount);
         else newLiquidity -= uint256(-amount);
 
         (, , , , uint256 reserveFactor, , , , , ) = _protocolDataProvider.getReserveConfigurationData(address(want));
