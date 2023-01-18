@@ -19,9 +19,10 @@ contract GenericAaveNoStaker is GenericAaveUpgradeable {
         bool _isIncentivised,
         address[] memory governorList,
         address guardian,
-        address[] memory keeperList
+        address[] memory keeperList,
+        address oneInch_
     ) external {
-        initializeAave(_strategy, name, _isIncentivised, governorList, guardian, keeperList);
+        initializeAave(_strategy, name, _isIncentivised, governorList, guardian, keeperList, oneInch_);
     }
 
     // ============================= VIRTUAL FUNCTIONS =============================

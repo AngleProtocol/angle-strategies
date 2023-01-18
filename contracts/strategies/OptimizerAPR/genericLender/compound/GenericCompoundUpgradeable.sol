@@ -53,15 +53,16 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         address _cToken,
         address[] memory governorList,
         address guardian,
-        address[] memory keeperList
+        address[] memory keeperList,
+        address oneInch_
     ) external {
-        _initialize(_strategy, _name, governorList, guardian, keeperList);
+        _initialize(_strategy, _name, governorList, guardian, keeperList, oneInch_);
 
         cToken = CErc20I(_cToken);
         if (CErc20I(_cToken).underlying() != address(want)) revert WrongCToken();
 
         want.safeApprove(_cToken, type(uint256).max);
-        IERC20(comp).safeApprove(oneInch, type(uint256).max);
+        IERC20(comp).safeApprove(oneInch_, type(uint256).max);
     }
 
     // ======================== EXTERNAL STRATEGY FUNCTIONS ========================

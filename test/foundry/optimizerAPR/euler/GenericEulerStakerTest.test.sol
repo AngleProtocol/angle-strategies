@@ -79,6 +79,7 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
                     governorList,
                     _GUARDIAN,
                     keeperList,
+                    _1INCH_V5,
                     _STAKER,
                     _CHAINLINK,
                     _POOL,

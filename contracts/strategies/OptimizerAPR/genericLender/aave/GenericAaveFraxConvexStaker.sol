@@ -77,9 +77,10 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         address[] memory governorList,
         address guardian,
         address[] memory keeperList,
+        address oneInch_,
         uint256 _stakingPeriod
     ) external {
-        initializeAave(_strategy, name, _isIncentivised, governorList, guardian, keeperList);
+        initializeAave(_strategy, name, _isIncentivised, governorList, guardian, keeperList, oneInch_);
         if (_stakingPeriod < aFraxStakingContract.lock_time_min()) revert TooSmallStakingPeriod();
         stakingPeriod = _stakingPeriod;
         lastAaveReserveNormalizedIncome = _lendingPool.getReserveNormalizedIncome(address(want));

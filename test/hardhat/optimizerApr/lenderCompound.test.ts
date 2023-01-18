@@ -52,7 +52,7 @@ async function initLenderCompound(
   const lender = (await deployUpgradeable(
     new GenericCompoundUpgradeable__factory(guardian),
   )) as GenericCompoundUpgradeable;
-  await lender.initialize(strategy.address, name, cToken, [governor.address], guardian.address, [keeper.address]);
+  await lender.initialize(strategy.address, name, cToken, [governor.address], guardian.address, [keeper.address], oneInch);
   await strategy.connect(governor).addLender(lender.address);
   return { lender };
 }
@@ -67,6 +67,7 @@ let manager: PoolManager;
 let lenderCompound: GenericCompoundUpgradeable;
 let comptroller: IComptroller;
 let cToken: CErc20I;
+let oneInch: string;
 
 const guardianRole = ethers.utils.solidityKeccak256(['string'], ['GUARDIAN_ROLE']);
 const strategyRole = ethers.utils.solidityKeccak256(['string'], ['STRATEGY_ROLE']);
@@ -103,7 +104,7 @@ describe('OptimizerAPR - lenderCompound', () => {
     guardianError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${guardianRole}`;
     strategyError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${strategyRole}`;
     keeperError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${keeperRole}`;
-    // oneInch = '0x1111111254EEB25477B68fb85Ed929f73A960582';
+    oneInch = '0x1111111254EEB25477B68fb85Ed929f73A960582';
   });
 
   beforeEach(async () => {
@@ -151,7 +152,7 @@ describe('OptimizerAPR - lenderCompound', () => {
       await expect(
         lender.initialize(strategy.address, 'wrong lender', wrongCToken.address, [governor.address], guardian.address, [
           keeper.address,
-        ]),
+        ], oneInch),
       ).to.be.revertedWithCustomError(lender, 'WrongCToken');
     });
     it('Parameters', async () => {

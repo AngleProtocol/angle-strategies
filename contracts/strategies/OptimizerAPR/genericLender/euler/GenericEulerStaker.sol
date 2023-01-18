@@ -19,6 +19,9 @@ contract GenericEulerStaker is GenericEuler, OracleMath {
     uint256 internal constant _SECONDS_IN_YEAR = 365 days;
     uint32 internal constant _TWAP_PERIOD = 1 minutes;
 
+    /// @notice EUL token address
+    IERC20 private constant _EUL = IERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
+
     // ================================= VARIABLES =================================
     IEulerStakingRewards public eulerStakingContract;
     AggregatorV3Interface public chainlinkOracle;
@@ -34,17 +37,19 @@ contract GenericEulerStaker is GenericEuler, OracleMath {
         address[] memory governorList,
         address guardian,
         address[] memory keeperList,
+        address oneInch_,
         IEulerStakingRewards _eulerStakingContract,
         AggregatorV3Interface _chainlinkOracle,
         IUniswapV3Pool _pool,
         uint8 _isUniMultiplied
     ) external {
-        initializeEuler(_strategy, _name, governorList, guardian, keeperList);
+        initializeEuler(_strategy, _name, governorList, guardian, keeperList, oneInch_);
         eulerStakingContract = _eulerStakingContract;
         chainlinkOracle = _chainlinkOracle;
         pool = _pool;
         isUniMultiplied = _isUniMultiplied;
         IERC20(address(eToken)).safeApprove(address(_eulerStakingContract), type(uint256).max);
+        IERC20(_EUL).safeApprove(oneInch_, type(uint256).max);
     }
 
     // ============================= EXTERNAL FUNCTION =============================

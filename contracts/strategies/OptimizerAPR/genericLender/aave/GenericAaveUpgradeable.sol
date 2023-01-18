@@ -73,9 +73,10 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         bool _isIncentivised,
         address[] memory governorList,
         address guardian,
-        address[] memory keeperList
+        address[] memory keeperList,
+        address oneInch_
     ) public {
-        _initialize(_strategy, name, governorList, guardian, keeperList);
+        _initialize(_strategy, name, governorList, guardian, keeperList, oneInch_);
 
         _setAavePoolVariables();
         if (_isIncentivised && address(_aToken.getIncentivesController()) == address(0)) revert PoolNotIncentivized();
@@ -83,8 +84,8 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
         cooldownStkAave = true;
         IERC20(address(want)).safeApprove(address(_lendingPool), type(uint256).max);
         // Approve swap router spend
-        IERC20(address(_stkAave)).safeApprove(oneInch, type(uint256).max);
-        IERC20(address(_aave)).safeApprove(oneInch, type(uint256).max);
+        IERC20(address(_stkAave)).safeApprove(oneInch_, type(uint256).max);
+        IERC20(address(_aave)).safeApprove(oneInch_, type(uint256).max);
     }
 
     // ============================= EXTERNAL FUNCTIONS ============================

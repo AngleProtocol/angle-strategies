@@ -28,9 +28,10 @@ contract MockLender is GenericLenderBaseUpgradeable {
         string memory _name,
         address[] memory governorList,
         address guardian,
-        address[] memory keeperList
+        address[] memory keeperList,
+        address oneInch_
     ) public {
-        _initialize(_strategy, _name, governorList, guardian, keeperList);
+        _initialize(_strategy, _name, governorList, guardian, keeperList, oneInch_);
     }
 
     // ======================== EXTERNAL STRATEGY FUNCTIONS ========================

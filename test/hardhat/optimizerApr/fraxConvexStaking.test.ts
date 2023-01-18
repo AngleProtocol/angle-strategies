@@ -64,6 +64,7 @@ async function initLenderAaveFraxStaker(
     [governor.address],
     guardian.address,
     [keeper.address],
+    oneInch,
     stakingPeriod,
   );
   await strategy.connect(governor).addLender(lender.address);
@@ -143,6 +144,7 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
     //   IPoolRegistryFrax__factory.abi,
     //   '0x41a5881c17185383e19Df6FA4EC158a6F4851A69',
     // )) as IPoolRegistryFrax;
+    oneInch = '0x1111111254EEB25477B68fb85Ed929f73A960582';
 
     guardianError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${guardianRole}`;
     keeperError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${keeperRole}`;
@@ -160,7 +162,6 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       true,
       DAY,
     ));
-    oneInch = '0x1111111254EEB25477B68fb85Ed929f73A960582';
     amountStorage = ethers.utils.hexStripZeros(utils.parseEther('1').toHexString());
   });
 
@@ -169,8 +170,9 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       const lender = (await deployUpgradeable(
         new GenericAaveFraxConvexStaker__factory(guardian),
       )) as GenericAaveFraxConvexStaker;
+      console.log("oneInch ", oneInch);
       await expect(
-        lender.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address], 0),
+        lender.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address],oneInch, 0),
       ).to.be.revertedWithCustomError(lender, 'TooSmallStakingPeriod');
       await expect(
         lenderAave.initialize(
@@ -180,6 +182,7 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
           [governor.address],
           guardian.address,
           [keeper.address],
+          oneInch,
           0,
         ),
       ).to.be.revertedWith('Initializable: contract is already initialized');

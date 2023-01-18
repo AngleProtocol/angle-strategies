@@ -51,7 +51,7 @@ async function initLenderEuler(
   lender: GenericEuler;
 }> {
   const lender = (await deployUpgradeable(new GenericEuler__factory(guardian))) as GenericEuler;
-  await lender.initializeEuler(strategy.address, name, [governor.address], guardian.address, [keeper.address]);
+  await lender.initializeEuler(strategy.address, name, [governor.address], guardian.address, [keeper.address], oneInch);
   await strategy.connect(governor).addLender(lender.address);
   return { lender };
 }
@@ -67,6 +67,8 @@ let eToken: IEulerEToken;
 let euler: IEuler;
 // let eulerMarkets: IEulerMarkets;
 let governance: IGovernance;
+let oneInch = '0x1111111254EEB25477B68fb85Ed929f73A960582';
+
 
 const guardianRole = ethers.utils.solidityKeccak256(['string'], ['GUARDIAN_ROLE']);
 const strategyRole = ethers.utils.solidityKeccak256(['string'], ['STRATEGY_ROLE']);
@@ -136,7 +138,7 @@ describe('OptimizerAPR - lenderEuler', () => {
       const lender = (await deployUpgradeable(new GenericEuler__factory(guardian))) as GenericEuler;
       await lender.initializeEuler(strategy.address, 'wrong lender', [governor.address], guardian.address, [
         keeper.address,
-      ]);
+      ], oneInch);
       expect(await lender.eToken()).to.not.equal(wrongEToken.address);
     });
     it('Parameters', async () => {

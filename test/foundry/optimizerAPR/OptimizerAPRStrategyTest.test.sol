@@ -66,7 +66,8 @@ contract OptimizerAPRStrategyTest is BaseTest {
                     "lender 1",
                     governorList,
                     _GUARDIAN,
-                    keeperList
+                    keeperList,
+                    _1INCH_V5
                 )
             )
         );
@@ -79,7 +80,8 @@ contract OptimizerAPRStrategyTest is BaseTest {
                     "lender 2",
                     governorList,
                     _GUARDIAN,
-                    keeperList
+                    keeperList,
+                    _1INCH_V5
                 )
             )
         );
@@ -92,7 +94,8 @@ contract OptimizerAPRStrategyTest is BaseTest {
                     "lender 3",
                     governorList,
                     _GUARDIAN,
-                    keeperList
+                    keeperList,
+                    _1INCH_V5
                 )
             )
         );
@@ -120,7 +123,8 @@ contract OptimizerAPRStrategyTest is BaseTest {
                     "lendertmp 1",
                     governorList,
                     _GUARDIAN,
-                    keeperList
+                    keeperList,
+                    _1INCH_V5
                 )
             )
         );
@@ -133,7 +137,8 @@ contract OptimizerAPRStrategyTest is BaseTest {
                     "lenderTmp 2",
                     governorList,
                     _GUARDIAN,
-                    keeperList
+                    keeperList,
+                    _1INCH_V5
                 )
             )
         );
@@ -146,7 +151,8 @@ contract OptimizerAPRStrategyTest is BaseTest {
                     "lenderTmp 3",
                     governorList,
                     _GUARDIAN,
-                    keeperList
+                    keeperList,
+                    _1INCH_V5
                 )
             )
         );

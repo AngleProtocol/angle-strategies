@@ -94,7 +94,8 @@ contract OptimizerAPRStrategyForkTest is BaseTest {
                         address(_cUSDC),
                         governorList,
                         _GUARDIAN,
-                        keeperList
+                        keeperList,
+                        _1INCH_V5
                     )
                 )
             )
@@ -110,7 +111,8 @@ contract OptimizerAPRStrategyForkTest is BaseTest {
                     false,
                     governorList,
                     _GUARDIAN,
-                    keeperList
+                    keeperList,
+                    _1INCH_V5
                 )
             )
         );
@@ -125,6 +127,7 @@ contract OptimizerAPRStrategyForkTest is BaseTest {
                     governorList,
                     _GUARDIAN,
                     keeperList,
+                    _1INCH_V5,
                     _STAKER,
                     _CHAINLINK,
                     _POOL,

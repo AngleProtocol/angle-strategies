@@ -52,7 +52,7 @@ async function initLenderAave(
   const lender = (await deployUpgradeable(new GenericAaveNoStaker__factory(guardian))) as GenericAaveNoStaker;
   await lender.initialize(strategy.address, name, isIncentivized, [governor.address], guardian.address, [
     keeper.address,
-  ]);
+  ], oneInch);
   await strategy.connect(governor).addLender(lender.address);
   return { lender };
 }
@@ -150,10 +150,10 @@ describe('OptimizerAPR - lenderAave', () => {
       await expect(
         lender.initialize(strategyFEI.address, 'lender FEI', true, [governor.address], guardian.address, [
           keeper.address,
-        ]),
+        ],oneInch),
       ).to.be.reverted;
       await expect(
-        lenderAave.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address]),
+        lenderAave.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address], oneInch),
       ).to.be.revertedWith('Initializable: contract is already initialized');
     });
   });
@@ -226,7 +226,7 @@ describe('OptimizerAPR - lenderAave', () => {
       const lender = (await deployUpgradeable(new GenericAaveNoStaker__factory(guardian))) as GenericAaveNoStaker;
       await lender.initialize(strategyFEI.address, 'lender FEI', false, [governor.address], guardian.address, [
         keeper.address,
-      ]);
+      ], oneInch);
       const apr = await lender.connect(keeper).apr();
       // at mainnet fork time there is 23% coming from liquidity rate and there is therefore no incentive
       expect(apr).to.be.closeTo(parseUnits('0.02334511', 18), parseUnits('0.1', 18));

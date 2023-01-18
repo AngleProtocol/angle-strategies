@@ -19,14 +19,9 @@ import "../../../interfaces/IStrategy.sol";
 abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlAngleUpgradeable {
     using SafeERC20 for IERC20;
 
-    bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
-    bytes32 public constant STRATEGY_ROLE = keccak256("STRATEGY_ROLE");
-    bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
-
-    // ========================== REFERENCES TO CONTRACTS ==========================
-
-    // solhint-disable-next-line
-    address internal constant oneInch = 0x1111111254EEB25477B68fb85Ed929f73A960582;
+    bytes32 public constant GUARDIAN_ROLE = 0x55435dd261a4b9b3364963f7738a7a662ad9c84396d64be3365284bb7f0a5041;
+    bytes32 public constant STRATEGY_ROLE = 0x928286c473ded01ff8bf61a1986f14a0579066072fa8261442d9fea514d93a4c;
+    bytes32 public constant KEEPER_ROLE = 0xfc8737ab85eb45125971625a9ebdb75cc78e01d5c1fa80c4c6e5203f47bc4fab;
 
     // ========================= REFERENCES AND PARAMETERS =========================
 
@@ -40,8 +35,10 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
     IERC20 public want;
     /// @notice Base of the asset handled by the lender
     uint256 public wantBase;
+    /// @notice 1inch Aggregattion router
+    address internal _oneInch;
 
-    uint256[45] private __gapBaseLender;
+    uint256[44] private __gapBaseLender;
 
     // =================================== ERRORS ==================================
 
@@ -63,8 +60,10 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
         string memory _name,
         address[] memory governorList,
         address guardian,
-        address[] memory keeperList
+        address[] memory keeperList,
+        address oneInch_
     ) internal initializer {
+        _oneInch = oneInch_;
         strategy = _strategy;
         // The corresponding `PoolManager` is inferred from the `Strategy`
         poolManager = IPoolManager(IStrategy(strategy).poolManager());
@@ -173,13 +172,19 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
         }
     }
 
+    /// @notice Changes oneInch contract address
+    /// @param oneInch_ Addresses of the new 1inch api endpoint contract
+    function set1Inch(address oneInch_) external onlyRole(GUARDIAN_ROLE) {
+        _oneInch = oneInch_;
+    }
+
     /// @notice Swap earned _stkAave or Aave for `want` through 1Inch
     /// @param minAmountOut Minimum amount of `want` to receive for the swap to happen
     /// @param payload Bytes needed for 1Inch API
     /// @dev In the case of a contract lending to Aave, tokens swapped should typically be: _stkAave -> `want` or Aave -> `want`
     function sellRewards(uint256 minAmountOut, bytes memory payload) external onlyRole(KEEPER_ROLE) {
         //solhint-disable-next-line
-        (bool success, bytes memory result) = oneInch.call(payload);
+        (bool success, bytes memory result) = _oneInch.call(payload);
         if (!success) _revertBytes(result);
 
         uint256 amountOut = abi.decode(result, (uint256));
