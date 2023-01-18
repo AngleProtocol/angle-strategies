@@ -81,7 +81,7 @@ contract MockLender is GenericLenderBaseUpgradeable {
     /// @notice Internal version of the `aprAfterDeposit` function
     function _aprAfterDeposit(int256 amount) internal view returns (uint256 supplyAPY) {
         uint256 totalSupply = want.balanceOf(address(this));
-        if (amount > 0) totalSupply += uint256(amount);
+        if (amount >= 0) totalSupply += uint256(amount);
         else totalSupply -= uint256(-amount);
         if (totalSupply > 0) supplyAPY = _computeAPYs(totalSupply);
     }

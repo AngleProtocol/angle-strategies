@@ -171,21 +171,21 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
             uint256 lowestApr = type(uint256).max;
             for (uint256 i; i < lendersList.length; ++i) {
                 uint256 aprAfterDeposit = lendersList[i].aprAfterDeposit(int256(looseAssets));
+                uint256 nav = lendersList[i].nav();
+                totalNav += nav;
                 if (aprAfterDeposit > highestApr) {
                     highestApr = aprAfterDeposit;
+                    highestLenderNav = nav;
                     _highest = i;
                 }
-
-                if (lendersList[i].hasAssets()) {
+                // Checking strategies that have assets
+                if (nav > 10 * wantBase) {
                     uint256 apr = lendersList[i].apr();
-                    uint256 nav = lendersList[i].nav();
-                    totalNav += nav;
                     weightedAprs[i] = apr * nav;
-                    if (_highest == i) highestLenderNav == nav;
                     if (apr < lowestApr) {
                         lowestApr = apr;
-                        _lowest = i;
                         lowestNav = nav;
+                        _lowest = i;
                     }
                 }
             }
@@ -242,7 +242,6 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
 
         // The hint was successful --> we find a better allocation than the current one
         if (_totalApr < estimatedAprHint) {
-            // TODO add a minimum deposit/withdraw? If yes could be tricky as we need a way to remove it from another lender withdraw/deposit
             for (uint256 i; i < lendersListLength; ++i) {
                 if (lenderAdjustedAmounts[i] < 0) lendersList[i].withdraw(uint256(-lenderAdjustedAmounts[i]));
             }
@@ -423,9 +422,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         if (lenderLength != shares.length) revert IncorrectListLength();
 
         uint256 bal = estimatedTotalAssets();
-        if (bal == 0) {
-            return (weightedAPR, lenderAdjustedAmounts);
-        }
+        if (bal == 0) return (weightedAPR, lenderAdjustedAmounts);
 
         uint256 share;
         for (uint256 i; i < lenderLength; ++i) {

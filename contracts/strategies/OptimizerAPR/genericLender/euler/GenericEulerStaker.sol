@@ -78,7 +78,7 @@ contract GenericEulerStaker is GenericEuler, OracleMath {
     function _stakingApr(int256 amount) internal view override returns (uint256 apr) {
         uint256 periodFinish = eulerStakingContract.periodFinish();
         uint256 newTotalSupply = eulerStakingContract.totalSupply();
-        if (amount > 0) newTotalSupply += eToken.convertUnderlyingToBalance(uint256(amount));
+        if (amount >= 0) newTotalSupply += eToken.convertUnderlyingToBalance(uint256(amount));
         else newTotalSupply -= eToken.convertUnderlyingToBalance(uint256(-amount));
         if (periodFinish <= block.timestamp || newTotalSupply == 0) return 0;
         // APRs are in 1e18 and a 5% penalty on the EUL price is taken to avoid overestimations
