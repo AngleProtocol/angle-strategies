@@ -3,7 +3,9 @@
 pragma solidity ^0.8.17;
 
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+
 import "../BaseStrategyUpgradeable.sol";
+
 import "../../interfaces/IGenericLender.sol";
 
 /// @title OptimizerAPRGreedyStrategy
@@ -24,8 +26,9 @@ contract OptimizerAPRGreedyStrategy is BaseStrategyUpgradeable {
 
     uint256 public withdrawalThreshold;
 
-    event AddLender(address indexed lender);
+    // =================================== EVENTS ==================================
 
+    event AddLender(address indexed lender);
     event RemoveLender(address indexed lender);
 
     // ================================ CONSTRUCTOR ================================
@@ -61,8 +64,8 @@ contract OptimizerAPRGreedyStrategy is BaseStrategyUpgradeable {
             uint256 _debtPayment
         )
     {
-        _profit = 0;
-        _loss = 0; //for clarity
+        _profit = 0; //default assignments for clarity
+        _loss = 0;
         _debtPayment = _debtOutstanding;
 
         uint256 lentAssets = lentTotalAssets();
@@ -89,7 +92,7 @@ contract OptimizerAPRGreedyStrategy is BaseStrategyUpgradeable {
             uint256 amountToFree = _profit + _debtPayment;
             // We need to add outstanding to our profit
             // don't need to do logic if there is nothing to free
-            if (amountToFree > 0 && looseAssets < amountToFree) {
+            if (amountToFree != 0 && looseAssets < amountToFree) {
                 // Withdraw what we can withdraw
                 _withdrawSome(amountToFree - looseAssets);
                 uint256 newLoose = want.balanceOf(address(this));
@@ -109,7 +112,7 @@ contract OptimizerAPRGreedyStrategy is BaseStrategyUpgradeable {
             _loss = debt - total;
 
             uint256 amountToFree = _loss + _debtPayment;
-            if (amountToFree > 0 && looseAssets < amountToFree) {
+            if (amountToFree != 0 && looseAssets < amountToFree) {
                 // Withdraw what we can withdraw
 
                 _withdrawSome(amountToFree - looseAssets);
@@ -146,20 +149,19 @@ contract OptimizerAPRGreedyStrategy is BaseStrategyUpgradeable {
             uint256 _potential
         )
     {
-        //all loose assets are to be invested
+        // All loose assets are to be invested
         uint256 looseAssets = want.balanceOf(address(this));
 
-        // our simple algo
-        // get the lowest apr strat
-        // cycle through and see who could take its funds plus want for the highest apr
+        // Simple algo:
+        //  - Get the lowest apr strat
+        //  - Cycle through and see who could take its funds plus want for the highest apr
         _lowestApr = type(uint256).max;
         _lowest = 0;
         uint256 lowestNav = 0;
-
         uint256 highestApr = 0;
         _highest = 0;
-
-        for (uint256 i = 0; i < lendersList.length; i++) {
+        uint256 length = lendersList.length;
+        for (uint256 i = 0; i < length; i++) {
             uint256 aprAfterDeposit = lendersList[i].aprAfterDeposit(int256(looseAssets));
             if (aprAfterDeposit > highestApr) {
                 highestApr = aprAfterDeposit;
@@ -293,13 +295,6 @@ contract OptimizerAPRGreedyStrategy is BaseStrategyUpgradeable {
     }
 
     // =============================== VIEW FUNCTIONS ==============================
-
-    struct LendStatus {
-        string name;
-        uint256 assets;
-        uint256 rate;
-        address add;
-    }
 
     /// @notice View function to check the current state of the strategy
     /// @return Returns the status of all lenders attached the strategy

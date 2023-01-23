@@ -79,11 +79,6 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
 
     uint256[46] private __gapBaseStrategy;
 
-    // =================================== ERRORS ==================================
-
-    error InvalidToken();
-    error ZeroAddress();
-
     // ================================ CONSTRUCTOR ================================
 
     /// @custom:oz-upgrades-unsafe-allow constructor

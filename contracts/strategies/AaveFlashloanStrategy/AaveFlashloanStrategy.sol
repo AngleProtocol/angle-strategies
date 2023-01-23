@@ -119,15 +119,6 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     IAToken private _aToken;
     IVariableDebtToken private _debtToken;
 
-    // ================================== Errors ===================================
-
-    error ErrorSwap();
-    error InvalidSender();
-    error InvalidSetOfParameters();
-    error InvalidWithdrawCheck();
-    error TooSmallAmountOut();
-    error TooHighParameterValue();
-
     // ============================ Initializer ====================================
 
     /// @notice Constructor of the `Strategy`

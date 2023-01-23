@@ -31,14 +31,6 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     // solhint-disable-next-line
     uint256 private dust;
 
-    // =================================== ERRORS ==================================
-
-    error FailedToMint();
-    error FailedToRecoverETH();
-    error FailedToRedeem();
-    error InvalidOracleValue();
-    error WrongCToken();
-
     // ============================= Constructor ===================================
 
     /// @notice Initializer of the `GenericCompound`
