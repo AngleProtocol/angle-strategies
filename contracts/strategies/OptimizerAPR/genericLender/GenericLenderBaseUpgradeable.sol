@@ -13,6 +13,8 @@ import "../../../interfaces/IGenericLender.sol";
 import "../../../interfaces/IPoolManager.sol";
 import "../../../interfaces/IStrategy.sol";
 
+import "../../../utils/Errors.sol";
+
 /// @title GenericLenderBaseUpgradeable
 /// @author Forked from https://github.com/Grandthrax/yearnV2-generic-lender-strat/tree/master/contracts/GenericLender
 /// @notice A base contract to build contracts that lend assets to protocols
@@ -39,13 +41,6 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
     address internal _oneInch;
 
     uint256[44] private __gapBaseLender;
-
-    // =================================== ERRORS ==================================
-
-    error ErrorSwap();
-    error IncompatibleLengths();
-    error ProtectedToken();
-    error TooSmallAmount();
 
     // ================================ INITIALIZER ================================
 

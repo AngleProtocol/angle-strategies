@@ -54,10 +54,6 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
     event IncentivisedUpdated(bool _isIncentivised);
 
-    // =================================== ERROR ===================================
-
-    error PoolNotIncentivized();
-
     // ================================ CONSTRUCTOR ================================
 
     /// @notice Initializer of the `GenericAave`

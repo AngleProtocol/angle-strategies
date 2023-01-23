@@ -6,6 +6,7 @@ import { PoolManager } from "../../../contracts/mock/MockPoolManager2.sol";
 import { OptimizerAPRStrategy } from "../../../contracts/strategies/OptimizerAPR/OptimizerAPRStrategy.sol";
 import { MockLender, IERC20, IGenericLender } from "../../../contracts/mock/MockLender.sol";
 import { MockToken } from "../../../contracts/mock/MockToken.sol";
+import "../../../contracts/utils/Errors.sol";
 
 contract OptimizerAPRStrategyTest is BaseTest {
     using stdStorage for StdStorage;
@@ -243,7 +244,7 @@ contract OptimizerAPRStrategyTest is BaseTest {
         uint64[] memory lenderShares = new uint64[](2);
         lenderShares[0] = _BPS / 2;
         lenderShares[1] = _BPS / 2;
-        vm.expectRevert(OptimizerAPRStrategy.IncorrectListLength.selector);
+        vm.expectRevert(IncorrectListLength.selector);
         strat.harvest(abi.encode(lenderShares));
     }
 
@@ -259,7 +260,7 @@ contract OptimizerAPRStrategyTest is BaseTest {
         lenderShares[0] = _BPS / 2;
         lenderShares[1] = _BPS / 3;
         lenderShares[2] = 0;
-        vm.expectRevert(OptimizerAPRStrategy.InvalidShares.selector);
+        vm.expectRevert(InvalidShares.selector);
         strat.harvest(abi.encode(lenderShares));
     }
 

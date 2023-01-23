@@ -4,6 +4,13 @@ pragma solidity ^0.8.17;
 
 import "./IAccessControlAngle.sol";
 
+struct LendStatus {
+    string name;
+    uint256 assets;
+    uint256 rate;
+    address add;
+}
+
 /// @title IStrategy
 /// @author Inspired by Yearn with slight changes from Angle Core Team
 /// @notice Interface for yield farming strategies

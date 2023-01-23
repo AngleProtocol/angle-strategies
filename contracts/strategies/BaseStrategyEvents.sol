@@ -11,11 +11,12 @@ import "../external/AccessControlAngleUpgradeable.sol";
 import "../interfaces/IStrategy.sol";
 import "../interfaces/IPoolManager.sol";
 
+import "../utils/Errors.sol";
+
 /// @title BaseStrategyEvents
 /// @author Angle Core Team
 /// @notice Events used in the abstract `BaseStrategy` contract
 contract BaseStrategyEvents {
-    // So indexers can keep track of this
     event Harvested(uint256 profit, uint256 loss, uint256 debtPayment, uint256 debtOutstanding);
 
     event UpdatedMinReportDelayed(uint256 delay);

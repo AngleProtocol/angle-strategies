@@ -45,11 +45,6 @@ contract GenericAaveFraxStaker is GenericAaveUpgradeable {
     /// @notice Staking duration
     uint256 public stakingPeriod;
 
-    // =================================== ERRORS ==================================
-
-    error NoLockedLiquidity();
-    error TooSmallStakingPeriod();
-
     // ================================ CONSTRUCTOR ================================
 
     /// @notice Wrapper built on top of the `initializeAave` method to initialize the contract

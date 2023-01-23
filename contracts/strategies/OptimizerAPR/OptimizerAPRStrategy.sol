@@ -3,15 +3,10 @@
 pragma solidity ^0.8.17;
 
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
-import "../BaseStrategyUpgradeable.sol";
-import "../../interfaces/IGenericLender.sol";
 
-struct LendStatus {
-    string name;
-    uint256 assets;
-    uint256 rate;
-    address add;
-}
+import "../BaseStrategyUpgradeable.sol";
+
+import "../../interfaces/IGenericLender.sol";
 
 /// @title OptimizerAPRStrategy
 /// @author Angle Labs, Inc.
@@ -24,25 +19,21 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
     using Address for address;
 
     // ================================= CONSTANTS =================================
+
     uint64 internal constant _BPS = 10000;
 
     // ============================ CONTRACTS REFERENCES ===========================
+
     IGenericLender[] public lenders;
 
     // ================================= PARAMETERS ================================
+
     uint256 public withdrawalThreshold;
 
     // =================================== EVENTS ==================================
+
     event AddLender(address indexed lender);
     event RemoveLender(address indexed lender);
-
-    // =================================== ERRORS ==================================
-    error IncorrectListLength();
-    error InvalidShares();
-    error UndockedLender();
-    error LenderAlreadyAdded();
-    error FailedWithdrawal();
-    error NonExistentLender();
 
     /// @notice Constructor of the `Strategy`
     /// @param _poolManager Address of the `PoolManager` lending to this strategy
@@ -160,16 +151,18 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         // All loose assets are to be invested
         uint256 looseAssets = want.balanceOf(address(this));
 
-        // Simple greedy algo: get the lowest apr strat and cycle through and see who
-        // could take its funds to improve the overall highest APR
+        // Simple greedy algo:
+        //  - Get the lowest apr strat
+        //  - Cycle through and see who could take its funds to improve the overall highest APR
         uint256 lowestNav;
         uint256 highestApr;
         uint256 highestLenderNav;
         uint256 totalNav = looseAssets;
         uint256[] memory weightedAprs = new uint256[](lendersList.length);
+        uint256 lendersListLength = lendersList.length;
         {
             uint256 lowestApr = type(uint256).max;
-            for (uint256 i; i < lendersList.length; ++i) {
+            for (uint256 i; i < lendersListLength; ++i) {
                 uint256 aprAfterDeposit = lendersList[i].aprAfterDeposit(int256(looseAssets));
                 uint256 nav = lendersList[i].nav();
                 totalNav += nav;
@@ -198,10 +191,10 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
             uint256 weightedApr1;
             // Case where funds are divested from the strategy with the lowest APR to be invested in the one with the highest APR
             uint256 weightedApr2;
-            for (uint256 i; i < lendersList.length; ++i) {
+            for (uint256 i; i < lendersListLength; ++i) {
                 if (i == _highest) {
                     weightedApr1 += (highestLenderNav + looseAssets) * highestApr;
-                    if (lowestNav != 0 && lendersList.length > 1)
+                    if (lowestNav != 0 && lendersListLength > 1)
                         weightedApr2 +=
                             (highestLenderNav + looseAssets + lowestNav) *
                             lendersList[_highest].aprAfterDeposit(int256(lowestNav + looseAssets));
@@ -525,7 +518,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         // Granting the new role
         // Access control for this contract
         _grantRole(GUARDIAN_ROLE, _guardian);
-        // Propagating the new role in other contract
+        // Propagating the new role to underyling lenders
         uint256 lendersLength = lenders.length;
         for (uint256 i; i < lendersLength; ++i) {
             lenders[i].grantRole(GUARDIAN_ROLE, _guardian);
