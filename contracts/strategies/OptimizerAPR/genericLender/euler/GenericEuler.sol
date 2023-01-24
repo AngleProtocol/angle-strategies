@@ -24,7 +24,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     // solhint-disable-next-line
     IEulerMarkets private constant _eulerMarkets = IEulerMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
     // solhint-disable-next-line
-    uint256 private constant SECONDS_PER_YEAR = 365.2425 * 86400;
+    uint256 internal constant _SECONDS_IN_YEAR = 365 days;
     // solhint-disable-next-line
     uint256 private constant RESERVE_FEE_SCALE = 4_000_000_000;
 
@@ -162,11 +162,11 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         uint32 _reserveFee
     ) internal pure returns (uint256 supplyAPY) {
         // Not useful for the moment
-        // uint256 borrowAPY = (ComputePower.computePower(borrowSPY, SECONDS_PER_YEAR) - ComputePower.BASE_INTEREST) / 1e9;
+        // uint256 borrowAPY = (ComputePower.computePower(borrowSPY, _SECONDS_IN_YEAR) - ComputePower.BASE_INTEREST) / 1e9;
         uint256 supplySPY = (borrowSPY * totalBorrows) / totalSupplyUnderlying;
         supplySPY = (supplySPY * (RESERVE_FEE_SCALE - _reserveFee)) / RESERVE_FEE_SCALE;
         // All rates are in base 18 on Angle strategies
-        supplyAPY = (ComputePower.computePower(supplySPY, SECONDS_PER_YEAR, BASE_INTEREST) - BASE_INTEREST) / 1e9;
+        supplyAPY = (ComputePower.computePower(supplySPY, _SECONDS_IN_YEAR, BASE_INTEREST) - BASE_INTEREST) / 1e9;
     }
 
     /// @notice See `withdraw`

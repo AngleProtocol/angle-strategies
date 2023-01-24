@@ -16,7 +16,6 @@ contract GenericEulerStaker is GenericEuler, OracleMath {
     using Address for address;
 
     // ================================= CONSTANTS =================================
-    uint256 internal constant _SECONDS_IN_YEAR = 365 days;
     uint32 internal constant _TWAP_PERIOD = 1 minutes;
 
     /// @notice EUL token address
