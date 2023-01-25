@@ -48,7 +48,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     using SafeERC20 for IERC20;
 
     uint256 public constant BASE = 10**18;
-    uint256 public constant SECONDSPERYEAR = 31556952;
+    uint256 public constant SECONDS_PER_YEAR = 31556952;
 
     /// @notice Role for `PoolManager` only - keccak256("POOLMANAGER_ROLE")
     bytes32 public constant POOLMANAGER_ROLE = 0x5916f72c85af4ac6f7e34636ecc97619c4b2085da099a5d28f3e58436cfbe562;

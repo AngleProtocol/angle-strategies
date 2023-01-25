@@ -463,7 +463,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
 
     /// @notice Removes a lending platform and fails if total withdrawal is impossible
     /// @param lender The address of the adapter to the lending platform to remove
-    function safeRemoveLender(address lender) external onlyRole(GUARDIAN_ROLE) {
+    function safeRemoveLender(address lender) external onlyRole(KEEPER_ROLE) {
         _removeLender(lender, false);
     }
 
