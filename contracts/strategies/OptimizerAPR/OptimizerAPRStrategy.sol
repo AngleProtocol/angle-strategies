@@ -136,6 +136,8 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
     /// @return _lowest The index of the lender in the `lendersList` with lowest apr
     /// @return _highest The index of the lender with highest apr
     /// @return _investmentStrategy Whether we should invest from the lowest to the highest yielding strategy or simply invest loose assets
+    /// @return _totalApr The APR computed according to (greedy) heuristics that will determine whether positions should be adjusted
+    /// with proposed caller solution or the greedy solution
     /// @dev `lendersList` is kept as a parameter to avoid multiplying reads in storage to the `lenders`
     /// array
     function _estimateGreedyAdjustPosition(IGenericLender[] memory lendersList)
@@ -303,7 +305,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
             }
             uint256 amountWithdrawnFromStrat = lendersList[lowest].withdraw(_amount - amountWithdrawn);
             // To avoid staying on the same strat if we can't withdraw anythin from it
-            amountWithdrawn = amountWithdrawn + amountWithdrawnFromStrat;
+            amountWithdrawn += amountWithdrawnFromStrat;
             ++j;
             // not best solution because it would be better to move to the 2nd lowestAPR instead of quiting
             if (amountWithdrawnFromStrat == 0) {
@@ -396,7 +398,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         uint256 weightedAPR;
         uint256 lendersLength = lenders.length;
         for (uint256 i; i < lendersLength; ++i) {
-            weightedAPR = weightedAPR + lenders[i].weightedApr();
+            weightedAPR += lenders[i].weightedApr();
         }
 
         return weightedAPR / bal;
