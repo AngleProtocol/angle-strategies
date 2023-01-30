@@ -30,6 +30,9 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
 
     uint256 public withdrawalThreshold;
 
+    // =================================== ERRORS ==================================
+    error IncorrectDistribution();
+
     // =================================== EVENTS ==================================
 
     event AddLender(address indexed lender);
@@ -237,15 +240,25 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
 
         // The hint was successful --> we find a better allocation than the current one
         if (_totalApr < estimatedAprHint) {
+            uint256 deltaWithdraw;
             for (uint256 i; i < lendersListLength; ++i) {
-                if (lenderAdjustedAmounts[i] < 0) lendersList[i].withdraw(uint256(-lenderAdjustedAmounts[i]));
+                if (lenderAdjustedAmounts[i] < 0) {
+                    deltaWithdraw +=
+                        lendersList[i].withdraw(uint256(-lenderAdjustedAmounts[i])) -
+                        uint256(-lenderAdjustedAmounts[i]);
+                }
             }
 
+            // Strategy didn't succeed to withdraw the intended funds --> go through the greedy path
+            if (deltaWithdraw > withdrawalThreshold) revert IncorrectDistribution();
+
             for (uint256 i; i < lendersListLength; ++i) {
-                if (lenderAdjustedAmounts[i] > 0) {
+                if (uint256(lenderAdjustedAmounts[i]) > deltaWithdraw) {
+                    lenderAdjustedAmounts[i] -= int256(deltaWithdraw);
+                    deltaWithdraw = 0;
                     want.safeTransfer(address(lendersList[i]), uint256(lenderAdjustedAmounts[i]));
                     lendersList[i].deposit();
-                }
+                } else deltaWithdraw -= uint256(lenderAdjustedAmounts[i]);
             }
         } else {
             if (_investmentStrategy) {
