@@ -253,6 +253,8 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
             if (deltaWithdraw > withdrawalThreshold) revert IncorrectDistribution();
 
             for (uint256 i; i < lendersListLength; ++i) {
+                // As `deltaWithdraw` is inferior to `withdrawalThreshold` (a dust)
+                // It is not critical to compensate on an arbitrary lender as it will only slightly impact global APR
                 if (lenderAdjustedAmounts[i] > int256(deltaWithdraw)) {
                     lenderAdjustedAmounts[i] -= int256(deltaWithdraw);
                     deltaWithdraw = 0;
