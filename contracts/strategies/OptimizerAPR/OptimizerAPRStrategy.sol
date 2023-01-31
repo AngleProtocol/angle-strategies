@@ -249,7 +249,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
                 }
             }
 
-            // Strategy didn't succeed to withdraw the intended funds --> go through the greedy path
+            // If the strategy didn't succeed to withdraw the intended funds -> revert and force the greedy path
             if (deltaWithdraw > withdrawalThreshold) revert IncorrectDistribution();
 
             for (uint256 i; i < lendersListLength; ++i) {
