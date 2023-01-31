@@ -294,14 +294,15 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         }
 
         // Don't withdraw dust
-        if (_amount < withdrawalThreshold) {
+        uint256 _withdrawalThreshold = withdrawalThreshold;
+        if (_amount < _withdrawalThreshold) {
             return 0;
         }
 
         amountWithdrawn;
         // In most situations this will only run once. Only big withdrawals will be a gas guzzler
         uint256 j;
-        while (amountWithdrawn < _amount - withdrawalThreshold) {
+        while (amountWithdrawn < _amount - _withdrawalThreshold) {
             uint256 lowestApr = type(uint256).max;
             uint256 lowest;
             for (uint256 i; i < lendersListLength; ++i) {
