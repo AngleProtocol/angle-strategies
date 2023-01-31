@@ -244,8 +244,8 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
             for (uint256 i; i < lendersListLength; ++i) {
                 if (lenderAdjustedAmounts[i] < 0) {
                     deltaWithdraw +=
-                        lendersList[i].withdraw(uint256(-lenderAdjustedAmounts[i])) -
-                        uint256(-lenderAdjustedAmounts[i]);
+                        uint256(-lenderAdjustedAmounts[i]) -
+                        lendersList[i].withdraw(uint256(-lenderAdjustedAmounts[i]));
                 }
             }
 
@@ -253,12 +253,12 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
             if (deltaWithdraw > withdrawalThreshold) revert IncorrectDistribution();
 
             for (uint256 i; i < lendersListLength; ++i) {
-                if (uint256(lenderAdjustedAmounts[i]) > deltaWithdraw) {
+                if (lenderAdjustedAmounts[i] > int256(deltaWithdraw)) {
                     lenderAdjustedAmounts[i] -= int256(deltaWithdraw);
                     deltaWithdraw = 0;
                     want.safeTransfer(address(lendersList[i]), uint256(lenderAdjustedAmounts[i]));
                     lendersList[i].deposit();
-                } else deltaWithdraw -= uint256(lenderAdjustedAmounts[i]);
+                } else if (lenderAdjustedAmounts[i] > 0) deltaWithdraw -= uint256(lenderAdjustedAmounts[i]);
             }
         } else {
             if (_investmentStrategy) {

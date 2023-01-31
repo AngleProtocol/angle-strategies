@@ -11,10 +11,13 @@ contract MockLender is GenericLenderBaseUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
+    uint256 private constant _BPS = 10**4;
+
     uint256 public r0;
     uint256 public slope1;
     uint256 public totalBorrow;
     uint256 public biasSupply;
+    uint256 public propWithdrawable;
 
     // ================================ CONSTRUCTOR ================================
 
@@ -29,9 +32,15 @@ contract MockLender is GenericLenderBaseUpgradeable {
         address[] memory governorList,
         address guardian,
         address[] memory keeperList,
-        address oneInch_
+        address oneInch_,
+        uint256 _propWithdrawable
     ) public {
         _initialize(_strategy, _name, governorList, guardian, keeperList, oneInch_);
+        propWithdrawable = _propWithdrawable;
+    }
+
+    function setPropWithdrawable(uint256 _propWithdrawable) external {
+        propWithdrawable = _propWithdrawable;
     }
 
     // ======================== EXTERNAL STRATEGY FUNCTIONS ========================
@@ -105,6 +114,8 @@ contract MockLender is GenericLenderBaseUpgradeable {
             amount = total;
         }
 
+        // Limited in what we can withdraw
+        amount = (amount * propWithdrawable) / _BPS;
         want.safeTransfer(address(strategy), amount);
         return amount;
     }

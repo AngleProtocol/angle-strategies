@@ -68,7 +68,8 @@ contract OptimizerAPRStrategyTest is BaseTest {
                     governorList,
                     _GUARDIAN,
                     keeperList,
-                    _1INCH_V5
+                    _1INCH_V5,
+                    _BPS
                 )
             )
         );
@@ -82,7 +83,8 @@ contract OptimizerAPRStrategyTest is BaseTest {
                     governorList,
                     _GUARDIAN,
                     keeperList,
-                    _1INCH_V5
+                    _1INCH_V5,
+                    _BPS
                 )
             )
         );
@@ -96,7 +98,8 @@ contract OptimizerAPRStrategyTest is BaseTest {
                     governorList,
                     _GUARDIAN,
                     keeperList,
-                    _1INCH_V5
+                    _1INCH_V5,
+                    _BPS
                 )
             )
         );
@@ -125,7 +128,8 @@ contract OptimizerAPRStrategyTest is BaseTest {
                     governorList,
                     _GUARDIAN,
                     keeperList,
-                    _1INCH_V5
+                    _1INCH_V5,
+                    _BPS
                 )
             )
         );
@@ -139,7 +143,8 @@ contract OptimizerAPRStrategyTest is BaseTest {
                     governorList,
                     _GUARDIAN,
                     keeperList,
-                    _1INCH_V5
+                    _1INCH_V5,
+                    _BPS
                 )
             )
         );
@@ -153,7 +158,8 @@ contract OptimizerAPRStrategyTest is BaseTest {
                     governorList,
                     _GUARDIAN,
                     keeperList,
-                    _1INCH_V5
+                    _1INCH_V5,
+                    _BPS
                 )
             )
         );
@@ -419,46 +425,6 @@ contract OptimizerAPRStrategyTest is BaseTest {
         }
     }
 
-    // function testDeposit2HopRevertMissingLiquidity(uint256[3] memory amounts, uint256[3] memory borrows) public {
-    //     amounts[0] = bound(amounts[0], 1, maxTokenAmount);
-    //     amounts[1] = bound(amounts[1], 1, maxTokenAmount);
-    //     amounts[2] = bound(amounts[2], 1, maxTokenAmount);
-    //     uint256 sumAmounts = 2 * (amounts[0] + amounts[1] + amounts[2]);
-
-    //     borrows[0] = bound(borrows[0], 1, amounts[0]);
-    //     borrows[1] = bound(borrows[1], 1, amounts[1]);
-    //     borrows[2] = sumAmounts;
-
-    //     lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
-    //     lender2.setLenderPoolVariables(0, 0, borrows[0], 0);
-    //     lender3.setLenderPoolVariables(0, 0, borrows[0], 0);
-
-    //     token.mint(address(manager), 2 * amounts[0]);
-    //     strat.harvest();
-    //     // to not withdraw what has been put on lender1 previously (because _potential is lower than highest)
-    //     lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR + 1, borrows[0], 0);
-    //     token.mint(address(manager), 2 * amounts[1]);
-    //     strat.harvest();
-    //     token.mint(address(manager), 2 * amounts[2]);
-    //     lender1.setLenderPoolVariables(0, 0, borrows[2], 0);
-    //     lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], 0);
-    //     lender3.setLenderPoolVariables(0, 0, borrows[2], 0);
-    //     uint64[] memory lenderShares = new uint64[](3);
-    //     lenderShares[1] = _BPS;
-    //     strat.harvest(abi.encode(lenderShares));
-    //     {
-    //         uint256 estimatedAPRHint = _computeAPY(sumAmounts, borrows[2], _BASE_APR / 100, _BASE_APR, 0);
-    //         assertEq(lender1.nav(), 0);
-    //         assertEq(lender2.nav(), sumAmounts);
-    //         assertEq(lender3.nav(), 0);
-    //         assertEq(lender1.apr(), 0);
-    //         assertEq(lender2.apr(), estimatedAPRHint);
-    //         assertEq(lender3.apr(), 0);
-    //         assertEq(strat.estimatedTotalAssets(), sumAmounts);
-    //         assertEq(strat.estimatedAPR(), estimatedAPRHint);
-    //     }
-    // }
-
     function testDeposit2HopMultiSharesSuccess(uint256[3] memory amounts, uint256[3] memory borrows) public {
         amounts[0] = bound(amounts[0], 1, maxTokenAmount);
         amounts[1] = bound(amounts[1], 1, maxTokenAmount);
@@ -553,6 +519,48 @@ contract OptimizerAPRStrategyTest is BaseTest {
             assertEq(strat.estimatedTotalAssets(), sumAmounts);
             assertEq(strat.estimatedAPR(), estimatedAPRHint);
         }
+    }
+
+    function testDeposit2HopMultiSharesRevertMissingLiquidity(
+        uint256[3] memory amounts,
+        uint256[3] memory borrows,
+        uint256 propWithdraw
+    ) public {
+        amounts[0] = bound(amounts[0], 2 * 1000 * 10**_DECIMAL_TOKEN, maxTokenAmount);
+        amounts[1] = bound(amounts[1], 2 * 1000 * 10**_DECIMAL_TOKEN, maxTokenAmount);
+        amounts[2] = bound(amounts[2], 2 * 1000 * 10**_DECIMAL_TOKEN, maxTokenAmount);
+        propWithdraw = bound(propWithdraw, 0, _BPS / 4);
+        // Because in this special case my best estimate won't be better than the greedy, because the distribution
+        // will be closer to te true optimum. This is just by chance for the greedy and the fuzzing is "searching for that chance"
+        uint256 sumAmounts = (amounts[0] + amounts[1] + amounts[2]);
+        if ((amounts[0] * _BPS) / sumAmounts > _BPS / 4 && (amounts[0] * _BPS) / sumAmounts < (_BPS * 44) / 100) return;
+        sumAmounts *= 4;
+
+        borrows[0] = bound(borrows[0], 1, amounts[0]);
+        borrows[1] = bound(borrows[1], 1, amounts[1]);
+        borrows[2] = sumAmounts;
+
+        lender1.setLenderPoolVariables(0, 0, borrows[0], 0);
+        lender2.setLenderPoolVariables(0, 0, borrows[0], 0);
+        lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[0], 0);
+
+        token.mint(address(manager), 4 * amounts[0]);
+        strat.harvest();
+        // to not withdraw what has been put on lender3 previously (because _potential is lower than highest)
+        lender1.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR + 1, borrows[0], 0);
+        token.mint(address(manager), 4 * amounts[1]);
+        strat.harvest();
+        token.mint(address(manager), 4 * amounts[2]);
+        lender1.setLenderPoolVariables(0, 0, borrows[2], 0);
+        lender2.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], sumAmounts);
+        lender3.setLenderPoolVariables(_BASE_APR / 100, _BASE_APR, borrows[2], 2 * sumAmounts);
+        //change liquidity on lender used
+        lender1.setPropWithdrawable(propWithdraw);
+        uint64[] memory lenderShares = new uint64[](3);
+        lenderShares[1] = (_BPS * 3) / 4;
+        lenderShares[2] = _BPS / 4;
+        vm.expectRevert(OptimizerAPRStrategy.IncorrectDistribution.selector);
+        strat.harvest(abi.encode(lenderShares));
     }
 
     function testHarvest2SharesWithLossSuccess(uint256[5] memory amounts, uint256[3] memory borrows) public {
