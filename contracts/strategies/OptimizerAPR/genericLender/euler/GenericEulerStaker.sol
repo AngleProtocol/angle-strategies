@@ -84,7 +84,7 @@ contract GenericEulerStaker is GenericEuler {
         // APRs are in 1e18 and a 5% penalty on the EUL price is taken to avoid overestimations
         // `_estimatedEulToWant()` and eTokens are in base 18
         apr =
-            (_estimatedEulToWant(eulerStakingContract.rewardRate() * _SECONDS_IN_YEAR) * 9500 * 1 ether) /
+            (_estimatedEulToWant(eulerStakingContract.rewardRate() * _SECONDS_IN_YEAR) * 9500 * 10**6) /
             10000 /
             newTotalSupply;
     }

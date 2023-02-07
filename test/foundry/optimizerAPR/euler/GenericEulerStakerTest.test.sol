@@ -246,7 +246,7 @@ contract GenericEulerStakerTest is BaseTest {
     function testAPRSuccess() public {
         uint256 apr = lender.apr();
         uint256 supplyAPR = _computeSupplyAPR(0);
-        uint256 stakingAPR = 18884 * 10**12;
+        uint256 stakingAPR = 18313 * 10**12;
         // elpase to not have staking incentives anymore
         vm.warp(block.timestamp + 86400 * 7 * 4);
         vm.roll(block.number + 1);
@@ -271,10 +271,10 @@ contract GenericEulerStakerTest is BaseTest {
         _STAKER.stake(eTokenAMount);
         vm.stopPrank();
 
-        uint256 totalSupply = _STAKER.totalSupply();
+        uint256 totalSupply = _eUSDC.convertBalanceToUnderlying(_STAKER.totalSupply());
         uint256 eulRoughPrice = 4015000000000000000;
         // rewards last 2 weeks
-        uint256 incentivesAPR = (rewardAmount * 53 * eulRoughPrice) / totalSupply / 2;
+        uint256 incentivesAPR = (rewardAmount * 53 * eulRoughPrice) / (totalSupply * 10**12) / 2;
         assertApproxEqAbs(contractEstimatedAPR, incentivesAPR, 10**15);
     }
 
@@ -302,10 +302,10 @@ contract GenericEulerStakerTest is BaseTest {
         // elpase to not have staking incentives anymore
         vm.warp(block.timestamp + 86400 * 7 * 2);
         _depositRewards(rewardAmount);
-        uint256 totalSupply = _STAKER.totalSupply();
+        uint256 totalSupply = _eUSDC.convertBalanceToUnderlying(_STAKER.totalSupply());
         uint256 eulRoughPrice = 4015000000000000000;
         // rewards last 2 weeks
-        uint256 incentivesAPR = (rewardAmount * 53 * eulRoughPrice) / totalSupply / 2;
+        uint256 incentivesAPR = (rewardAmount * 53 * eulRoughPrice) / (totalSupply * 10**12) / 2;
         uint256 aprWithIncentives = lender.apr();
         // incentives APR are tough to estimate (because of the price) which is why the .3% margin
         assertApproxEqAbs(aprWithIncentives, supplyAPR + incentivesAPR, 3 * 10**15);
@@ -413,10 +413,10 @@ contract GenericEulerStakerTest is BaseTest {
     function _stakingApr(uint256 amount) internal view returns (uint256 apr) {
         uint256 periodFinish = _STAKER.periodFinish();
         if (periodFinish <= block.timestamp) return 0;
-        uint256 newTotalSupply = _STAKER.totalSupply() + _eUSDC.convertUnderlyingToBalance(amount);
+        uint256 newTotalSupply = _eUSDC.convertBalanceToUnderlying(_STAKER.totalSupply()) + amount;
         // APRs are in 1e18 and a 5% penalty on the EUL price is taken to avoid overestimations
         // `_estimatedEulToWant()` and eTokens are in base 18
-        apr = (_estimatedEulToWant(_STAKER.rewardRate() * (365 days)) * 1 ether) / newTotalSupply;
+        apr = (_estimatedEulToWant(_STAKER.rewardRate() * (365 days)) * 10**6) / newTotalSupply;
     }
 
     /// @notice Estimates the amount of `want` we will get out by swapping it for EUL
