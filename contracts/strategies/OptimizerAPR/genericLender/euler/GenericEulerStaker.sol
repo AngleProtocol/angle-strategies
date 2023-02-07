@@ -2,21 +2,22 @@
 
 pragma solidity ^0.8.12;
 
+import { IEulerExec } from "../../../../interfaces/external/euler/IEuler.sol";
 import "../../../../interfaces/external/euler/IEulerStakingRewards.sol";
-import "../../../../interfaces/external/uniswap/IUniswapV3Pool.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "./GenericEuler.sol";
-import "../../../../utils/OracleMath.sol";
 
 /// @title GenericEulerStaker
 /// @author  Angle Core Team
 /// @notice `GenericEuler` with staking to earn EUL incentives
-contract GenericEulerStaker is GenericEuler, OracleMath {
+contract GenericEulerStaker is GenericEuler {
     using SafeERC20 for IERC20;
     using Address for address;
 
     // ================================= CONSTANTS =================================
     uint32 internal constant _TWAP_PERIOD = 1 minutes;
+    IEulerExec private constant _EXEC = IEulerExec(0x59828FdF7ee634AaaD3f58B19fDBa3b03E2D9d80);
+    IERC20 private constant _EUL = IERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
 
     /// @notice EUL token address
     IERC20 private constant _EUL = IERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
@@ -24,7 +25,6 @@ contract GenericEulerStaker is GenericEuler, OracleMath {
     // ================================= VARIABLES =================================
     IEulerStakingRewards public eulerStakingContract;
     AggregatorV3Interface public chainlinkOracle;
-    IUniswapV3Pool public pool;
     uint8 public isUniMultiplied;
 
     // ================================ CONSTRUCTOR ================================
@@ -38,15 +38,11 @@ contract GenericEulerStaker is GenericEuler, OracleMath {
         address[] memory keeperList,
         address oneInch_,
         IEulerStakingRewards _eulerStakingContract,
-        AggregatorV3Interface _chainlinkOracle,
-        IUniswapV3Pool _pool,
-        uint8 _isUniMultiplied
+        AggregatorV3Interface _chainlinkOracle
     ) external {
         initializeEuler(_strategy, _name, governorList, guardian, keeperList, oneInch_);
         eulerStakingContract = _eulerStakingContract;
         chainlinkOracle = _chainlinkOracle;
-        pool = _pool;
-        isUniMultiplied = _isUniMultiplied;
         IERC20(address(eToken)).safeApprove(address(_eulerStakingContract), type(uint256).max);
         IERC20(_EUL).safeApprove(oneInch_, type(uint256).max);
     }
@@ -98,25 +94,10 @@ contract GenericEulerStaker is GenericEuler, OracleMath {
     /// @notice Estimates the amount of `want` we will get out by swapping it for EUL
     /// @param quoteAmount The amount to convert in the out-currency
     /// @return The value of the `quoteAmount` expressed in out-currency
-    /// @dev Uses both Uniswap TWAP and Chainlink spot price
+    /// @dev Uses Euler TWAP and Chainlink spot price
     function _estimatedEulToWant(uint256 quoteAmount) internal view returns (uint256) {
-        uint32[] memory secondAgos = new uint32[](2);
-
-        secondAgos[0] = _TWAP_PERIOD;
-        secondAgos[1] = 0;
-
-        (int56[] memory tickCumulatives, ) = pool.observe(secondAgos);
-        int56 tickCumulativesDelta = tickCumulatives[1] - tickCumulatives[0];
-
-        int24 timeWeightedAverageTick = int24(tickCumulativesDelta / int32(_TWAP_PERIOD));
-
-        // Always round to negative infinity
-        if (tickCumulativesDelta < 0 && (tickCumulativesDelta % int56(int32(_TWAP_PERIOD)) != 0))
-            timeWeightedAverageTick--;
-
-        // Computing the `quoteAmount` from the ticks obtained from Uniswap
-        uint256 amountInBase = _getQuoteAtTick(timeWeightedAverageTick, quoteAmount, isUniMultiplied);
-        return _quoteOracleEUL(amountInBase);
+        (uint256 twapEUL, ) = _EXEC.getPrice(address(_EUL));
+        return _quoteOracleEUL((quoteAmount * twapEUL) / 10**18);
     }
 
     // ============================= VIRTUAL FUNCTIONS =============================
