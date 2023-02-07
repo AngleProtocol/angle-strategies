@@ -25,19 +25,11 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     // solhint-disable-next-line
     address public constant comp = 0xc00e94Cb662C3520282E6f5717214004A7f26888;
 
-    // ======================== References to contracts ============================
+    // ================================= REFERENCES ================================
 
     CErc20I public cToken;
     // solhint-disable-next-line
     uint256 private dust;
-
-    // =============================== Errors ======================================
-
-    error FailedToMint();
-    error FailedToRecoverETH();
-    error FailedToRedeem();
-    error InvalidOracleValue();
-    error WrongCToken();
 
     // ============================= Constructor ===================================
 
@@ -53,18 +45,19 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         address _cToken,
         address[] memory governorList,
         address guardian,
-        address[] memory keeperList
+        address[] memory keeperList,
+        address oneInch_
     ) external {
-        _initialize(_strategy, _name, governorList, guardian, keeperList);
+        _initialize(_strategy, _name, governorList, guardian, keeperList, oneInch_);
 
         cToken = CErc20I(_cToken);
         if (CErc20I(_cToken).underlying() != address(want)) revert WrongCToken();
 
         want.safeApprove(_cToken, type(uint256).max);
-        IERC20(comp).safeApprove(oneInch, type(uint256).max);
+        IERC20(comp).safeApprove(oneInch_, type(uint256).max);
     }
 
-    // ===================== External Strategy Functions ===========================
+    // ======================== EXTERNAL STRATEGY FUNCTIONS ========================
 
     /// @inheritdoc IGenericLender
     function deposit() external override onlyRole(STRATEGY_ROLE) {
@@ -84,7 +77,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         return returned >= invested;
     }
 
-    // ========================== External View Functions ==========================
+    // ========================== EXTERNAL VIEW FUNCTIONS ==========================
 
     /// @inheritdoc GenericLenderBaseUpgradeable
     function underlyingBalanceStored() public view override returns (uint256 balance) {
@@ -98,7 +91,7 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     }
 
     /// @inheritdoc IGenericLender
-    function aprAfterDeposit(uint256 amount) external view override returns (uint256) {
+    function aprAfterDeposit(int256 amount) external view override returns (uint256) {
         uint256 cashPrior = want.balanceOf(address(cToken));
 
         uint256 borrows = cToken.totalBorrows();
@@ -109,13 +102,22 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
 
         InterestRateModel model = cToken.interestRateModel();
 
+        uint256 newCashPrior = cashPrior;
+        uint256 totalSupplyInWant = (cToken.totalSupply() * cToken.exchangeRateStored()) / 1e18;
+        if (amount >= 0) {
+            newCashPrior += uint256(amount);
+            totalSupplyInWant += uint256(amount);
+        } else {
+            newCashPrior -= uint256(-amount);
+            totalSupplyInWant -= uint256(-amount);
+        }
         // The supply rate is derived from the borrow rate, reserve factor and the amount of total borrows.
-        uint256 supplyRate = model.getSupplyRate(cashPrior + amount, borrows, reserves, reserverFactor);
+        uint256 supplyRate = model.getSupplyRate(newCashPrior, borrows, reserves, reserverFactor);
         // Adding the yield from comp
-        return supplyRate * BLOCKS_PER_YEAR + _incentivesRate(amount);
+        return supplyRate * BLOCKS_PER_YEAR + _incentivesRate(totalSupplyInWant);
     }
 
-    // ================================= Governance ================================
+    // ================================= GOVERNANCE ================================
 
     /// @inheritdoc IGenericLender
     function emergencyWithdraw(uint256 amount) external override onlyRole(GUARDIAN_ROLE) {
@@ -132,11 +134,12 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
         dust = dust_;
     }
 
-    // ============================= Internal Functions ============================
+    // ============================= INTERNAL FUNCTIONS ============================
 
     /// @notice See `apr`
     function _apr() internal view override returns (uint256) {
-        return cToken.supplyRatePerBlock() * BLOCKS_PER_YEAR + _incentivesRate(0);
+        uint256 totalSupplyInWant = (cToken.totalSupply() * cToken.exchangeRateStored()) / 1e18;
+        return cToken.supplyRatePerBlock() * BLOCKS_PER_YEAR + _incentivesRate(totalSupplyInWant);
     }
 
     /// @notice See `withdraw`
@@ -184,10 +187,9 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     }
 
     /// @notice Calculates APR from Compound's Liquidity Mining Program
-    /// @param amountToAdd Amount to add to the `totalSupplyInWant` (for the `aprAfterDeposit` function)
-    function _incentivesRate(uint256 amountToAdd) internal view returns (uint256) {
+    /// @param totalSupplyInWant Total supply in want for this market (for the `aprAfterDeposit` function)
+    function _incentivesRate(uint256 totalSupplyInWant) internal view returns (uint256) {
         uint256 supplySpeed = comptroller.compSupplySpeeds(address(cToken));
-        uint256 totalSupplyInWant = (cToken.totalSupply() * cToken.exchangeRateStored()) / 1e18 + amountToAdd;
         // `supplySpeed` is in `COMP` unit -> the following operation is going to put it in `want` unit
         supplySpeed = _comptoWant(supplySpeed);
         uint256 incentivesRate;

@@ -2,7 +2,7 @@ import { network } from 'hardhat';
 import { DeployFunction } from 'hardhat-deploy/types';
 import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
 import { BigNumber } from 'ethers';
-import { GenericEuler__factory, OptimizerAPRStrategy, OptimizerAPRStrategy__factory } from '../../typechain';
+import { GenericEuler__factory, OptimizerAPRGreedyStrategy, OptimizerAPRGreedyStrategy__factory } from '../../typechain';
 import { impersonate } from '../../test/hardhat/test-utils';
 
 const func: DeployFunction = async ({ deployments, ethers }) => {
@@ -77,9 +77,9 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
     if (!network.live) {
       const strategy = new ethers.Contract(
         strategyAddress,
-        OptimizerAPRStrategy__factory.createInterface(),
+        OptimizerAPRGreedyStrategy__factory.createInterface(),
         deployer,
-      ) as OptimizerAPRStrategy;
+      ) as OptimizerAPRGreedyStrategy;
 
       await impersonate(guardian, async acc => {
         await network.provider.send('hardhat_setBalance', [guardian, '0x10000000000000000000000000000']);

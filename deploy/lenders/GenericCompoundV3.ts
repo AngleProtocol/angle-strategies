@@ -7,8 +7,8 @@ import {
   ERC20__factory,
   GenericCompoundUpgradeable,
   GenericCompoundUpgradeable__factory,
-  OptimizerAPRStrategy,
-  OptimizerAPRStrategy__factory,
+  OptimizerAPRGreedyStrategy,
+  OptimizerAPRGreedyStrategy__factory,
 } from '../../typechain';
 import { parseUnits } from 'ethers/lib/utils';
 import { impersonate } from '../../test/hardhat/test-utils';
@@ -98,9 +98,9 @@ const func: DeployFunction = async ({ deployments, ethers }) => {
 
       const strategy = new ethers.Contract(
         strategyAddress,
-        OptimizerAPRStrategy__factory.createInterface(),
+        OptimizerAPRGreedyStrategy__factory.createInterface(),
         deployer,
-      ) as OptimizerAPRStrategy;
+      ) as OptimizerAPRGreedyStrategy;
 
       await impersonate(guardian, async acc => {
         await network.provider.send('hardhat_setBalance', [guardian, '0x10000000000000000000000000000']);

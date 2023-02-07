@@ -90,8 +90,8 @@ describe('StrategyStETH', () => {
       it('apr', async () => {
         expect(await strategy.apr()).to.be.equal(parseUnits('3', 9));
       });
-      it('SECONDSPERYEAR', async () => {
-        expect(await strategy.SECONDSPERYEAR()).to.be.equal(BigNumber.from('31556952'));
+      it('SECONDS_PER_YEAR', async () => {
+        expect(await strategy.SECONDS_PER_YEAR()).to.be.equal(BigNumber.from('31556952'));
       });
       it('DENOMINATOR', async () => {
         expect(await strategy.DENOMINATOR()).to.be.equal(BigNumber.from('10000'));

@@ -10,8 +10,8 @@ import {
   GenericCompoundUpgradeable__factory,
   GenericEuler,
   GenericEuler__factory,
-  OptimizerAPRStrategy,
-  OptimizerAPRStrategy__factory,
+  OptimizerAPRGreedyStrategy,
+  OptimizerAPRGreedyStrategy__factory,
   PoolManager,
   PoolManager__factory,
 } from '../../../typechain';
@@ -56,9 +56,9 @@ async function main() {
 
   const strategy = new ethers.Contract(
     strategyAddress,
-    OptimizerAPRStrategy__factory.createInterface(),
+    OptimizerAPRGreedyStrategy__factory.createInterface(),
     deployer,
-  ) as OptimizerAPRStrategy;
+  ) as OptimizerAPRGreedyStrategy;
   const poolManager = new ethers.Contract(
     poolManagerAddress,
     PoolManager__factory.createInterface(),

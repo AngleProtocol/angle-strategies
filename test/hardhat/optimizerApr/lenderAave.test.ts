@@ -13,8 +13,8 @@ import {
   ILendingPool__factory,
   IStakedAave,
   IStakedAave__factory,
-  OptimizerAPRStrategy,
-  OptimizerAPRStrategy__factory,
+  OptimizerAPRGreedyStrategy,
+  OptimizerAPRGreedyStrategy__factory,
   PoolManager,
 } from '../../../typechain';
 import { gwei } from '../../../utils/bignumber';
@@ -29,9 +29,11 @@ async function initStrategy(
   keeper: SignerWithAddress,
   manager: PoolManager,
 ): Promise<{
-  strategy: OptimizerAPRStrategy;
+  strategy: OptimizerAPRGreedyStrategy;
 }> {
-  const strategy = (await deployUpgradeable(new OptimizerAPRStrategy__factory(guardian))) as OptimizerAPRStrategy;
+  const strategy = (await deployUpgradeable(
+    new OptimizerAPRGreedyStrategy__factory(guardian),
+  )) as OptimizerAPRGreedyStrategy;
   await strategy.initialize(manager.address, governor.address, guardian.address, [keeper.address]);
   await manager.connect(governor).addStrategy(strategy.address, gwei('0.8'));
   return { strategy };
@@ -41,7 +43,7 @@ async function initLenderAave(
   governor: SignerWithAddress,
   guardian: SignerWithAddress,
   keeper: SignerWithAddress,
-  strategy: OptimizerAPRStrategy,
+  strategy: OptimizerAPRGreedyStrategy,
   name: string,
   isIncentivized: boolean,
 ): Promise<{
@@ -50,13 +52,13 @@ async function initLenderAave(
   const lender = (await deployUpgradeable(new GenericAaveNoStaker__factory(guardian))) as GenericAaveNoStaker;
   await lender.initialize(strategy.address, name, isIncentivized, [governor.address], guardian.address, [
     keeper.address,
-  ]);
+  ], oneInch);
   await strategy.connect(governor).addLender(lender.address);
   return { lender };
 }
 
 let governor: SignerWithAddress, guardian: SignerWithAddress, user: SignerWithAddress, keeper: SignerWithAddress;
-let strategy: OptimizerAPRStrategy;
+let strategy: OptimizerAPRGreedyStrategy;
 let token: ERC20;
 let tokenDecimal: number;
 let FEI: ERC20;
@@ -148,10 +150,10 @@ describe('OptimizerAPR - lenderAave', () => {
       await expect(
         lender.initialize(strategyFEI.address, 'lender FEI', true, [governor.address], guardian.address, [
           keeper.address,
-        ]),
+        ],oneInch),
       ).to.be.reverted;
       await expect(
-        lenderAave.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address]),
+        lenderAave.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address], oneInch),
       ).to.be.revertedWith('Initializable: contract is already initialized');
     });
   });
@@ -224,7 +226,7 @@ describe('OptimizerAPR - lenderAave', () => {
       const lender = (await deployUpgradeable(new GenericAaveNoStaker__factory(guardian))) as GenericAaveNoStaker;
       await lender.initialize(strategyFEI.address, 'lender FEI', false, [governor.address], guardian.address, [
         keeper.address,
-      ]);
+      ], oneInch);
       const apr = await lender.connect(keeper).apr();
       // at mainnet fork time there is 23% coming from liquidity rate and there is therefore no incentive
       expect(apr).to.be.closeTo(parseUnits('0.02334511', 18), parseUnits('0.1', 18));

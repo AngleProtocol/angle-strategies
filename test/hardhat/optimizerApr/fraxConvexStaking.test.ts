@@ -17,8 +17,8 @@ import {
   IStakedAave__factory,
   MockToken,
   MockToken__factory,
-  OptimizerAPRStrategy,
-  OptimizerAPRStrategy__factory,
+  OptimizerAPRGreedyStrategy,
+  OptimizerAPRGreedyStrategy__factory,
   PoolManager,
 } from '../../../typechain';
 import { gwei } from '../../../utils/bignumber';
@@ -33,9 +33,11 @@ async function initStrategy(
   keeper: SignerWithAddress,
   manager: PoolManager,
 ): Promise<{
-  strategy: OptimizerAPRStrategy;
+  strategy: OptimizerAPRGreedyStrategy;
 }> {
-  const strategy = (await deployUpgradeable(new OptimizerAPRStrategy__factory(guardian))) as OptimizerAPRStrategy;
+  const strategy = (await deployUpgradeable(
+    new OptimizerAPRGreedyStrategy__factory(guardian),
+  )) as OptimizerAPRGreedyStrategy;
   await strategy.initialize(manager.address, governor.address, guardian.address, [keeper.address]);
   await manager.connect(governor).addStrategy(strategy.address, gwei('0.99999'));
   return { strategy };
@@ -45,7 +47,7 @@ async function initLenderAaveFraxStaker(
   governor: SignerWithAddress,
   guardian: SignerWithAddress,
   keeper: SignerWithAddress,
-  strategy: OptimizerAPRStrategy,
+  strategy: OptimizerAPRGreedyStrategy,
   name: string,
   isIncentivized: boolean,
   stakingPeriod: number,
@@ -62,6 +64,7 @@ async function initLenderAaveFraxStaker(
     [governor.address],
     guardian.address,
     [keeper.address],
+    oneInch,
     stakingPeriod,
   );
   await strategy.connect(governor).addLender(lender.address);
@@ -69,7 +72,7 @@ async function initLenderAaveFraxStaker(
 }
 
 let governor: SignerWithAddress, guardian: SignerWithAddress, user: SignerWithAddress, keeper: SignerWithAddress;
-let strategy: OptimizerAPRStrategy;
+let strategy: OptimizerAPRGreedyStrategy;
 let token: ERC20;
 let aToken: ERC20;
 let nativeRewardToken: MockToken;
@@ -141,6 +144,7 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
     //   IPoolRegistryFrax__factory.abi,
     //   '0x41a5881c17185383e19Df6FA4EC158a6F4851A69',
     // )) as IPoolRegistryFrax;
+    oneInch = '0x1111111254EEB25477B68fb85Ed929f73A960582';
 
     guardianError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${guardianRole}`;
     keeperError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${keeperRole}`;
@@ -158,7 +162,6 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       true,
       DAY,
     ));
-    oneInch = '0x1111111254EEB25477B68fb85Ed929f73A960582';
     amountStorage = ethers.utils.hexStripZeros(utils.parseEther('1').toHexString());
   });
 
@@ -167,8 +170,9 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       const lender = (await deployUpgradeable(
         new GenericAaveFraxConvexStaker__factory(guardian),
       )) as GenericAaveFraxConvexStaker;
+      console.log("oneInch ", oneInch);
       await expect(
-        lender.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address], 0),
+        lender.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address],oneInch, 0),
       ).to.be.revertedWithCustomError(lender, 'TooSmallStakingPeriod');
       await expect(
         lenderAave.initialize(
@@ -178,6 +182,7 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
           [governor.address],
           guardian.address,
           [keeper.address],
+          oneInch,
           0,
         ),
       ).to.be.revertedWith('Initializable: contract is already initialized');

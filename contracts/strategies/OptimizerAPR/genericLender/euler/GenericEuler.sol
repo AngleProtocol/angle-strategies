@@ -24,7 +24,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     // solhint-disable-next-line
     IEulerMarkets private constant _eulerMarkets = IEulerMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
     // solhint-disable-next-line
-    uint256 private constant SECONDS_PER_YEAR = 365.2425 * 86400;
+    uint256 internal constant _SECONDS_IN_YEAR = 365 days;
     // solhint-disable-next-line
     uint256 private constant RESERVE_FEE_SCALE = 4_000_000_000;
 
@@ -53,9 +53,10 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         string memory _name,
         address[] memory governorList,
         address guardian,
-        address[] memory keeperList
+        address[] memory keeperList,
+        address oneInch_
     ) public {
-        _initialize(_strategy, _name, governorList, guardian, keeperList);
+        _initialize(_strategy, _name, governorList, guardian, keeperList, oneInch_);
 
         eToken = IEulerEToken(_eulerMarkets.underlyingToEToken(address(want)));
         dToken = IEulerDToken(_eulerMarkets.underlyingToDToken(address(want)));
@@ -106,7 +107,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     }
 
     /// @inheritdoc IGenericLender
-    function aprAfterDeposit(uint256 amount) external view override returns (uint256) {
+    function aprAfterDeposit(int256 amount) external view override returns (uint256) {
         return _aprAfterDeposit(amount);
     }
 
@@ -127,13 +128,16 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     }
 
     /// @notice Internal version of the `aprAfterDeposit` function
-    function _aprAfterDeposit(uint256 amount) internal view returns (uint256) {
+    function _aprAfterDeposit(int256 amount) internal view returns (uint256) {
         uint256 totalBorrows = dToken.totalSupply();
         // Total supply is current supply + added liquidity
-        uint256 totalSupply = eToken.totalSupplyUnderlying() + amount;
+
+        uint256 totalSupply = eToken.totalSupplyUnderlying();
+        if (amount >= 0) totalSupply += uint256(amount);
+        else totalSupply -= uint256(-amount);
 
         uint256 supplyAPY;
-        if (totalSupply > 0) {
+        if (totalSupply != 0) {
             uint32 futureUtilisationRate = uint32(
                 (totalBorrows * (uint256(type(uint32).max) * 1e18)) / totalSupply / 1e18
             );
@@ -158,11 +162,11 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         uint32 _reserveFee
     ) internal pure returns (uint256 supplyAPY) {
         // Not useful for the moment
-        // uint256 borrowAPY = (ComputePower.computePower(borrowSPY, SECONDS_PER_YEAR) - ComputePower.BASE_INTEREST) / 1e9;
+        // uint256 borrowAPY = (ComputePower.computePower(borrowSPY, _SECONDS_IN_YEAR) - ComputePower.BASE_INTEREST) / 1e9;
         uint256 supplySPY = (borrowSPY * totalBorrows) / totalSupplyUnderlying;
         supplySPY = (supplySPY * (RESERVE_FEE_SCALE - _reserveFee)) / RESERVE_FEE_SCALE;
         // All rates are in base 18 on Angle strategies
-        supplyAPY = (ComputePower.computePower(supplySPY, SECONDS_PER_YEAR, BASE_INTEREST) - BASE_INTEREST) / 1e9;
+        supplyAPY = (ComputePower.computePower(supplySPY, _SECONDS_IN_YEAR, BASE_INTEREST) - BASE_INTEREST) / 1e9;
     }
 
     /// @notice See `withdraw`
@@ -198,7 +202,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
                 toUnstake = availableLiquidity > balanceUnderlying ? availableLiquidity - balanceUnderlying : 0;
                 toWithdraw = availableLiquidity;
             }
-            if (toUnstake > 0) _unstake(toUnstake);
+            if (toUnstake != 0) _unstake(toUnstake);
             eToken.withdraw(0, toWithdraw);
         }
 
@@ -241,7 +245,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
 
     /// @notice Calculates APR from Liquidity Mining Program
     /// @dev amountToAdd Amount to add to the currently supplied liquidity (for the `aprAfterDeposit` function)
-    function _stakingApr(uint256) internal view virtual returns (uint256) {
+    function _stakingApr(int256) internal view virtual returns (uint256) {
         return 0;
     }
 }

@@ -10,7 +10,7 @@ import "./GenericAaveUpgradeable.sol";
 /// @dev In this implementation, we just have to override the base functions with constant amounts as nothing is
 /// staked in an external contract
 contract GenericAaveNoStaker is GenericAaveUpgradeable {
-    // ================================ Constructor ================================
+    // ================================ CONSTRUCTOR ================================
 
     /// @notice Wrapper on top of the `initializeAave` method
     function initialize(
@@ -19,12 +19,13 @@ contract GenericAaveNoStaker is GenericAaveUpgradeable {
         bool _isIncentivised,
         address[] memory governorList,
         address guardian,
-        address[] memory keeperList
+        address[] memory keeperList,
+        address oneInch_
     ) external {
-        initializeAave(_strategy, name, _isIncentivised, governorList, guardian, keeperList);
+        initializeAave(_strategy, name, _isIncentivised, governorList, guardian, keeperList, oneInch_);
     }
 
-    // =========================== Virtual Functions ===============================
+    // ============================= VIRTUAL FUNCTIONS =============================
 
     function _stake(uint256) internal override returns (uint256) {}
 
@@ -39,7 +40,7 @@ contract GenericAaveNoStaker is GenericAaveUpgradeable {
 
     /// @notice Get stakingAPR after staking an additional `amount`: in this case since nothing
     /// is staked, it simply returns 0
-    function _stakingApr(uint256) internal pure override returns (uint256) {
+    function _stakingApr(int256) internal pure override returns (uint256) {
         return 0;
     }
 }

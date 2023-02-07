@@ -46,6 +46,7 @@ const config: HardhatUserConfig = {
       {
         version: '0.8.17',
         settings: {
+          viaIR: true,
           optimizer: {
             enabled: true,
             runs: 1000000,
@@ -57,6 +58,7 @@ const config: HardhatUserConfig = {
       'contracts/strategies/AaveFlashloanStrategy/AaveFlashloanStrategy.sol': {
         version: '0.8.17',
         settings: {
+          viaIR: true,
           optimizer: {
             enabled: true,
             runs: 3000,
@@ -213,9 +215,6 @@ const config: HardhatUserConfig = {
     clear: true,
     flat: true,
     spacing: 2,
-  },
-  etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY,
   },
   typechain: {
     outDir: 'typechain',

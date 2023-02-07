@@ -52,7 +52,7 @@ interface IGenericLender is IAccessControlAngle {
     /// of `amount`
     /// @param amount Amount to add to the lending platform, and that we want to take into account
     /// in the apr computation
-    function aprAfterDeposit(uint256 amount) external view returns (uint256);
+    function aprAfterDeposit(int256 amount) external view returns (uint256);
 
     /// @notice
     /// Removes tokens from this Strategy that are not the type of tokens
@@ -71,4 +71,7 @@ interface IGenericLender is IAccessControlAngle {
     /// Implement `_protectedTokens()` to specify any additional tokens that
     /// should be protected from sweeping in addition to `want`.
     function sweep(address _token, address to) external;
+
+    /// @notice Returns the current balance invested on the lender and related staking contracts
+    function underlyingBalanceStored() external view returns (uint256 balance);
 }

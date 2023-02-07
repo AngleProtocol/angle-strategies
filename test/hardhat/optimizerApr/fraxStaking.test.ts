@@ -17,8 +17,8 @@ import {
   IStakedAave__factory,
   MockToken,
   MockToken__factory,
-  OptimizerAPRStrategy,
-  OptimizerAPRStrategy__factory,
+  OptimizerAPRGreedyStrategy,
+  OptimizerAPRGreedyStrategy__factory,
   PoolManager,
 } from '../../../typechain';
 import { gwei } from '../../../utils/bignumber';
@@ -33,9 +33,11 @@ async function initStrategy(
   keeper: SignerWithAddress,
   manager: PoolManager,
 ): Promise<{
-  strategy: OptimizerAPRStrategy;
+  strategy: OptimizerAPRGreedyStrategy;
 }> {
-  const strategy = (await deployUpgradeable(new OptimizerAPRStrategy__factory(guardian))) as OptimizerAPRStrategy;
+  const strategy = (await deployUpgradeable(
+    new OptimizerAPRGreedyStrategy__factory(guardian),
+  )) as OptimizerAPRGreedyStrategy;
   await strategy.initialize(manager.address, governor.address, guardian.address, [keeper.address]);
   await manager.connect(governor).addStrategy(strategy.address, gwei('0.99999'));
   return { strategy };
@@ -45,7 +47,7 @@ async function initLenderAaveFraxStaker(
   governor: SignerWithAddress,
   guardian: SignerWithAddress,
   keeper: SignerWithAddress,
-  strategy: OptimizerAPRStrategy,
+  strategy: OptimizerAPRGreedyStrategy,
   name: string,
   isIncentivized: boolean,
   stakingPeriod: number,
@@ -60,6 +62,7 @@ async function initLenderAaveFraxStaker(
     [governor.address],
     guardian.address,
     [keeper.address],
+          oneInch,
     stakingPeriod,
   );
   await strategy.connect(governor).addLender(lender.address);
@@ -67,10 +70,9 @@ async function initLenderAaveFraxStaker(
 }
 
 let governor: SignerWithAddress, guardian: SignerWithAddress, user: SignerWithAddress, keeper: SignerWithAddress;
-let strategy: OptimizerAPRStrategy;
+let strategy: OptimizerAPRGreedyStrategy;
 let token: ERC20;
 let aToken: ERC20;
-let frax: ERC20;
 let nativeRewardToken: MockToken;
 let tokenDecimal: number;
 let manager: PoolManager;
@@ -109,7 +111,6 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
 
     token = (await ethers.getContractAt(ERC20__factory.abi, '0x853d955aCEf822Db058eb8505911ED77F175b99e')) as ERC20;
     aToken = (await ethers.getContractAt(ERC20__factory.abi, '0xd4937682df3C8aEF4FE912A96A74121C0829E664')) as ERC20;
-    frax = (await ethers.getContractAt(ERC20__factory.abi, '0x853d955aCEf822Db058eb8505911ED77F175b99e')) as ERC20;
     nativeRewardToken = (await ethers.getContractAt(
       MockToken__factory.abi,
       '0x3432B6A60D23Ca0dFCa7761B7ab56459D9C964D0',
@@ -136,6 +137,8 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
       AggregatorV3Interface__factory.abi,
       '0x547a514d5e3769680Ce22B2361c10Ea13619e8a9',
     )) as AggregatorV3Interface;
+    oneInch = '0x1111111254EEB25477B68fb85Ed929f73A960582';
+
 
     guardianError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${guardianRole}`;
     keeperError = `AccessControl: account ${user.address.toLowerCase()} is missing role ${keeperRole}`;
@@ -153,7 +156,6 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
       true,
       DAY,
     ));
-    oneInch = '0x1111111254EEB25477B68fb85Ed929f73A960582';
     amountStorage = ethers.utils.hexStripZeros(utils.parseEther('1').toHexString());
   });
 
@@ -161,7 +163,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
     it('reverts - too small saking period and already initialized', async () => {
       const lender = (await deployUpgradeable(new GenericAaveFraxStaker__factory(guardian))) as GenericAaveFraxStaker;
       await expect(
-        lender.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address], 0),
+        lender.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address], oneInch,0),
       ).to.be.revertedWithCustomError(lender, 'TooSmallStakingPeriod');
       await expect(
         lenderAave.initialize(
@@ -171,6 +173,7 @@ describe('OptimizerAPR - lenderAaveFraxStaker', () => {
           [governor.address],
           guardian.address,
           [keeper.address],
+          oneInch,
           0,
         ),
       ).to.be.revertedWith('Initializable: contract is already initialized');

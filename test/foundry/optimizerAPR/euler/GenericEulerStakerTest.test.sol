@@ -4,7 +4,7 @@ pragma solidity ^0.8.17;
 import "../../BaseTest.test.sol";
 import { OracleMath } from "../../../../contracts/utils/OracleMath.sol";
 import { PoolManager } from "../../../../contracts/mock/MockPoolManager2.sol";
-import { OptimizerAPRStrategy } from "../../../../contracts/strategies/OptimizerAPR/OptimizerAPRStrategy.sol";
+import { OptimizerAPRGreedyStrategy } from "../../../../contracts/strategies/OptimizerAPR/OptimizerAPRGreedyStrategy.sol";
 import { GenericEulerStaker, IERC20, IEulerStakingRewards, IEuler, IEulerEToken, IEulerDToken, IGenericLender, AggregatorV3Interface, IUniswapV3Pool } from "../../../../contracts/strategies/OptimizerAPR/genericLender/euler/GenericEulerStaker.sol";
 
 interface IMinimalLiquidityGauge {
@@ -36,8 +36,8 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
     uint256 internal constant _ONE_MINUS_RESERVE = 75 * 10**16;
 
     PoolManager public manager;
-    OptimizerAPRStrategy public stratImplementation;
-    OptimizerAPRStrategy public strat;
+    OptimizerAPRGreedyStrategy public stratImplementation;
+    OptimizerAPRGreedyStrategy public strat;
     GenericEulerStaker public lenderImplementation;
     GenericEulerStaker public lender;
     uint256 public maxTokenAmount = 10**(_DECIMAL_TOKEN + 6);
@@ -58,8 +58,8 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
         governorList[0] = _GOVERNOR;
 
         manager = new PoolManager(address(_TOKEN), _GOVERNOR, _GUARDIAN);
-        stratImplementation = new OptimizerAPRStrategy();
-        strat = OptimizerAPRStrategy(
+        stratImplementation = new OptimizerAPRGreedyStrategy();
+        strat = OptimizerAPRGreedyStrategy(
             deployUpgradeable(
                 address(stratImplementation),
                 abi.encodeWithSelector(strat.initialize.selector, address(manager), _GOVERNOR, _GUARDIAN, keeperList)
@@ -79,6 +79,7 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
                     governorList,
                     _GUARDIAN,
                     keeperList,
+                    _1INCH_V5,
                     _STAKER,
                     _CHAINLINK,
                     _POOL,

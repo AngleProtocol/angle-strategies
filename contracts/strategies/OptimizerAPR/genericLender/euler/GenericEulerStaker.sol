@@ -16,8 +16,10 @@ contract GenericEulerStaker is GenericEuler, OracleMath {
     using Address for address;
 
     // ================================= CONSTANTS =================================
-    uint256 internal constant _SECONDS_IN_YEAR = 365 days;
     uint32 internal constant _TWAP_PERIOD = 1 minutes;
+
+    /// @notice EUL token address
+    IERC20 private constant _EUL = IERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
 
     // ================================= VARIABLES =================================
     IEulerStakingRewards public eulerStakingContract;
@@ -34,17 +36,19 @@ contract GenericEulerStaker is GenericEuler, OracleMath {
         address[] memory governorList,
         address guardian,
         address[] memory keeperList,
+        address oneInch_,
         IEulerStakingRewards _eulerStakingContract,
         AggregatorV3Interface _chainlinkOracle,
         IUniswapV3Pool _pool,
         uint8 _isUniMultiplied
     ) external {
-        initializeEuler(_strategy, _name, governorList, guardian, keeperList);
+        initializeEuler(_strategy, _name, governorList, guardian, keeperList, oneInch_);
         eulerStakingContract = _eulerStakingContract;
         chainlinkOracle = _chainlinkOracle;
         pool = _pool;
         isUniMultiplied = _isUniMultiplied;
         IERC20(address(eToken)).safeApprove(address(_eulerStakingContract), type(uint256).max);
+        IERC20(_EUL).safeApprove(oneInch_, type(uint256).max);
     }
 
     // ============================= EXTERNAL FUNCTION =============================
@@ -75,9 +79,11 @@ contract GenericEulerStaker is GenericEuler, OracleMath {
     }
 
     /// @inheritdoc GenericEuler
-    function _stakingApr(uint256 amount) internal view override returns (uint256 apr) {
+    function _stakingApr(int256 amount) internal view override returns (uint256 apr) {
         uint256 periodFinish = eulerStakingContract.periodFinish();
-        uint256 newTotalSupply = eulerStakingContract.totalSupply() + eToken.convertUnderlyingToBalance(amount);
+        uint256 newTotalSupply = eulerStakingContract.totalSupply();
+        if (amount >= 0) newTotalSupply += eToken.convertUnderlyingToBalance(uint256(amount));
+        else newTotalSupply -= eToken.convertUnderlyingToBalance(uint256(-amount));
         if (periodFinish <= block.timestamp || newTotalSupply == 0) return 0;
         // APRs are in 1e18 and a 5% penalty on the EUL price is taken to avoid overestimations
         // `_estimatedEulToWant()` and eTokens are in base 18
