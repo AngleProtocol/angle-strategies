@@ -35,8 +35,9 @@
 
 pragma solidity ^0.8.12;
 
-import "./BaseStrategyEvents.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+
+import "./BaseStrategyEvents.sol";
 
 /// @title BaseStrategyUpgradeable
 /// @author Forked from https://github.com/yearn/yearn-managers/blob/master/contracts/BaseStrategy.sol

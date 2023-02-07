@@ -8,6 +8,7 @@ error FailedToRecoverETH();
 error FailedToRedeem();
 error FailedWithdrawal();
 error IncompatibleLengths();
+error IncorrectDistribution();
 error IncorrectListLength();
 error InvalidOracleValue();
 error InvalidSender();

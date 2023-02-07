@@ -559,7 +559,7 @@ contract OptimizerAPRStrategyTest is BaseTest {
         uint64[] memory lenderShares = new uint64[](3);
         lenderShares[1] = (_BPS * 3) / 4;
         lenderShares[2] = _BPS / 4;
-        vm.expectRevert(OptimizerAPRStrategy.IncorrectDistribution.selector);
+        vm.expectRevert(IncorrectDistribution.selector);
         strat.harvest(abi.encode(lenderShares));
     }
 
