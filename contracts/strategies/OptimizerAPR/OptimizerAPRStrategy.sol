@@ -140,9 +140,8 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
     /// @return _highest The index of the lender with highest apr
     /// @return _investmentStrategy Whether we should invest from the lowest to the highest yielding strategy or simply invest loose assets
     /// @return _totalApr The APR computed according to (greedy) heuristics that will determine whether positions should be adjusted
-    /// with proposed caller solution or the greedy solution
-    /// @dev `lendersList` is kept as a parameter to avoid multiplying reads in storage to the `lenders`
-    /// array
+    /// according to the solution proposed by the caller or according to the greedy method
+    /// @dev `lendersList` is kept as a parameter to avoid multiplying reads in storage to the `lenders` array
     function _estimateGreedyAdjustPosition(IGenericLender[] memory lendersList)
         internal
         view
@@ -226,7 +225,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         // Storing the `lenders` array in a cache variable
         IGenericLender[] memory lendersList = lenders;
         uint256 lendersListLength = lendersList.length;
-        // We just keep all money in want if we dont have any lenders
+        // We just keep all money in `want` if we dont have any lenders
         if (lendersListLength == 0) return;
 
         uint64[] memory lenderSharesHint = abi.decode(data, (uint64[]));
