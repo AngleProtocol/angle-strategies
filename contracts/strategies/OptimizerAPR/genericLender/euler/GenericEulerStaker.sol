@@ -19,9 +19,6 @@ contract GenericEulerStaker is GenericEuler {
     IEulerExec private constant _EXEC = IEulerExec(0x59828FdF7ee634AaaD3f58B19fDBa3b03E2D9d80);
     IERC20 private constant _EUL = IERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
 
-    /// @notice EUL token address
-    IERC20 private constant _EUL = IERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
-
     // ================================= VARIABLES =================================
     IEulerStakingRewards public eulerStakingContract;
     AggregatorV3Interface public chainlinkOracle;
@@ -77,9 +74,9 @@ contract GenericEulerStaker is GenericEuler {
     /// @inheritdoc GenericEuler
     function _stakingApr(int256 amount) internal view override returns (uint256 apr) {
         uint256 periodFinish = eulerStakingContract.periodFinish();
-        uint256 newTotalSupply = eulerStakingContract.totalSupply();
-        if (amount >= 0) newTotalSupply += eToken.convertUnderlyingToBalance(uint256(amount));
-        else newTotalSupply -= eToken.convertUnderlyingToBalance(uint256(-amount));
+        uint256 newTotalSupply = eToken.convertBalanceToUnderlying(eulerStakingContract.totalSupply());
+        if (amount >= 0) newTotalSupply += uint256(amount);
+        else newTotalSupply -= uint256(-amount);
         if (periodFinish <= block.timestamp || newTotalSupply == 0) return 0;
         // APRs are in 1e18 and a 5% penalty on the EUL price is taken to avoid overestimations
         // `_estimatedEulToWant()` and eTokens are in base 18
