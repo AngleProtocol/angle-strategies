@@ -67,10 +67,10 @@ const config: HardhatUserConfig = {
       'contracts/strategies/OptimizerAPR/genericLender/aave/GenericAaveFraxConvexStaker.sol': {
         version: '0.8.17',
         settings: {
-          viaIR: true,
+          viaIR: false,
           optimizer: {
             enabled: true,
-            runs: 1,
+            runs: 30000,
           },
         },
       },
@@ -80,17 +80,7 @@ const config: HardhatUserConfig = {
           viaIR: true,
           optimizer: {
             enabled: true,
-            runs: 1,
-          },
-        },
-      },
-      'contracts/strategies/OptimizerAPR/genericLender/euler/GenericEulerStaker.sol': {
-        version: '0.8.17',
-        settings: {
-          viaIR: true,
-          optimizer: {
-            enabled: true,
-            runs: 1,
+            runs: 20000,
           },
         },
       },

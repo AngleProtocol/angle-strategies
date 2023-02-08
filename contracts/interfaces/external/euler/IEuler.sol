@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 // Forked from https://github.com/euler-xyz/euler-interfaces
-pragma solidity >=0.8.12;
+pragma solidity ^0.8.12;
 
 /// @notice Main storage contract for the Euler system
 interface IEulerConstants {
@@ -180,7 +180,7 @@ interface IEulerExec {
     /// @param underlying Token address
     /// @return twap Time-weighted average price
     /// @return twapPeriod TWAP duration, either the twapWindow value in AssetConfig, or less if that duration not available
-    function getPrice(address underlying) external returns (uint256 twap, uint256 twapPeriod);
+    function getPrice(address underlying) external view returns (uint256 twap, uint256 twapPeriod);
 
     /// @notice Retrieve Euler's view of an asset's price, as well as the current marginal price on uniswap
     /// @param underlying Token address

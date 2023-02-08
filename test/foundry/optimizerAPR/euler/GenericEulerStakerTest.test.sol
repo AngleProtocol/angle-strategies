@@ -2,29 +2,27 @@
 pragma solidity ^0.8.12;
 
 import "../../BaseTest.test.sol";
-import { OracleMath } from "../../../../contracts/utils/OracleMath.sol";
 import { PoolManager } from "../../../../contracts/mock/MockPoolManager2.sol";
-import { OptimizerAPRGreedyStrategy } from "../../../../contracts/strategies/OptimizerAPR/OptimizerAPRGreedyStrategy.sol";
-import { GenericEulerStaker, IERC20, IEulerStakingRewards, IEuler, IEulerEToken, IEulerDToken, IGenericLender, AggregatorV3Interface, IUniswapV3Pool } from "../../../../contracts/strategies/OptimizerAPR/genericLender/euler/GenericEulerStaker.sol";
+import { OptimizerAPRStrategy } from "../../../../contracts/strategies/OptimizerAPR/OptimizerAPRStrategy.sol";
+import { GenericEulerStaker, IERC20, IEulerStakingRewards, IEuler, IEulerExec, IEulerEToken, IEulerDToken, IGenericLender, AggregatorV3Interface } from "../../../../contracts/strategies/OptimizerAPR/genericLender/euler/GenericEulerStaker.sol";
 
 interface IMinimalLiquidityGauge {
     // solhint-disable-next-line
     function add_reward(address rewardToken, address distributor) external;
 }
 
-contract GenericEulerStakerTest is BaseTest, OracleMath {
+contract GenericEulerStakerTest is BaseTest {
     using stdStorage for StdStorage;
 
     address internal _hacker = address(uint160(uint256(keccak256(abi.encodePacked("hacker")))));
 
     IERC20 internal constant _TOKEN = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
     IERC20 internal constant _EUL = IERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
+    IEulerExec private constant _EXEC = IEulerExec(0x59828FdF7ee634AaaD3f58B19fDBa3b03E2D9d80);
     IEulerStakingRewards internal constant _STAKER = IEulerStakingRewards(0xE5aFE81e63f0A52a3a03B922b30f73B8ce74D570);
     IEuler private constant _euler = IEuler(0x27182842E098f60e3D576794A5bFFb0777E025d3);
     IEulerEToken internal constant _eUSDC = IEulerEToken(0xEb91861f8A4e1C12333F42DCE8fB0Ecdc28dA716);
     IEulerDToken internal constant _dUSDC = IEulerDToken(0x84721A3dB22EB852233AEAE74f9bC8477F8bcc42);
-    IUniswapV3Pool private constant _POOL = IUniswapV3Pool(0xB003DF4B243f938132e8CAdBEB237AbC5A889FB4);
-    uint8 private constant _IS_UNI_MULTIPLIED = 0;
     AggregatorV3Interface private constant _CHAINLINK =
         AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
 
@@ -36,8 +34,8 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
     uint256 internal constant _ONE_MINUS_RESERVE = 75 * 10**16;
 
     PoolManager public manager;
-    OptimizerAPRGreedyStrategy public stratImplementation;
-    OptimizerAPRGreedyStrategy public strat;
+    OptimizerAPRStrategy public stratImplementation;
+    OptimizerAPRStrategy public strat;
     GenericEulerStaker public lenderImplementation;
     GenericEulerStaker public lender;
     uint256 public maxTokenAmount = 10**(_DECIMAL_TOKEN + 6);
@@ -58,8 +56,8 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
         governorList[0] = _GOVERNOR;
 
         manager = new PoolManager(address(_TOKEN), _GOVERNOR, _GUARDIAN);
-        stratImplementation = new OptimizerAPRGreedyStrategy();
-        strat = OptimizerAPRGreedyStrategy(
+        stratImplementation = new OptimizerAPRStrategy();
+        strat = OptimizerAPRStrategy(
             deployUpgradeable(
                 address(stratImplementation),
                 abi.encodeWithSelector(strat.initialize.selector, address(manager), _GOVERNOR, _GUARDIAN, keeperList)
@@ -81,9 +79,7 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
                     keeperList,
                     _1INCH_V5,
                     _STAKER,
-                    _CHAINLINK,
-                    _POOL,
-                    _IS_UNI_MULTIPLIED
+                    _CHAINLINK
                 )
             )
         );
@@ -250,7 +246,7 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
     function testAPRSuccess() public {
         uint256 apr = lender.apr();
         uint256 supplyAPR = _computeSupplyAPR(0);
-        uint256 stakingAPR = 18884 * 10**12;
+        uint256 stakingAPR = 18313 * 10**12;
         // elpase to not have staking incentives anymore
         vm.warp(block.timestamp + 86400 * 7 * 4);
         vm.roll(block.number + 1);
@@ -275,10 +271,10 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
         _STAKER.stake(eTokenAMount);
         vm.stopPrank();
 
-        uint256 totalSupply = _STAKER.totalSupply();
+        uint256 totalSupply = _eUSDC.convertBalanceToUnderlying(_STAKER.totalSupply());
         uint256 eulRoughPrice = 4015000000000000000;
         // rewards last 2 weeks
-        uint256 incentivesAPR = (rewardAmount * 53 * eulRoughPrice) / totalSupply / 2;
+        uint256 incentivesAPR = (rewardAmount * 53 * eulRoughPrice) / (totalSupply * 10**12) / 2;
         assertApproxEqAbs(contractEstimatedAPR, incentivesAPR, 10**15);
     }
 
@@ -306,10 +302,10 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
         // elpase to not have staking incentives anymore
         vm.warp(block.timestamp + 86400 * 7 * 2);
         _depositRewards(rewardAmount);
-        uint256 totalSupply = _STAKER.totalSupply();
+        uint256 totalSupply = _eUSDC.convertBalanceToUnderlying(_STAKER.totalSupply());
         uint256 eulRoughPrice = 4015000000000000000;
         // rewards last 2 weeks
-        uint256 incentivesAPR = (rewardAmount * 53 * eulRoughPrice) / totalSupply / 2;
+        uint256 incentivesAPR = (rewardAmount * 53 * eulRoughPrice) / (totalSupply * 10**12) / 2;
         uint256 aprWithIncentives = lender.apr();
         // incentives APR are tough to estimate (because of the price) which is why the .3% margin
         assertApproxEqAbs(aprWithIncentives, supplyAPR + incentivesAPR, 3 * 10**15);
@@ -417,10 +413,10 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
     function _stakingApr(uint256 amount) internal view returns (uint256 apr) {
         uint256 periodFinish = _STAKER.periodFinish();
         if (periodFinish <= block.timestamp) return 0;
-        uint256 newTotalSupply = _STAKER.totalSupply() + _eUSDC.convertUnderlyingToBalance(amount);
+        uint256 newTotalSupply = _eUSDC.convertBalanceToUnderlying(_STAKER.totalSupply()) + amount;
         // APRs are in 1e18 and a 5% penalty on the EUL price is taken to avoid overestimations
         // `_estimatedEulToWant()` and eTokens are in base 18
-        apr = (_estimatedEulToWant(_STAKER.rewardRate() * (365 days)) * 1 ether) / newTotalSupply;
+        apr = (_estimatedEulToWant(_STAKER.rewardRate() * (365 days)) * 10**6) / newTotalSupply;
     }
 
     /// @notice Estimates the amount of `want` we will get out by swapping it for EUL
@@ -428,25 +424,8 @@ contract GenericEulerStakerTest is BaseTest, OracleMath {
     /// @return The value of the `quoteAmount` expressed in out-currency
     /// @dev Uses both Uniswap TWAP and Chainlink spot price
     function _estimatedEulToWant(uint256 quoteAmount) internal view returns (uint256) {
-        uint32[] memory secondAgos = new uint32[](2);
-
-        uint32 twapPeriod = 1 minutes;
-        secondAgos[0] = twapPeriod;
-        secondAgos[1] = 0;
-
-        (IUniswapV3Pool pool, uint8 isUniMultiplied) = (IUniswapV3Pool(0xB003DF4B243f938132e8CAdBEB237AbC5A889FB4), 0);
-        (int56[] memory tickCumulatives, ) = pool.observe(secondAgos);
-        int56 tickCumulativesDelta = tickCumulatives[1] - tickCumulatives[0];
-
-        int24 timeWeightedAverageTick = int24(tickCumulativesDelta / int32(twapPeriod));
-
-        // Always round to negative infinity
-        if (tickCumulativesDelta < 0 && (tickCumulativesDelta % int56(int32(twapPeriod)) != 0))
-            timeWeightedAverageTick--;
-
-        // Computing the `quoteAmount` from the ticks obtained from Uniswap
-        uint256 amountInETH = _getQuoteAtTick(timeWeightedAverageTick, quoteAmount, isUniMultiplied);
-
+        (uint256 twapEUL, ) = _EXEC.getPrice(address(_EUL));
+        uint256 amountInETH = (quoteAmount * twapEUL) / 10**18;
         (, int256 ethPriceUSD, , , ) = AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419)
             .latestRoundData();
         // ethPriceUSD is in base 8

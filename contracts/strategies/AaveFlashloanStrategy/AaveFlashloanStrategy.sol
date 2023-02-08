@@ -1019,4 +1019,12 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         }
         revert ErrorSwap();
     }
+
+    // ============================= VIRTUAL FUNCTIONS =============================
+
+    /// @inheritdoc BaseStrategyUpgradeable
+    function harvest(bytes memory data) external override {}
+
+    /// @inheritdoc BaseStrategyUpgradeable
+    function _adjustPosition(bytes memory) internal override {}
 }
