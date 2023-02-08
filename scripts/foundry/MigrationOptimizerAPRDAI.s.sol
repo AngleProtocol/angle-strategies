@@ -11,9 +11,9 @@ import { OptimizerAPRStrategy } from "../../contracts/strategies/OptimizerAPR/Op
 import { OptimizerAPRGreedyStrategy } from "../../contracts/strategies/OptimizerAPR/OptimizerAPRGreedyStrategy.sol";
 import { GenericAaveNoStaker, IERC20, IERC20Metadata, IGenericLender } from "../../contracts/strategies/OptimizerAPR/genericLender/aave/GenericAaveNoStaker.sol";
 import { GenericCompoundUpgradeable } from "../../contracts/strategies/OptimizerAPR/genericLender/compound/GenericCompoundUpgradeable.sol";
-import { GenericEulerStaker, IEulerStakingRewards, IEuler, IEulerEToken, IEulerDToken, IGenericLender, AggregatorV3Interface } from "../../contracts/strategies/OptimizerAPR/genericLender/euler/GenericEulerStaker.sol";
+import { GenericEuler, IEuler, IEulerEToken, IEulerDToken, IGenericLender, AggregatorV3Interface } from "../../contracts/strategies/OptimizerAPR/genericLender/euler/GenericEulerStaker.sol";
 
-contract MigrationOptimizerAPR is Script, MainnetConstants {
+contract MigrationOptimizerAPRUSDC is Script, MainnetConstants {
     uint256 internal constant _BASE_TOKEN = 10**18;
     uint256 internal constant _BASE_APR = 10**18;
     uint64 internal constant _BPS = 10**4;
@@ -24,38 +24,41 @@ contract MigrationOptimizerAPR is Script, MainnetConstants {
     // solhint-disable-next-line
     IERC20 private constant _stkAave = IERC20(0x4da27a545c0c5B758a6BA100e3a049001de870f5);
     IEuler private constant _EULER = IEuler(0x27182842E098f60e3D576794A5bFFb0777E025d3);
-    AggregatorV3Interface private constant _CHAINLINK =
-        AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
     uint256 internal constant _PROP_INVESTED = 95 * 10**7;
 
+    OptimizerAPRStrategy public stratImplementation = OptimizerAPRStrategy(address(0));
+    GenericCompoundUpgradeable public lenderCompoundImplementation = GenericCompoundUpgradeable(payable(address(0)));
+    GenericAaveNoStaker public lenderAaveImplementation = GenericAaveNoStaker(address(0));
+
     // TODO Change on collateral
-    IERC20 public token = IERC20(USDC);
-    PoolManager public manager = PoolManager(0xe9f183FC656656f1F17af1F2b0dF79b8fF9ad8eD);
-    CErc20I internal _cToken = CErc20I(0x39AA39c021dfbaE8faC545936693aC917d5E7563);
-    // solhint-disable-next-line
-    IEulerStakingRewards internal constant _STAKER = IEulerStakingRewards(0xE5aFE81e63f0A52a3a03B922b30f73B8ce74D570);
+    IERC20 public token = IERC20(DAI);
+    PoolManager public manager = PoolManager(0xc9daabC677F3d1301006e723bD21C60be57a5915);
+    CErc20I internal _cToken = CErc20I(0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643);
 
     uint256 public marginAmount;
     uint8 internal _decimalToken;
     string internal _tokenSymbol;
-    OptimizerAPRStrategy public stratImplementation;
     OptimizerAPRStrategy public strat;
-    GenericCompoundUpgradeable public lenderCompoundImplementation;
     GenericCompoundUpgradeable public lenderCompound;
-    GenericAaveNoStaker public lenderAaveImplementation;
     GenericAaveNoStaker public lenderAave;
-    GenericEulerStaker public lenderEulerImplementation;
-    GenericEulerStaker public lenderEuler;
+    GenericEuler public lenderEulerImplementation;
+    GenericEuler public lenderEuler;
 
-    error ZeroAdress();
+    error ZeroAddress();
 
     function run() external {
         // vm.createSelectFork("mainnet");
         uint256 deployerPrivateKey = vm.deriveKey(vm.envString("MNEMONIC_MAINNET"), 0);
         vm.startBroadcast(deployerPrivateKey);
 
-        if (address(token) == address(0) || address(_cToken) == address(0) || address(manager) == address(0))
-            revert ZeroAdress();
+        if (
+            address(token) == address(0) ||
+            address(_cToken) == address(0) ||
+            address(manager) == address(0) ||
+            address(stratImplementation) == address(0) ||
+            address(stratImplementation) == address(0) ||
+            address(stratImplementation) == address(0)
+        ) revert ZeroAddress();
 
         _decimalToken = IERC20Metadata(address(token)).decimals();
         _tokenSymbol = IERC20Metadata(address(token)).symbol();
@@ -71,7 +74,6 @@ contract MigrationOptimizerAPR is Script, MainnetConstants {
         console.log(string.concat("Aave Lender ", _tokenSymbol, " v2"));
         console.log(string.concat("Euler Staker Lender ", _tokenSymbol));
 
-        stratImplementation = new OptimizerAPRStrategy();
         strat = OptimizerAPRStrategy(
             deployUpgradeable(
                 address(stratImplementation),
@@ -81,7 +83,6 @@ contract MigrationOptimizerAPR is Script, MainnetConstants {
 
         console.log("Successfully deployed OptimizerAPR strategy at the address: ", address(strat));
 
-        lenderCompoundImplementation = new GenericCompoundUpgradeable();
         lenderCompound = GenericCompoundUpgradeable(
             payable(
                 deployUpgradeable(
@@ -102,7 +103,6 @@ contract MigrationOptimizerAPR is Script, MainnetConstants {
 
         console.log("Successfully deployed Generic Compound strategy at the address: ", address(lenderCompound));
 
-        lenderAaveImplementation = new GenericAaveNoStaker();
         lenderAave = GenericAaveNoStaker(
             deployUpgradeable(
                 address(lenderAaveImplementation),
@@ -121,20 +121,18 @@ contract MigrationOptimizerAPR is Script, MainnetConstants {
 
         console.log("Successfully deployed Generic Aave strategy at the address: ", address(lenderAave));
 
-        lenderEulerImplementation = new GenericEulerStaker();
-        lenderEuler = GenericEulerStaker(
+        lenderEulerImplementation = new GenericEuler();
+        lenderEuler = GenericEuler(
             deployUpgradeable(
                 address(lenderEulerImplementation),
                 abi.encodeWithSelector(
-                    lenderEulerImplementation.initialize.selector,
+                    lenderEulerImplementation.initializeEuler.selector,
                     address(strat),
-                    string.concat("Euler Staker Lender ", _tokenSymbol),
+                    string.concat("Euler Lender ", _tokenSymbol),
                     governorList,
                     GUARDIAN,
                     keeperList,
-                    ONE_INCH,
-                    _STAKER,
-                    _CHAINLINK
+                    ONE_INCH
                 )
             )
         );
