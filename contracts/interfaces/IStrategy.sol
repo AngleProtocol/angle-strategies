@@ -12,7 +12,7 @@ struct LendStatus {
 }
 
 /// @title IStrategy
-/// @author Inspired by Yearn with slight changes from Angle Core Team
+/// @author Inspired by Yearn with slight changes
 /// @notice Interface for yield farming strategies
 interface IStrategy is IAccessControlAngle {
     function estimatedAPR() external view returns (uint256);

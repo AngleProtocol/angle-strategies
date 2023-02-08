@@ -6,7 +6,7 @@ import "./GenericAaveUpgradeable.sol";
 
 /// @title GenericAaveNoStaker
 /// @author  Angle Core Team
-/// @notice Only deposit onto Aave lendingPool with no staking
+/// @notice Only deposit onto Aave lendingPool without staking
 /// @dev In this implementation, we just have to override the base functions with constant amounts as nothing is
 /// staked in an external contract
 contract GenericAaveNoStaker is GenericAaveUpgradeable {
@@ -38,7 +38,7 @@ contract GenericAaveNoStaker is GenericAaveUpgradeable {
         return 0;
     }
 
-    /// @notice Get stakingAPR after staking an additional `amount`: in this case since nothing
+    /// @notice Get stakingAPR after staking an additional `amount`: in this case, since nothing
     /// is staked, it simply returns 0
     function _stakingApr(int256) internal pure override returns (uint256) {
         return 0;

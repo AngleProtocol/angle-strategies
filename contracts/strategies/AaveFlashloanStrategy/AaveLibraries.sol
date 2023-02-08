@@ -129,11 +129,11 @@ library FlashMintLib {
             lp.deposit(dai, amountFlashmint, address(this), _referral);
 
             if (deficit) {
-                // 2a. if in deficit withdraw amount and repay it
+                // 2a. If in deficit withdraw amount and repay it
                 lp.withdraw(want, amount, address(this));
                 lp.repay(want, IERC20(want).balanceOf(address(this)), 2, address(this));
             } else {
-                // 2b. if levering up borrow and deposit
+                // 2b. If levering up borrow and deposit
                 lp.borrow(want, amount, 2, _referral, address(this));
                 lp.deposit(want, IERC20(want).balanceOf(address(this)), address(this), _referral);
             }

@@ -20,7 +20,7 @@ import "./ComputeProfitability.sol";
 /// @title AaveFlashloanStrategy
 /// @author Yearn Finance (https://etherscan.io/address/0xd4E94061183b2DBF24473F28A3559cf4dE4459Db#code)
 /// but heavily reviewed and modified by Angle Core Team
-/// @notice This strategy is used to optimize lending yield on Aave by taking some form or recursivity that is to say
+/// @notice This strategy is used to optimize lending yield on Aave by taking some form of recursivity that is to say
 /// by borrowing to maximize Aave rewards
 /// @dev Angle strategies computes the optimal collateral ratio based on AAVE rewards for deposits and borrows
 // solhint-disable-next-line max-states-count
@@ -440,7 +440,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
     /// to compute the optimal borrow amount
     /// @dev No access control needed because they fetch the values from Aave directly.
     /// If it changes there, it will need to be updated here too
-    /// @dev We expect the values concerned not to be often modified
+    /// @dev We expect the values concerned not to be modified often
     function setAavePoolVariables() external {
         _setAavePoolVariables();
     }
@@ -794,8 +794,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         uint256 currentBorrow,
         uint256 guessedBorrow
     ) internal view returns (uint256 borrow) {
-        // This works if `wantBase < 10**27` which we should expect to be very the case for the strategies we are
-        // launching at the moment
+        // This works if `wantBase < 10**27` which we should expect to be the case
         uint256 normalizationFactor = 10**27 / wantBase;
 
         ComputeProfitability.SCalculateBorrow memory parameters;
@@ -824,8 +823,8 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
                     (availableLiquidity +
                         totalStableDebt +
                         totalVariableDebt +
-                        // to adapt to our future balance
-                        // add the wantBalance and remove the currentBorrowed from the optimisation
+                        // to adapt to our future balance: add the `wantBalance` and remove the
+                        // `currentBorrowed` from the optimisation
                         balanceExcludingRewards -
                         deposits) * normalizationFactor
                 ),

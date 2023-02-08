@@ -128,8 +128,8 @@ contract GenericCompoundUpgradeable is GenericLenderBaseUpgradeable {
     }
 
     /// @notice Allow to modify the dust amount
-    /// @param dust_ Amount under which the contract do not try to redeem from Compouns
-    /// @dev Set in a function because contract was already initalized
+    /// @param dust_ Amount under which the contract does not try to redeem from Compound
+    /// @dev Set in a function because contract was already initialized
     function setDust(uint256 dust_) external onlyRole(GUARDIAN_ROLE) {
         dust = dust_;
     }

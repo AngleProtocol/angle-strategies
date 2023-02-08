@@ -416,7 +416,7 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         return weightedAPR / bal;
     }
 
-    /// @notice Returns the eighted apr in an hypothetical world where the strategy splits its nav
+    /// @notice Returns the weighted apr in an hypothetical world where the strategy splits its nav
     /// in respect to shares
     /// @param shares List of shares (in bps of the nav) that should be allocated to each lender
     function estimatedAPR(uint64[] memory shares)
@@ -481,13 +481,13 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         _removeLender(lender, false);
     }
 
-    /// @notice Removes a lending platform and even if total withdrawal is impossible
+    /// @notice Removes a lending platform even if total withdrawal is impossible
     /// @param lender The address of the adapter to the lending platform to remove
     function forceRemoveLender(address lender) external onlyRole(GUARDIAN_ROLE) {
         _removeLender(lender, true);
     }
 
-    /// @notice Internal function to handle lending platform removing
+    /// @notice Internal function to handle lending platform removal
     /// @param lender The address of the adapter for the lending platform to remove
     /// @param force Whether it is required that all the funds are withdrawn prior to removal
     function _removeLender(address lender, bool force) internal {

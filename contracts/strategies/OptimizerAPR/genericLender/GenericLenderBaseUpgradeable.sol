@@ -37,14 +37,14 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
     IERC20 public want;
     /// @notice Base of the asset handled by the lender
     uint256 public wantBase;
-    /// @notice 1inch Aggregattion router
+    /// @notice 1inch Aggregation router
     address internal _oneInch;
 
     uint256[44] private __gapBaseLender;
 
     // ================================ INITIALIZER ================================
 
-    /// @notice Initalizer of the `GenericLenderBase`
+    /// @notice Initializer of the `GenericLenderBase`
     /// @param _strategy Reference to the strategy using this lender
     /// @param _name Name of the lender
     /// @param governorList List of addresses with governor privilege
@@ -121,7 +121,7 @@ abstract contract GenericLenderBaseUpgradeable is IGenericLender, AccessControlA
     /// @notice See `apr`
     function _apr() internal view virtual returns (uint256);
 
-    /// @notice Returns the current balance invested on the lender and related staking contracts
+    /// @notice Returns the current balance invested in the lender and related staking contracts
     function underlyingBalanceStored() public view virtual returns (uint256 balance);
 
     // ================================= GOVERNANCE ================================

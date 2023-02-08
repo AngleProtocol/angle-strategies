@@ -123,7 +123,7 @@ contract GenericEulerStaker is GenericEuler, OracleMath {
 
     /// @notice Return quote amount of the EUL amount
     function _quoteOracleEUL(uint256 amount) internal view virtual returns (uint256 quoteAmount) {
-        // no stale checks are made as it is only used to estimate the staking APR
+        // No stale checks are made as it is only used to estimate the staking APR
         (, int256 ethPriceUSD, , , ) = chainlinkOracle.latestRoundData();
         // ethPriceUSD is in base 8
         return (uint256(ethPriceUSD) * amount) / 1e8;

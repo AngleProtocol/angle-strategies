@@ -129,7 +129,7 @@ abstract contract GenericAaveUpgradeable is GenericLenderBaseUpgradeable {
 
     /// @notice Retrieves lending pool variables like the `COOLDOWN_SECONDS` or the `UNSTAKE_WINDOW` on Aave
     /// @dev No access control is needed here because values are fetched from Aave directly
-    /// @dev We expect the values concerned not to be often modified
+    /// @dev We expect the values concerned not to be modified often
     function setAavePoolVariables() external {
         _setAavePoolVariables();
     }
