@@ -30,9 +30,6 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
 
     uint256 public withdrawalThreshold;
 
-    // =================================== ERRORS ==================================
-    error IncorrectDistribution();
-
     // =================================== EVENTS ==================================
 
     event AddLender(address indexed lender);
