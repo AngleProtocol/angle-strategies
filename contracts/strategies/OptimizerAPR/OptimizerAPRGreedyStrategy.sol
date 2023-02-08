@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.12;
 
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
@@ -362,10 +362,10 @@ contract OptimizerAPRGreedyStrategy is BaseStrategyUpgradeable {
         uint16 share;
     }
 
-    /// @notice Reallocates all funds according to a new distributions
+    /// @notice Reallocates all funds according to a new distribution
     /// @param _newPositions List of shares to specify the new allocation
     /// @dev Share must add up to 1000. 500 means 50% etc
-    /// @dev This code has been forked, so we have not thoroughly tested it on our own
+    /// @dev This code has been forked, so we have not thoroughly tested it
     function manualAllocation(LenderRatio[] memory _newPositions) external onlyRole(GUARDIAN_ROLE) {
         IGenericLender[] memory lendersList = lenders;
         uint256 share = 0;

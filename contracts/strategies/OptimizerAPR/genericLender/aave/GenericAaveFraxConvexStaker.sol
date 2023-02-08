@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.12;
 
 import "../../../../interfaces/external/frax/IFraxUnifiedFarmTemplate.sol";
 import "../../../../interfaces/external/convex/frax/IBoosterFrax.sol";
@@ -92,7 +92,7 @@ contract GenericAaveFraxConvexStaker is GenericAaveUpgradeable {
         return vault.earned();
     }
 
-    /// @notice Permisionless function to claim rewards, reward tokens are directly sent to the contract and keeper/governance
+    /// @notice Permissionless function to claim rewards, reward tokens are directly sent to the contract and keeper/governance
     /// can handle them via a `sweep` or a `sellRewards` call
     function claimRewardsExternal() external {
         return vault.getReward(true);

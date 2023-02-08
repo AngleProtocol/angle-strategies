@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.12;
 
 import "@openzeppelin/contracts/interfaces/IERC3156FlashLender.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -129,11 +129,11 @@ library FlashMintLib {
             lp.deposit(dai, amountFlashmint, address(this), _referral);
 
             if (deficit) {
-                // 2a. if in deficit withdraw amount and repay it
+                // 2a. If in deficit withdraw amount and repay it
                 lp.withdraw(want, amount, address(this));
                 lp.repay(want, IERC20(want).balanceOf(address(this)), 2, address(this));
             } else {
-                // 2b. if levering up borrow and deposit
+                // 2b. If levering up borrow and deposit
                 lp.borrow(want, amount, 2, _referral, address(this));
                 lp.deposit(want, IERC20(want).balanceOf(address(this)), address(this), _referral);
             }

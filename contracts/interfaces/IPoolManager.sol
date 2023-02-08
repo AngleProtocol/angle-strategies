@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.12;
 
-// Struct for the parameters associated to a strategy interacting with a collateral `PoolManager`
+// Struct for the parameters associated with a strategy interacting with a collateral `PoolManager`
 // contract
 struct StrategyParams {
     // Timestamp of last report made by this strategy
@@ -41,7 +41,7 @@ interface IPoolManagerFunctions {
 
 /// @title IPoolManager
 /// @author Angle Core Team
-/// @notice Previous interface with additionnal getters for public variables and mappings
+/// @notice Previous interface with additional getters for public variables and mappings
 /// @dev Used in other contracts of the protocol
 interface IPoolManager is IPoolManagerFunctions {
     function stableMaster() external view returns (address);

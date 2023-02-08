@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.12;
 
 /// @title FunctionUtils
 /// @author Angle Core Team
@@ -8,9 +8,9 @@ pragma solidity ^0.8.17;
 /// @dev Functions in this contract should typically be pure functions
 /// @dev This contract is voluntarily a contract and not a library to save some gas cost every time it is used
 contract FunctionUtils {
-    /// @notice Base that is used to compute ratios and floating numbers
+    /// @notice Base that is used to compute ratios and floating point numbers
     uint256 public constant BASE_TOKENS = 10**18;
-    /// @notice Base that is used to define parameters that need to have a floating value (for instance parameters
+    /// @notice Base that is used to define parameters that need to have a floating point value (for instance parameters
     /// that are defined as ratios)
     uint256 public constant BASE_PARAMS = 10**9;
 

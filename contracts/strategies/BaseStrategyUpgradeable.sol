@@ -191,7 +191,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
 
     // ============================= INTERNAL FUNCTIONS ============================
 
-    /// @notice PrepareReturn the Strategy, recognizing any profits or losses
+    /// @notice Prepares the Strategy to return, recognizing any profits or losses
     /// @dev In the rare case the Strategy is in emergency shutdown, this will exit
     /// the Strategy's position.
     /// @dev  When `_report()` is called, the Strategy reports to the Manager (via
@@ -270,7 +270,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     /// @notice same as _adjustPosition but with an initial parameter
     function _adjustPosition(uint256) internal virtual;
 
-    /// @notice same as _adjustPosition but with permisionless parameters
+    /// @notice same as _adjustPosition but with permissionless parameters
     function _adjustPosition(bytes memory) internal virtual {
         _adjustPosition();
     }
@@ -279,7 +279,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     /// irregardless of slippage. Any excess will be re-invested with `_adjustPosition()`.
     /// This function should return the amount of `want` tokens made available by the
     /// liquidation. If there is a difference between them, `_loss` indicates whether the
-    /// difference is due to a realized loss, or if there is some other sitution at play
+    /// difference is due to a realized loss, or if there is some other situation at play
     /// (e.g. locked funds) where the amount made available is less than what is needed.
     ///
     /// NOTE: The invariant `_liquidatedAmount + _loss <= _amountNeeded` should always be maintained

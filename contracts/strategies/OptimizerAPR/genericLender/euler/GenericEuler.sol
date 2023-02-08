@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.12;
 
 import { IEuler, IEulerMarkets, IEulerEToken, IEulerDToken, IBaseIRM } from "../../../../interfaces/external/euler/IEuler.sol";
 import "../../../../external/ComputePower.sol";
@@ -70,7 +70,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
 
     /// @notice Retrieves Euler variables `reserveFee` and the `irm` - rates curve -  used for the underlying token
     /// @dev No access control is needed here because values are fetched from Euler directly
-    /// @dev We expect the values concerned not to be often modified
+    /// @dev We expect the values concerned not to be modified often
     function setEulerPoolVariables() external {
         _setEulerPoolVariables();
     }
@@ -81,7 +81,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     function deposit() external override onlyRole(STRATEGY_ROLE) {
         uint256 balance = want.balanceOf(address(this));
         eToken.deposit(0, balance);
-        // We don't stake balance but the whole eToken Balance
+        // We don't stake balance but the whole eToken balance
         // if some dust has been kept idle
         _stakeAll();
     }
