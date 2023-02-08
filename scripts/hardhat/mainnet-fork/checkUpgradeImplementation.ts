@@ -1,12 +1,13 @@
+import { expect } from 'chai';
 import { Contract, utils } from 'ethers';
+import { ethers, network } from 'hardhat';
+
 import {
-  TransparentUpgradeableProxy__factory,
-  TransparentUpgradeableProxy,
   AaveFlashloanStrategy,
   AaveFlashloanStrategy__factory,
-} from '../../typechain';
-import { network, ethers } from 'hardhat';
-import { expect } from 'chai';
+  TransparentUpgradeableProxy,
+  TransparentUpgradeableProxy__factory,
+} from '../../../typechain';
 
 export async function deploy(
   contractName: string,

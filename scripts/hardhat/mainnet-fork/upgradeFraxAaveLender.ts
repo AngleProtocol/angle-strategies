@@ -1,4 +1,5 @@
 // This script is to be run after having run `unpauseCollat.ts`
+import { ChainId, CONTRACTS_ADDRESSES } from '@angleprotocol/sdk';
 import {
   PerpetualManagerFront,
   PerpetualManagerFront__factory,
@@ -8,10 +9,11 @@ import {
   StableMasterFront,
   StableMasterFront__factory,
 } from '@angleprotocol/sdk/dist/constants/interfaces';
-
-import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
-import { network, ethers } from 'hardhat';
 import { parseUnits } from 'ethers/lib/utils';
+import { ethers, network } from 'hardhat';
+
+import { DAY } from '../../../test/hardhat/contants';
+import { time } from '../../../test/hardhat/test-utils/helpers';
 import {
   logGeneralInfo,
   logOptimizerInfo,
@@ -19,10 +21,8 @@ import {
   randomDeposit,
   randomWithdraw,
   wait,
-} from '../../test/hardhat/utils-interaction';
-import { OptimizerAPRGreedyStrategy, OptimizerAPRGreedyStrategy__factory } from '../../typechain';
-import { time } from '../../test/hardhat/test-utils/helpers';
-import { DAY } from '../../test/hardhat/contants';
+} from '../../../test/hardhat/utils-interaction';
+import { OptimizerAPRGreedyStrategy, OptimizerAPRGreedyStrategy__factory } from '../../../typechain';
 
 async function main() {
   // =============== Simulation parameters ====================

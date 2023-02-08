@@ -7,8 +7,9 @@ script = 'scripts/foundry'
 cache_path = 'cache-forge'
 gas_reports = ["*"]
 via_ir = true
-
 solc_version = '0.8.17'
+optimizer = true
+optimizer_runs = 1000000
 
 ffi = true
 
@@ -22,6 +23,7 @@ runs = 500
 mainnet = "${ETH_NODE_URI_MAINNET}"
 polygon = "${ETH_NODE_URI_POLYGON}"
 goerli = "${ETH_NODE_URI_GOERLI}"
+fork = "${ETH_NODE_URI_FORK}"
 
 [etherscan]
 mainnet = { key = "$MAINNET_ETHERSCAN_API_KEY}" }

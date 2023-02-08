@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.12;
 
-import "../BaseTest.test.sol";
+import "forge-std/Script.sol";
+import { Test } from "forge-std/Test.sol";
+import "../MainnetConstants.s.sol";
+import { IAngleHelper } from "../../../contracts/interfaces/IAngleHelper.sol";
 import { CErc20I, CTokenI } from "../../../contracts/interfaces/external/compound/CErc20I.sol";
 import { IComptroller } from "../../../contracts/interfaces/external/compound/IComptroller.sol";
 import { PoolManager, IStrategy } from "../../../contracts/mock/MockPoolManager2.sol";
@@ -11,9 +14,7 @@ import { GenericAaveNoStaker, IERC20, IERC20Metadata, IGenericLender } from "../
 import { GenericCompoundUpgradeable } from "../../../contracts/strategies/OptimizerAPR/genericLender/compound/GenericCompoundUpgradeable.sol";
 import { GenericEulerStaker, IEulerStakingRewards, IEuler, IEulerEToken, IEulerDToken, IGenericLender, AggregatorV3Interface } from "../../../contracts/strategies/OptimizerAPR/genericLender/euler/GenericEulerStaker.sol";
 
-contract OptimizerAPRStrategyForkTest is BaseTest {
-    using stdStorage for StdStorage;
-
+contract CheckMigration is Script, MainnetConstants, Test {
     uint256 internal constant _BASE_TOKEN = 10**18;
     uint256 internal constant _BASE_APR = 10**18;
     uint64 internal constant _BPS = 10**4;
@@ -42,133 +43,59 @@ contract OptimizerAPRStrategyForkTest is BaseTest {
 
     uint256 public marginAmount;
     uint8 internal _decimalToken;
-    OptimizerAPRStrategy public stratImplementation;
-    OptimizerAPRStrategy public strat;
-    GenericCompoundUpgradeable public lenderCompoundImplementation;
-    GenericCompoundUpgradeable public lenderCompound;
-    GenericAaveNoStaker public lenderAaveImplementation;
-    GenericAaveNoStaker public lenderAave;
-    GenericEulerStaker public lenderEulerImplementation;
-    GenericEulerStaker public lenderEuler;
+    OptimizerAPRStrategy public constant strat = OptimizerAPRStrategy(0xD1760AA0FCD9e64bA4ea43399Ad789CFd63C7809);
+    GenericCompoundUpgradeable public constant lenderCompound =
+        GenericCompoundUpgradeable(payable(0x906B067e392e2c5f9E4f101f36C0b8CdA4885EBf));
+    GenericAaveNoStaker public constant lenderAave = GenericAaveNoStaker(0xDf951d2061b12922BFbF22cb17B17f3b39183570);
+    GenericEulerStaker public constant lenderEuler = GenericEulerStaker(0x8f119cd256a0FfFeed643E830ADCD9767a1d517F);
 
     uint256 public constant BACKTEST_LENGTH = 30;
     uint256 public constant IMPROVE_LENGTH = 2;
 
-    function setUp() public override {
-        super.setUp();
-
-        _ethereum = vm.createFork(vm.envString("ETH_NODE_URI_ETH_FOUNDRY"), 16583523);
-        vm.selectFork(_ethereum);
+    function run() external {
+        // vm.createSelectFork("mainnet");
+        uint256 deployerPrivateKey = vm.deriveKey(vm.envString("MNEMONIC_FORK"), 0);
+        vm.startBroadcast(GOVERNOR);
 
         _decimalToken = IERC20Metadata(address(token)).decimals();
         marginAmount = 10**(_decimalToken + 1);
 
-        address[] memory keeperList = new address[](1);
-        address[] memory governorList = new address[](1);
-        keeperList[0] = _KEEPER;
-        governorList[0] = _GOVERNOR;
-
-        stratImplementation = new OptimizerAPRStrategy();
-        strat = OptimizerAPRStrategy(
-            deployUpgradeable(
-                address(stratImplementation),
-                abi.encodeWithSelector(strat.initialize.selector, address(manager), _GOVERNOR, _GUARDIAN, keeperList)
-            )
-        );
-
-        lenderCompoundImplementation = new GenericCompoundUpgradeable();
-        lenderCompound = GenericCompoundUpgradeable(
-            payable(
-                deployUpgradeable(
-                    address(lenderCompoundImplementation),
-                    abi.encodeWithSelector(
-                        lenderCompoundImplementation.initialize.selector,
-                        address(strat),
-                        "lender Compound",
-                        address(_cUSDC),
-                        governorList,
-                        _GUARDIAN,
-                        keeperList,
-                        _1INCH_V5
-                    )
-                )
-            )
-        );
-        lenderAaveImplementation = new GenericAaveNoStaker();
-        lenderAave = GenericAaveNoStaker(
-            deployUpgradeable(
-                address(lenderAaveImplementation),
-                abi.encodeWithSelector(
-                    lenderAaveImplementation.initialize.selector,
-                    address(strat),
-                    "lender Aave",
-                    false,
-                    governorList,
-                    _GUARDIAN,
-                    keeperList,
-                    _1INCH_V5
-                )
-            )
-        );
-        lenderEulerImplementation = new GenericEulerStaker();
-        lenderEuler = GenericEulerStaker(
-            deployUpgradeable(
-                address(lenderEulerImplementation),
-                abi.encodeWithSelector(
-                    lenderEulerImplementation.initialize.selector,
-                    address(strat),
-                    "lender Euler",
-                    governorList,
-                    _GUARDIAN,
-                    keeperList,
-                    _1INCH_V5,
-                    _STAKER,
-                    _CHAINLINK
-                )
-            )
-        );
-
-        vm.startPrank(_GOVERNOR);
         strat.addLender(IGenericLender(address(lenderCompound)));
         strat.addLender(IGenericLender(address(lenderAave)));
         strat.addLender(IGenericLender(address(lenderEuler)));
         manager.updateStrategyDebtRatio(address(_oldStrat), 0);
         manager.addStrategy(address(strat), _PROP_INVESTED);
-        vm.stopPrank();
-    }
+        vm.stopBroadcast();
 
-    // =============================== MIGRATE FUNDS ===============================
+        vm.startBroadcast(KEEPER);
+        // do a claimComp first and sell the rewards
+        address[] memory holders = new address[](1);
+        CTokenI[] memory cTokens = new CTokenI[](1);
+        holders[0] = address(_oldLenderCompound);
+        cTokens[0] = CTokenI(address(_cUSDC));
+        _COMPTROLLER.claimComp(holders, cTokens, true, true);
+        uint256 compReward = _COMP.balanceOf(address(_oldLenderCompound));
+        console.log("compReward ", compReward);
+        // TODO when selling simulate back at current block how many rewards we received
+        _oldLenderCompound.sellRewards(
+            0,
+            hex"2e95b6c8000000000000000000000000c00e94cb662c3520282e6f5717214004a7f2688800000000000000000000000000000000000000000000000008c662afa8912e0700000000000000000000000000000000000000000000000000000000021c862e0000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000200000000000000003b6d034059f7a66a2fbcaf203cee71359b51142238f85b7880000000000000003b6d0340b4e16d0168e52d35cacd2c6185b44281ec28c9dccfee7c08"
+        );
 
-    function testMigrationFundsSuccess() public {
-        {
-            // do a claimComp first and sell the rewards
-            address[] memory holders = new address[](1);
-            CTokenI[] memory cTokens = new CTokenI[](1);
-            holders[0] = address(_oldLenderCompound);
-            cTokens[0] = CTokenI(address(_cUSDC));
-            _COMPTROLLER.claimComp(holders, cTokens, true, true);
-            uint256 compReward = _COMP.balanceOf(address(_oldLenderCompound));
-            console.log("compReward ", compReward);
-            vm.prank(0xcC617C6f9725eACC993ac626C7efC6B96476916E);
-            // TODO when selling simulate back at current block how many rewards we received
-            _oldLenderCompound.sellRewards(
-                0,
-                hex"2e95b6c8000000000000000000000000c00e94cb662c3520282e6f5717214004a7f2688800000000000000000000000000000000000000000000000008c662afa8912e0700000000000000000000000000000000000000000000000000000000021c862e0000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000200000000000000003b6d034059f7a66a2fbcaf203cee71359b51142238f85b7880000000000000003b6d0340b4e16d0168e52d35cacd2c6185b44281ec28c9dccfee7c08"
-            );
+        // do a claimRewards first and sell the rewards
+        _oldLenderAave.claimRewards();
+        // there shouldn't be any
+        uint256 stkAaveOldLender = _stkAave.balanceOf(address(_oldLenderAave));
+        uint256 aaveOldLender = _aave.balanceOf(address(_oldLenderAave));
+        assertEq(stkAaveOldLender, 0);
+        assertEq(aaveOldLender, 0);
 
-            // do a claimRewards first and sell the rewards
-            vm.prank(0xcC617C6f9725eACC993ac626C7efC6B96476916E);
-            _oldLenderAave.claimRewards();
-            // there shouldn't be any
-            uint256 stkAaveOldLender = _stkAave.balanceOf(address(_oldLenderAave));
-            uint256 aaveOldLender = _aave.balanceOf(address(_oldLenderAave));
-            assertEq(stkAaveOldLender, 0);
-            assertEq(aaveOldLender, 0);
-        }
         // Update the rate so that we have the true rate and we don't underestimate the rate on chain
         _cUSDC.accrueInterest();
+        vm.stopBroadcast();
+
         // remove funds from previous strat
-        vm.startPrank(_GOVERNOR);
+        vm.startBroadcast(GOVERNOR);
         // It would have been more efficient but it doesn't account for profits
         // _oldStrat.safeRemoveLender(address(_oldLenderAave));
         // _oldStrat.forceRemoveLender(address(_oldLenderCompound));
@@ -196,6 +123,7 @@ contract OptimizerAPRStrategyForkTest is BaseTest {
         assertApproxEqAbs(lenderEuler.nav(), (totalAssetsInvested * lenderShares[2]) / _BPS, marginAmount);
         assertApproxEqAbs(lenderAave.nav(), (totalAssetsInvested * lenderShares[1]) / _BPS, marginAmount);
         assertApproxEqAbs(strat.estimatedTotalAssets(), totalAssetsInvested, marginAmount);
+        vm.stopBroadcast();
 
         console.log("strat apr ", strat.estimatedAPR());
         console.log("compound apr ", lenderCompound.apr());

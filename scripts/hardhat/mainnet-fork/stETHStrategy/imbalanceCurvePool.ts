@@ -29,7 +29,7 @@ import {
   randomMint,
   // randomWithdraw,
   wait,
-} from '../../../test/hardhat/utils-interaction';
+} from '../../../../test/hardhat/utils-interaction';
 import {
   IStableSwapPool,
   IStableSwapPool__factory,
@@ -37,7 +37,7 @@ import {
   ISteth__factory,
   StETHStrategy,
   StETHStrategy__factory,
-} from '../../../typechain';
+} from '../../../../typechain';
 
 async function main() {
   // =============== Simulation parameters ====================
@@ -45,7 +45,7 @@ async function main() {
 
   // If we're in mainnet fork, we're using the json.mainnet address
   // eslint-disable-next-line
-  const json = (await import('../../../deploy/networks/mainnet.json')) as any;
+  const json = (await import('../../../../deploy/networks/mainnet.json')) as any;
 
   const governance = CONTRACTS_ADDRESSES[ChainId.MAINNET].GovernanceMultiSig! as string;
 

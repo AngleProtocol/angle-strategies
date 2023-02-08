@@ -6,7 +6,7 @@ import {
   GenericCompoundUpgradeable__factory,
   OptimizerAPRGreedyStrategy,
   OptimizerAPRGreedyStrategy__factory,
-} from '../../../typechain';
+} from '../../../../typechain';
 
 async function main() {
   // =============== Simulation parameters ====================

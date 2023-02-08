@@ -8,32 +8,35 @@ import {
 import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
 import { network, ethers } from 'hardhat';
 import { parseUnits } from 'ethers/lib/utils';
-import { ERC20, ERC20__factory, OptimizerAPRGreedyStrategy, OptimizerAPRGreedyStrategy__factory } from '../../typechain';
-import { logBN } from '../../test/hardhat/utils-interaction';
+import { OptimizerAPRGreedyStrategy, OptimizerAPRGreedyStrategy__factory } from '../../../../typechain';
+import { DAY } from '../../../../test/hardhat/contants';
 
 async function main() {
   // =============== Simulation parameters ====================
   const { deployer } = await ethers.getNamedSigners();
 
-  const collateralName = 'USDC';
+  const collateralName = 'FRAX';
 
   let strategyAddress: string;
   let poolManagerAddress: string;
+  let guardian: string;
 
   if (!network.live) {
+    guardian = CONTRACTS_ADDRESSES[ChainId.MAINNET].Guardian!;
     poolManagerAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]
       ?.PoolManager as string;
     strategyAddress = CONTRACTS_ADDRESSES[ChainId.MAINNET].agEUR?.collaterals?.[collateralName]?.Strategies
       ?.GenericOptimisedLender.Contract as string;
   } else {
+    guardian = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].Guardian!;
     poolManagerAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
       ?.PoolManager as string;
     strategyAddress = CONTRACTS_ADDRESSES[network.config.chainId as ChainId].agEUR?.collaterals?.[collateralName]
       ?.Strategies?.GenericOptimisedLender.Contract as string;
   }
 
-  const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
-  const wantToken = (await ethers.getContractAt(ERC20__factory.abi, USDC)) as ERC20;
+  // const FRAX = '0x853d955aCEf822Db058eb8505911ED77F175b99e';
+  // const wantToken = (await ethers.getContractAt(ERC20__factory.abi, FRAX)) as ERC20;
 
   const strategy = new ethers.Contract(
     strategyAddress,
@@ -50,18 +53,30 @@ async function main() {
 
   console.log('All contracts loaded');
 
-  console.log(`
-  Balance before:
-   \t${logBN(await wantToken.balanceOf(poolManager.address), { base: 6 })}
-  `);
+  //   const tx1 = await (await strategy['harvest()']()).wait();
+  //   console.log('tx1: ', tx1.transactionHash);
+  //   console.log('1st harvest');
 
-  await (await strategy['harvest()']()).wait();
-  console.log('harvest');
+  //   await time.increase(DAY * 7);
+  const { timestamp } = await ethers.provider.getBlock(await ethers.provider.getBlockNumber());
+  await network.provider.send('evm_setNextBlockTimestamp', [timestamp + 7 * DAY]);
+  await network.provider.send('evm_mine');
+  console.log('increased time');
 
-  console.log(`
-  Balance After:
-   \t${logBN(await wantToken.balanceOf(poolManager.address), { base: 6 })}
-  `);
+  await network.provider.request({
+    method: 'hardhat_impersonateAccount',
+    params: [guardian],
+  });
+  await network.provider.send('hardhat_setBalance', [guardian, '0x10000000000000000000000000000']);
+  const signer = await ethers.getSigner(guardian);
+  await poolManager.connect(signer).updateStrategyDebtRatio(strategy.address, parseUnits('0.5', 9));
+
+  console.log('update strategy debt ratio');
+
+  const tx2 = await (await strategy['harvest()']()).wait();
+  console.log('tx2: ', tx2.transactionHash);
+
+  console.log('2nd harvest');
 }
 
 main().catch(error => {
