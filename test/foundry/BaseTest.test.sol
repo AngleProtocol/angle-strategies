@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.12;
 
 import { Test, stdMath, StdStorage, stdStorage } from "forge-std/Test.sol";
 import "../../contracts/external/ProxyAdmin.sol";

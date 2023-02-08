@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.12;
 
 import "../../../../interfaces/external/euler/IEulerStakingRewards.sol";
 import "../../../../interfaces/external/uniswap/IUniswapV3Pool.sol";

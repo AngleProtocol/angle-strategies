@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.12;
 
 library ComputePower {
     /// @notice Calculates (1+x)**n where x is a small number in base `base`

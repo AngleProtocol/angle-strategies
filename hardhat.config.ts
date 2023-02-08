@@ -56,12 +56,41 @@ const config: HardhatUserConfig = {
     ],
     overrides: {
       'contracts/strategies/AaveFlashloanStrategy/AaveFlashloanStrategy.sol': {
+        version: '0.8.12',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 1,
+          },
+        },
+      },
+      'contracts/strategies/OptimizerAPR/genericLender/aave/GenericAaveFraxConvexStaker.sol': {
         version: '0.8.17',
         settings: {
           viaIR: true,
           optimizer: {
             enabled: true,
-            runs: 3000,
+            runs: 1,
+          },
+        },
+      },
+      'contracts/strategies/OptimizerAPR/genericLender/aave/GenericAaveFraxStaker.sol': {
+        version: '0.8.17',
+        settings: {
+          viaIR: true,
+          optimizer: {
+            enabled: true,
+            runs: 1,
+          },
+        },
+      },
+      'contracts/strategies/OptimizerAPR/genericLender/euler/GenericEulerStaker.sol': {
+        version: '0.8.17',
+        settings: {
+          viaIR: true,
+          optimizer: {
+            enabled: true,
+            runs: 1,
           },
         },
       },
