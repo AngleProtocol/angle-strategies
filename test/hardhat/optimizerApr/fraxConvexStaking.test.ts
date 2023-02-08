@@ -170,9 +170,17 @@ describe('OptimizerAPR - lenderAaveFraxConvexStaker', () => {
       const lender = (await deployUpgradeable(
         new GenericAaveFraxConvexStaker__factory(guardian),
       )) as GenericAaveFraxConvexStaker;
-      console.log("oneInch ", oneInch);
       await expect(
-        lender.initialize(strategy.address, 'test', true, [governor.address], guardian.address, [keeper.address],oneInch, 0),
+        lender.initialize(
+          strategy.address,
+          'test',
+          true,
+          [governor.address],
+          guardian.address,
+          [keeper.address],
+          oneInch,
+          0,
+        ),
       ).to.be.revertedWithCustomError(lender, 'TooSmallStakingPeriod');
       await expect(
         lenderAave.initialize(

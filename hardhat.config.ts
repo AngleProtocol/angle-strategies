@@ -67,7 +67,7 @@ const config: HardhatUserConfig = {
       'contracts/strategies/OptimizerAPR/genericLender/aave/GenericAaveFraxConvexStaker.sol': {
         version: '0.8.17',
         settings: {
-          viaIR: true,
+          viaIR: false,
           optimizer: {
             enabled: true,
             runs: 1,

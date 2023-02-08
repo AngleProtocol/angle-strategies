@@ -34,8 +34,8 @@ contract GenericEulerStakerTest is BaseTest {
     uint256 internal constant _ONE_MINUS_RESERVE = 75 * 10**16;
 
     PoolManager public manager;
-    OptimizerAPRGreedyStrategy public stratImplementation;
-    OptimizerAPRGreedyStrategy public strat;
+    OptimizerAPRStrategy public stratImplementation;
+    OptimizerAPRStrategy public strat;
     GenericEulerStaker public lenderImplementation;
     GenericEulerStaker public lender;
     uint256 public maxTokenAmount = 10**(_DECIMAL_TOKEN + 6);
@@ -56,8 +56,8 @@ contract GenericEulerStakerTest is BaseTest {
         governorList[0] = _GOVERNOR;
 
         manager = new PoolManager(address(_TOKEN), _GOVERNOR, _GUARDIAN);
-        stratImplementation = new OptimizerAPRGreedyStrategy();
-        strat = OptimizerAPRGreedyStrategy(
+        stratImplementation = new OptimizerAPRStrategy();
+        strat = OptimizerAPRStrategy(
             deployUpgradeable(
                 address(stratImplementation),
                 abi.encodeWithSelector(strat.initialize.selector, address(manager), _GOVERNOR, _GUARDIAN, keeperList)

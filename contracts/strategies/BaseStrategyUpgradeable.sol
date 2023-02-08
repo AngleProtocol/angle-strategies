@@ -33,7 +33,7 @@
           ▓▓▓        ▓▓      ▓▓▓    ▓▓▓       ▓▓▓▓▓▓▓▓▓▓        ▓▓▓▓▓▓▓▓▓▓       ▓▓▓▓▓▓▓▓▓▓          
 */
 
-pragma solidity ^0.8.12;
+pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
@@ -51,12 +51,19 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     uint256 public constant BASE = 10**18;
     uint256 public constant SECONDS_PER_YEAR = 31556952;
 
-    /// @notice Role for `PoolManager` only - keccak256("POOLMANAGER_ROLE")
-    bytes32 public constant POOLMANAGER_ROLE = 0x5916f72c85af4ac6f7e34636ecc97619c4b2085da099a5d28f3e58436cfbe562;
-    /// @notice Role for guardians and governors - keccak256("GUARDIAN_ROLE")
-    bytes32 public constant GUARDIAN_ROLE = 0x55435dd261a4b9b3364963f7738a7a662ad9c84396d64be3365284bb7f0a5041;
-    /// @notice Role for keepers - keccak256("KEEPER_ROLE")
-    bytes32 public constant KEEPER_ROLE = 0xfc8737ab85eb45125971625a9ebdb75cc78e01d5c1fa80c4c6e5203f47bc4fab;
+    // /// @notice Role for `PoolManager` only - keccak256("POOLMANAGER_ROLE")
+    // bytes32 public constant POOLMANAGER_ROLE = 0x5916f72c85af4ac6f7e34636ecc97619c4b2085da099a5d28f3e58436cfbe562;
+    // /// @notice Role for guardians and governors - keccak256("GUARDIAN_ROLE")
+    // bytes32 public constant GUARDIAN_ROLE = 0x55435dd261a4b9b3364963f7738a7a662ad9c84396d64be3365284bb7f0a5041;
+    // /// @notice Role for keepers - keccak256("KEEPER_ROLE")
+    // bytes32 public constant KEEPER_ROLE = 0xfc8737ab85eb45125971625a9ebdb75cc78e01d5c1fa80c4c6e5203f47bc4fab;
+
+    /// @notice Role for `PoolManager` only
+    bytes32 public constant POOLMANAGER_ROLE = keccak256("POOLMANAGER_ROLE");
+    /// @notice Role for guardians and governors
+    bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
+    /// @notice Role for keepers
+    bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
     // ================================= REFERENCES ================================
 
@@ -134,7 +141,7 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     /// @notice Same as the function above with a `data` parameter to help adjust the position
     /// @dev Since this function is permissionless, strategy implementations should be made
     /// to remain safe regardless of the data that is passed in the call
-    function harvest(bytes memory data) external {
+    function harvest(bytes memory data) external virtual {
         _report();
         _adjustPosition(data);
     }

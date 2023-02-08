@@ -9,7 +9,7 @@ import { OptimizerAPRStrategy } from "../../../contracts/strategies/OptimizerAPR
 import { OptimizerAPRGreedyStrategy } from "../../../contracts/strategies/OptimizerAPR/OptimizerAPRGreedyStrategy.sol";
 import { GenericAaveNoStaker, IERC20, IERC20Metadata, IGenericLender } from "../../../contracts/strategies/OptimizerAPR/genericLender/aave/GenericAaveNoStaker.sol";
 import { GenericCompoundUpgradeable } from "../../../contracts/strategies/OptimizerAPR/genericLender/compound/GenericCompoundUpgradeable.sol";
-import { GenericEulerStaker, IEulerStakingRewards, IEuler, IEulerEToken, IEulerDToken, IGenericLender, AggregatorV3Interface, IUniswapV3Pool } from "../../../contracts/strategies/OptimizerAPR/genericLender/euler/GenericEulerStaker.sol";
+import { GenericEulerStaker, IEulerStakingRewards, IEuler, IEulerEToken, IEulerDToken, IGenericLender, AggregatorV3Interface } from "../../../contracts/strategies/OptimizerAPR/genericLender/euler/GenericEulerStaker.sol";
 
 contract OptimizerAPRStrategyForkTest is BaseTest {
     using stdStorage for StdStorage;
@@ -36,8 +36,6 @@ contract OptimizerAPRStrategyForkTest is BaseTest {
     IEuler private constant _EULER = IEuler(0x27182842E098f60e3D576794A5bFFb0777E025d3);
     IEulerEToken internal constant _EUSDC = IEulerEToken(0xEb91861f8A4e1C12333F42DCE8fB0Ecdc28dA716);
     IEulerDToken internal constant _DUSDC = IEulerDToken(0x84721A3dB22EB852233AEAE74f9bC8477F8bcc42);
-    IUniswapV3Pool private constant _POOL = IUniswapV3Pool(0xB003DF4B243f938132e8CAdBEB237AbC5A889FB4);
-    uint8 private constant _IS_UNI_MULTIPLIED = 0;
     AggregatorV3Interface private constant _CHAINLINK =
         AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
     uint256 internal constant _PROP_INVESTED = 95 * 10**7;
@@ -129,9 +127,7 @@ contract OptimizerAPRStrategyForkTest is BaseTest {
                     keeperList,
                     _1INCH_V5,
                     _STAKER,
-                    _CHAINLINK,
-                    _POOL,
-                    _IS_UNI_MULTIPLIED
+                    _CHAINLINK
                 )
             )
         );

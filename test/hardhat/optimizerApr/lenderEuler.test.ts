@@ -67,8 +67,7 @@ let eToken: IEulerEToken;
 let euler: IEuler;
 // let eulerMarkets: IEulerMarkets;
 let governance: IGovernance;
-let oneInch = '0x1111111254EEB25477B68fb85Ed929f73A960582';
-
+const oneInch = '0x1111111254EEB25477B68fb85Ed929f73A960582';
 
 const guardianRole = ethers.utils.solidityKeccak256(['string'], ['GUARDIAN_ROLE']);
 const strategyRole = ethers.utils.solidityKeccak256(['string'], ['STRATEGY_ROLE']);
@@ -136,9 +135,14 @@ describe('OptimizerAPR - lenderEuler', () => {
       manager = (await deploy('PoolManager', [token.address, governor.address, guardian.address])) as PoolManager;
       ({ strategy } = await initStrategy(governor, guardian, keeper, manager));
       const lender = (await deployUpgradeable(new GenericEuler__factory(guardian))) as GenericEuler;
-      await lender.initializeEuler(strategy.address, 'wrong lender', [governor.address], guardian.address, [
-        keeper.address,
-      ], oneInch);
+      await lender.initializeEuler(
+        strategy.address,
+        'wrong lender',
+        [governor.address],
+        guardian.address,
+        [keeper.address],
+        oneInch,
+      );
       expect(await lender.eToken()).to.not.equal(wrongEToken.address);
     });
     it('Parameters', async () => {
