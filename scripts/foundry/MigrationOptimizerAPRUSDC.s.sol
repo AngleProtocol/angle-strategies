@@ -8,7 +8,6 @@ import { CErc20I, CTokenI } from "../../contracts/interfaces/external/compound/C
 import { IComptroller } from "../../contracts/interfaces/external/compound/IComptroller.sol";
 import { PoolManager, IStrategy } from "../../contracts/mock/MockPoolManager2.sol";
 import { OptimizerAPRStrategy } from "../../contracts/strategies/OptimizerAPR/OptimizerAPRStrategy.sol";
-import { OptimizerAPRGreedyStrategy } from "../../contracts/strategies/OptimizerAPR/OptimizerAPRGreedyStrategy.sol";
 import { GenericAaveNoStaker, IERC20, IERC20Metadata, IGenericLender } from "../../contracts/strategies/OptimizerAPR/genericLender/aave/GenericAaveNoStaker.sol";
 import { GenericCompoundUpgradeable } from "../../contracts/strategies/OptimizerAPR/genericLender/compound/GenericCompoundUpgradeable.sol";
 import { GenericEulerStaker, IEulerStakingRewards, IEuler, IEulerEToken, IEulerDToken, IGenericLender, AggregatorV3Interface } from "../../contracts/strategies/OptimizerAPR/genericLender/euler/GenericEulerStaker.sol";

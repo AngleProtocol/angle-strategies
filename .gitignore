@@ -31,7 +31,6 @@ gasReporterOutput.json
 addresses.json
 blockchain_db
 yarn-error.log
-broadcast
 
 # deployments
 deployments/localhost

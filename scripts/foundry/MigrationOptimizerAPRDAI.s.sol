@@ -27,8 +27,10 @@ contract MigrationOptimizerAPRUSDC is Script, MainnetConstants {
     uint256 internal constant _PROP_INVESTED = 95 * 10**7;
 
     OptimizerAPRStrategy public stratImplementation = OptimizerAPRStrategy(address(0));
-    GenericCompoundUpgradeable public lenderCompoundImplementation = GenericCompoundUpgradeable(payable(address(0)));
-    GenericAaveNoStaker public lenderAaveImplementation = GenericAaveNoStaker(address(0));
+    GenericCompoundUpgradeable public lenderCompoundImplementation =
+        GenericCompoundUpgradeable(payable(0xDeEe844C6992F36ADAC59cF38d1F790B2a0313e2));
+    GenericAaveNoStaker public lenderAaveImplementation =
+        GenericAaveNoStaker(0x14bA0B82f1940e35Af39c364e8Fa99408881Ae30);
 
     // TODO Change on collateral
     IERC20 public token = IERC20(DAI);
