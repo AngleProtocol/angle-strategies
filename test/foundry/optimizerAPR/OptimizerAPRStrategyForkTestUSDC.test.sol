@@ -129,11 +129,7 @@ contract OptimizerAPRStrategyUSDCForkTest is BaseTest {
         );
 
         vm.startPrank(_GOVERNOR);
-        strat.addLender(IGenericLender(address(lenderCompound)));
-        strat.addLender(IGenericLender(address(lenderAave)));
-        strat.addLender(IGenericLender(address(lenderEuler)));
         manager.updateStrategyDebtRatio(address(_oldStrat), 0);
-        manager.addStrategy(address(strat), _PROP_INVESTED);
         vm.stopPrank();
     }
 
@@ -174,6 +170,10 @@ contract OptimizerAPRStrategyUSDCForkTest is BaseTest {
         // _oldStrat.forceRemoveLender(address(_oldLenderCompound));
         _oldStrat.harvest();
         manager.withdrawFromStrategy(IStrategy(address(_oldStrat)), token.balanceOf(address(_oldStrat)));
+        strat.addLender(IGenericLender(address(lenderCompound)));
+        strat.addLender(IGenericLender(address(lenderAave)));
+        strat.addLender(IGenericLender(address(lenderEuler)));
+        manager.addStrategy(address(strat), _PROP_INVESTED);
         vm.stopPrank();
 
         // There shouldn't be any funds left on the old strat
@@ -186,20 +186,20 @@ contract OptimizerAPRStrategyUSDCForkTest is BaseTest {
         assertEq(_oldStrat.estimatedTotalAssets(), 0);
         assertEq(_oldStrat.lentTotalAssets(), 0);
 
-        // // Then we add the new strategy
-        // uint64[] memory lenderShares = new uint64[](3);
-        // lenderShares[0] = (_BPS * 2) / 5;
-        // lenderShares[2] = (_BPS * 3) / 5;
-        // strat.harvest(abi.encode(lenderShares));
-        // uint256 totalAssetsInvested = (manager.getTotalAsset() * _PROP_INVESTED) / 10**9;
-        // assertApproxEqAbs(lenderCompound.nav(), (totalAssetsInvested * lenderShares[0]) / _BPS, marginAmount);
-        // assertApproxEqAbs(lenderEuler.nav(), (totalAssetsInvested * lenderShares[2]) / _BPS, marginAmount);
-        // assertApproxEqAbs(lenderAave.nav(), (totalAssetsInvested * lenderShares[1]) / _BPS, marginAmount);
-        // assertApproxEqAbs(strat.estimatedTotalAssets(), totalAssetsInvested, marginAmount);
+        // Then we add the new strategy
+        uint64[] memory lenderShares = new uint64[](3);
+        lenderShares[0] = (_BPS * 2) / 5;
+        lenderShares[2] = (_BPS * 3) / 5;
+        strat.harvest(abi.encode(lenderShares));
+        uint256 totalAssetsInvested = (manager.getTotalAsset() * _PROP_INVESTED) / 10**9;
+        assertApproxEqAbs(lenderCompound.nav(), (totalAssetsInvested * lenderShares[0]) / _BPS, marginAmount);
+        assertApproxEqAbs(lenderEuler.nav(), (totalAssetsInvested * lenderShares[2]) / _BPS, marginAmount);
+        assertApproxEqAbs(lenderAave.nav(), (totalAssetsInvested * lenderShares[1]) / _BPS, marginAmount);
+        assertApproxEqAbs(strat.estimatedTotalAssets(), totalAssetsInvested, marginAmount);
 
-        // console.log("strat apr ", strat.estimatedAPR());
-        // console.log("compound apr ", lenderCompound.apr());
-        // console.log("aave apr ", lenderAave.apr());
-        // console.log("euler apr ", lenderEuler.apr());
+        console.log("strat apr ", strat.estimatedAPR());
+        console.log("compound apr ", lenderCompound.apr());
+        console.log("aave apr ", lenderAave.apr());
+        console.log("euler apr ", lenderEuler.apr());
     }
 }

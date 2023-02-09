@@ -123,11 +123,7 @@ contract OptimizerAPRStrategyDAIForkTest is BaseTest {
         );
 
         vm.startPrank(_GOVERNOR);
-        strat.addLender(IGenericLender(address(lenderCompound)));
-        strat.addLender(IGenericLender(address(lenderAave)));
-        strat.addLender(IGenericLender(address(lenderEuler)));
         manager.updateStrategyDebtRatio(address(_oldStrat), 0);
-        manager.addStrategy(address(strat), _PROP_INVESTED);
         vm.stopPrank();
     }
 
@@ -168,6 +164,10 @@ contract OptimizerAPRStrategyDAIForkTest is BaseTest {
         // _oldStrat.forceRemoveLender(address(_oldLenderCompound));
         _oldStrat.harvest();
         manager.withdrawFromStrategy(IStrategy(address(_oldStrat)), token.balanceOf(address(_oldStrat)));
+        strat.addLender(IGenericLender(address(lenderCompound)));
+        strat.addLender(IGenericLender(address(lenderAave)));
+        strat.addLender(IGenericLender(address(lenderEuler)));
+        manager.addStrategy(address(strat), _PROP_INVESTED);
         vm.stopPrank();
 
         // There shouldn't be any funds left on the old strat
