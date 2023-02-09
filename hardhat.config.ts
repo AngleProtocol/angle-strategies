@@ -103,7 +103,7 @@ const config: HardhatUserConfig = {
       accounts: accounts('polygon'),
       gas: 'auto',
       chainId: 137,
-      gasPrice: 200e9,
+      gasPrice: 500e9,
       verify: {
         etherscan: {
           apiKey: etherscanKey('polygon'),

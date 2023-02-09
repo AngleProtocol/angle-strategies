@@ -16,6 +16,7 @@
     "hardhat:compile": "hardhat compile",
     "hardhat:coverage": "hardhat coverage",
     "hardhat:deploy": "hardhat deploy --network mainnet --tags",
+    "hardhat:polygon:deploy": "hardhat deploy --network polygon --tags",
     "hardhat:node:fork": "FORK=true hardhat node --tags",
     "hardhat:test": "hardhat test",
     "check-upgradeability": "hardhat run scripts/checkUpgradeability.ts",

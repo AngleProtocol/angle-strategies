@@ -160,10 +160,9 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
         uint256 highestLenderNav;
         uint256 totalNav = looseAssets;
         uint256[] memory weightedAprs = new uint256[](lendersList.length);
-        uint256 lendersListLength = lendersList.length;
         {
             uint256 lowestApr = type(uint256).max;
-            for (uint256 i; i < lendersListLength; ++i) {
+            for (uint256 i; i < lendersList.length; ++i) {
                 uint256 aprAfterDeposit = lendersList[i].aprAfterDeposit(int256(looseAssets));
                 uint256 nav = lendersList[i].nav();
                 totalNav += nav;
@@ -192,10 +191,10 @@ contract OptimizerAPRStrategy is BaseStrategyUpgradeable {
             uint256 weightedApr1;
             // Case where funds are divested from the strategy with the lowest APR to be invested in the one with the highest APR
             uint256 weightedApr2;
-            for (uint256 i; i < lendersListLength; ++i) {
+            for (uint256 i; i < lendersList.length; ++i) {
                 if (i == _highest) {
                     weightedApr1 += (highestLenderNav + looseAssets) * highestApr;
-                    if (lowestNav != 0 && lendersListLength > 1)
+                    if (lowestNav != 0 && lendersList.length > 1)
                         weightedApr2 +=
                             (highestLenderNav + looseAssets + lowestNav) *
                             lendersList[_highest].aprAfterDeposit(int256(lowestNav + looseAssets));

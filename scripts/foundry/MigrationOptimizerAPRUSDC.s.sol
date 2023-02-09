@@ -56,9 +56,9 @@ contract MigrationOptimizerAPRUSDC is Script, MainnetConstants {
         if (address(token) == address(0) || address(_cToken) == address(0) || address(manager) == address(0))
             revert ZeroAdress();
 
-        _decimalToken = IERC20Metadata(address(token)).decimals();
-        _tokenSymbol = IERC20Metadata(address(token)).symbol();
-        marginAmount = 10**(_decimalToken + 1);
+        // _decimalToken = IERC20Metadata(address(token)).decimals();
+        // _tokenSymbol = IERC20Metadata(address(token)).symbol();
+        // marginAmount = 10**(_decimalToken + 1);
 
         address[] memory keeperList = new address[](2);
         address[] memory governorList = new address[](1);
