@@ -81,7 +81,7 @@ contract OptimizerAPRStrategyForkTest is BaseTest {
                         lenderCompoundImplementation.initialize.selector,
                         address(strat),
                         "lender Compound",
-                        address(_cUSDC),
+                        address(_cDAI),
                         governorList,
                         _GUARDIAN,
                         keeperList,
@@ -139,7 +139,7 @@ contract OptimizerAPRStrategyForkTest is BaseTest {
             address[] memory holders = new address[](1);
             CTokenI[] memory cTokens = new CTokenI[](1);
             holders[0] = address(_oldLenderCompound);
-            cTokens[0] = CTokenI(address(_cUSDC));
+            cTokens[0] = CTokenI(address(_cDAI));
             _COMPTROLLER.claimComp(holders, cTokens, true, true);
             uint256 compReward = _COMP.balanceOf(address(_oldLenderCompound));
             console.log("compReward ", compReward);
@@ -160,7 +160,7 @@ contract OptimizerAPRStrategyForkTest is BaseTest {
             assertEq(aaveOldLender, 0);
         }
         // Update the rate so that we have the true rate and we don't underestimate the rate on chain
-        _cUSDC.accrueInterest();
+        _cDAI.accrueInterest();
         // remove funds from previous strat
         vm.startPrank(_GOVERNOR);
         // It would have been more efficient but it doesn't account for profits
@@ -172,7 +172,7 @@ contract OptimizerAPRStrategyForkTest is BaseTest {
 
         // There shouldn't be any funds left on the old strat
         assertEq(token.balanceOf(address(_oldLenderCompound)), 0);
-        assertApproxEqAbs(_cUSDC.balanceOf(address(_oldLenderCompound)), 0, 10**_decimalToken);
+        assertApproxEqAbs(_cDAI.balanceOf(address(_oldLenderCompound)), 0, 10**_decimalToken);
         assertEq(_oldLenderCompound.nav(), 0);
         assertEq(token.balanceOf(address(_oldLenderAave)), 0);
         assertEq(_oldLenderAave.nav(), 0);

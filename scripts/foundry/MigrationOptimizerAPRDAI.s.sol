@@ -13,7 +13,7 @@ import { GenericAaveNoStaker, IERC20, IERC20Metadata, IGenericLender } from "../
 import { GenericCompoundUpgradeable } from "../../contracts/strategies/OptimizerAPR/genericLender/compound/GenericCompoundUpgradeable.sol";
 import { GenericEuler, IEuler, IEulerEToken, IEulerDToken, IGenericLender, AggregatorV3Interface } from "../../contracts/strategies/OptimizerAPR/genericLender/euler/GenericEulerStaker.sol";
 
-contract MigrationOptimizerAPRUSDC is Script, MainnetConstants {
+contract MigrationOptimizerAPRDAI is Script, MainnetConstants {
     uint256 internal constant _BASE_TOKEN = 10**18;
     uint256 internal constant _BASE_APR = 10**18;
     uint64 internal constant _BPS = 10**4;
