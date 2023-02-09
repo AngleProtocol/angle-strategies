@@ -34,7 +34,7 @@ contract OptimizerAPRUpgradeTest is BaseTest {
     function setUp() public override {
         super.setUp();
 
-        _ethereum = vm.createFork(vm.envString("ETH_NODE_URI_ETH_FOUNDRY"), 16586662);
+        _ethereum = vm.createFork(vm.envString("ETH_NODE_URI_ETH_FOUNDRY"), 16590930);
         vm.selectFork(_ethereum);
 
         address[] memory keeperList = new address[](1);
