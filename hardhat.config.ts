@@ -46,7 +46,7 @@ const config: HardhatUserConfig = {
       {
         version: '0.8.17',
         settings: {
-          viaIR: true,
+          viaIR: false,
           optimizer: {
             enabled: true,
             runs: 1000000,
@@ -77,7 +77,7 @@ const config: HardhatUserConfig = {
       'contracts/strategies/OptimizerAPR/genericLender/aave/GenericAaveFraxStaker.sol': {
         version: '0.8.17',
         settings: {
-          viaIR: true,
+          viaIR: false,
           optimizer: {
             enabled: true,
             runs: 20000,

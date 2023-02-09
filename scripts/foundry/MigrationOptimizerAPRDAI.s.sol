@@ -26,7 +26,7 @@ contract MigrationOptimizerAPRDAI is Script, MainnetConstants {
     IEuler private constant _EULER = IEuler(0x27182842E098f60e3D576794A5bFFb0777E025d3);
     uint256 internal constant _PROP_INVESTED = 95 * 10**7;
 
-    OptimizerAPRStrategy public stratImplementation = OptimizerAPRStrategy(address(0));
+    OptimizerAPRStrategy public stratImplementation = OptimizerAPRStrategy(0x05E08E1BF31C1882822Cc48D7d51d6fe49Bca9c2);
     GenericCompoundUpgradeable public lenderCompoundImplementation =
         GenericCompoundUpgradeable(payable(0xDeEe844C6992F36ADAC59cF38d1F790B2a0313e2));
     GenericAaveNoStaker public lenderAaveImplementation =
@@ -58,8 +58,8 @@ contract MigrationOptimizerAPRDAI is Script, MainnetConstants {
             address(_cToken) == address(0) ||
             address(manager) == address(0) ||
             address(stratImplementation) == address(0) ||
-            address(stratImplementation) == address(0) ||
-            address(stratImplementation) == address(0)
+            address(lenderCompoundImplementation) == address(0) ||
+            address(lenderAaveImplementation) == address(0)
         ) revert ZeroAddress();
 
         _decimalToken = IERC20Metadata(address(token)).decimals();
