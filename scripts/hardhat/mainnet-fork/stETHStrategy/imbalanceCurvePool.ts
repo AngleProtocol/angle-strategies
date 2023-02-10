@@ -1,8 +1,9 @@
 // This script is to be run after having run `unpauseCollat.ts`
+import { ChainId, CONTRACTS_ADDRESSES } from '@angleprotocol/sdk';
 import {
-  PerpetualManagerFront,
   // eslint-disable-next-line camelcase
   Perpetual_Manager_Interface,
+  PerpetualManagerFront,
   PoolManager,
   // eslint-disable-next-line camelcase
   PoolManager_Interface,
@@ -14,11 +15,10 @@ import {
   Weth,
   Weth__factory,
 } from '@angleprotocol/sdk/dist/constants/interfaces';
-
 import { expect } from 'chai';
-import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
-import { network, ethers, deployments } from 'hardhat';
 import { parseUnits } from 'ethers/lib/utils';
+import { deployments, ethers, network } from 'hardhat';
+
 import {
   logBN,
   logGeneralInfo,

@@ -71,74 +71,74 @@ contract MigrationOptimizerAPRUSDC is Script, MainnetConstants {
         console.log(string.concat("Euler Staker Lender ", _tokenSymbol));
 
         stratImplementation = new OptimizerAPRStrategy();
-        // strat = OptimizerAPRStrategy(
-        //     deployUpgradeable(
-        //         address(stratImplementation),
-        //         abi.encodeWithSelector(strat.initialize.selector, address(manager), GOVERNOR, GUARDIAN, keeperList)
-        //     )
-        // );
+        strat = OptimizerAPRStrategy(
+            deployUpgradeable(
+                address(stratImplementation),
+                abi.encodeWithSelector(strat.initialize.selector, address(manager), GOVERNOR, GUARDIAN, keeperList)
+            )
+        );
 
-        // console.log("Successfully deployed OptimizerAPR strategy at the address: ", address(strat));
+        console.log("Successfully deployed OptimizerAPR strategy at the address: ", address(strat));
 
-        // lenderCompoundImplementation = new GenericCompoundUpgradeable();
-        // lenderCompound = GenericCompoundUpgradeable(
-        //     payable(
-        //         deployUpgradeable(
-        //             address(lenderCompoundImplementation),
-        //             abi.encodeWithSelector(
-        //                 lenderCompoundImplementation.initialize.selector,
-        //                 address(strat),
-        //                 string.concat("Compound Lender ", _tokenSymbol, " v2"),
-        //                 address(_cToken),
-        //                 governorList,
-        //                 GUARDIAN,
-        //                 keeperList,
-        //                 ONE_INCH
-        //             )
-        //         )
-        //     )
-        // );
+        lenderCompoundImplementation = new GenericCompoundUpgradeable();
+        lenderCompound = GenericCompoundUpgradeable(
+            payable(
+                deployUpgradeable(
+                    address(lenderCompoundImplementation),
+                    abi.encodeWithSelector(
+                        lenderCompoundImplementation.initialize.selector,
+                        address(strat),
+                        string.concat("Compound Lender ", _tokenSymbol, " v2"),
+                        address(_cToken),
+                        governorList,
+                        GUARDIAN,
+                        keeperList,
+                        ONE_INCH
+                    )
+                )
+            )
+        );
 
-        // console.log("Successfully deployed Generic Compound strategy at the address: ", address(lenderCompound));
+        console.log("Successfully deployed Generic Compound strategy at the address: ", address(lenderCompound));
 
-        // lenderAaveImplementation = new GenericAaveNoStaker();
-        // lenderAave = GenericAaveNoStaker(
-        //     deployUpgradeable(
-        //         address(lenderAaveImplementation),
-        //         abi.encodeWithSelector(
-        //             lenderAaveImplementation.initialize.selector,
-        //             address(strat),
-        //             string.concat("Aave Lender ", _tokenSymbol, " v2"),
-        //             false,
-        //             governorList,
-        //             GUARDIAN,
-        //             keeperList,
-        //             ONE_INCH
-        //         )
-        //     )
-        // );
+        lenderAaveImplementation = new GenericAaveNoStaker();
+        lenderAave = GenericAaveNoStaker(
+            deployUpgradeable(
+                address(lenderAaveImplementation),
+                abi.encodeWithSelector(
+                    lenderAaveImplementation.initialize.selector,
+                    address(strat),
+                    string.concat("Aave Lender ", _tokenSymbol, " v2"),
+                    false,
+                    governorList,
+                    GUARDIAN,
+                    keeperList,
+                    ONE_INCH
+                )
+            )
+        );
 
-        // console.log("Successfully deployed Generic Aave strategy at the address: ", address(lenderAave));
+        console.log("Successfully deployed Generic Aave strategy at the address: ", address(lenderAave));
 
-        // lenderEulerImplementation = new GenericEulerStaker();
-        // lenderEuler = GenericEulerStaker(
-        //     deployUpgradeable(
-        //         address(lenderEulerImplementation),
-        //         abi.encodeWithSelector(
-        //             lenderEulerImplementation.initialize.selector,
-        //             address(strat),
-        //             string.concat("Euler Staker Lender ", _tokenSymbol),
-        //             governorList,
-        //             GUARDIAN,
-        //             keeperList,
-        //             ONE_INCH,
-        //             _STAKER,
-        //             _CHAINLINK
-        //         )
-        //     )
-        // );
+        lenderEulerImplementation = new GenericEulerStaker();
+        lenderEuler = GenericEulerStaker(
+            deployUpgradeable(
+                address(lenderEulerImplementation),
+                abi.encodeWithSelector(
+                    lenderEulerImplementation.initialize.selector,
+                    address(strat),
+                    string.concat("Euler Staker Lender ", _tokenSymbol),
+                    governorList,
+                    GUARDIAN,
+                    keeperList,
+                    ONE_INCH,
+                    _STAKER,
+                    _CHAINLINK
+                )
+            )
+        );
 
-        // console.log("Successfully deployed Euler strategy at the address: ", address(lenderEuler));
+        console.log("Successfully deployed Euler strategy at the address: ", address(lenderEuler));
 
         // TODO check out OptimizerAPRStrategyForkTest for the needed op
         vm.stopBroadcast();

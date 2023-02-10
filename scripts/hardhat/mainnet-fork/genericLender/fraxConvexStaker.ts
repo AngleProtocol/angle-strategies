@@ -1,15 +1,15 @@
 // This script is to be run after having run `unpauseCollat.ts`
+import { ChainId, CONTRACTS_ADDRESSES } from '@angleprotocol/sdk';
 import {
   PoolManager,
   // eslint-disable-next-line camelcase
   PoolManager_Interface,
 } from '@angleprotocol/sdk/dist/constants/interfaces';
-
-import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
-import { network, ethers } from 'hardhat';
 import { parseUnits } from 'ethers/lib/utils';
-import { OptimizerAPRGreedyStrategy, OptimizerAPRGreedyStrategy__factory } from '../../../../typechain';
+import { ethers, network } from 'hardhat';
+
 import { DAY } from '../../../../test/hardhat/contants';
+import { OptimizerAPRGreedyStrategy, OptimizerAPRGreedyStrategy__factory } from '../../../../typechain';
 
 async function main() {
   // =============== Simulation parameters ====================
