@@ -1,7 +1,8 @@
 /* eslint-disable camelcase */
+import { BigNumber, constants, utils } from 'ethers';
 import { ethers, network } from 'hardhat';
-import { utils, constants, BigNumber } from 'ethers';
-import { ILendingPool__factory, ILendingPool, ERC20, ERC20__factory } from '../../typechain';
+
+import { ERC20, ERC20__factory, ILendingPool, ILendingPool__factory } from '../../../typechain';
 
 export const logBN = (amount: BigNumber, { base = 6, pad = 20, sign = false } = {}) => {
   const num = parseFloat(utils.formatUnits(amount, base));

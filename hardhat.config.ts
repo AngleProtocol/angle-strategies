@@ -46,7 +46,7 @@ const config: HardhatUserConfig = {
       {
         version: '0.8.17',
         settings: {
-          viaIR: true,
+          viaIR: false,
           optimizer: {
             enabled: true,
             runs: 1000000,
@@ -77,7 +77,7 @@ const config: HardhatUserConfig = {
       'contracts/strategies/OptimizerAPR/genericLender/aave/GenericAaveFraxStaker.sol': {
         version: '0.8.17',
         settings: {
-          viaIR: true,
+          viaIR: false,
           optimizer: {
             enabled: true,
             runs: 20000,
@@ -103,7 +103,7 @@ const config: HardhatUserConfig = {
       accounts: accounts('polygon'),
       gas: 'auto',
       chainId: 137,
-      gasPrice: 200e9,
+      gasPrice: 500e9,
       verify: {
         etherscan: {
           apiKey: etherscanKey('polygon'),

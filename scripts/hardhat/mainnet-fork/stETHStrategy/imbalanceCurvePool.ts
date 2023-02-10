@@ -1,8 +1,9 @@
 // This script is to be run after having run `unpauseCollat.ts`
+import { ChainId, CONTRACTS_ADDRESSES } from '@angleprotocol/sdk';
 import {
-  PerpetualManagerFront,
   // eslint-disable-next-line camelcase
   Perpetual_Manager_Interface,
+  PerpetualManagerFront,
   PoolManager,
   // eslint-disable-next-line camelcase
   PoolManager_Interface,
@@ -14,11 +15,10 @@ import {
   Weth,
   Weth__factory,
 } from '@angleprotocol/sdk/dist/constants/interfaces';
-
 import { expect } from 'chai';
-import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
-import { network, ethers, deployments } from 'hardhat';
 import { parseUnits } from 'ethers/lib/utils';
+import { deployments, ethers, network } from 'hardhat';
+
 import {
   logBN,
   logGeneralInfo,
@@ -29,7 +29,7 @@ import {
   randomMint,
   // randomWithdraw,
   wait,
-} from '../../../test/hardhat/utils-interaction';
+} from '../../../../test/hardhat/utils-interaction';
 import {
   IStableSwapPool,
   IStableSwapPool__factory,
@@ -37,7 +37,7 @@ import {
   ISteth__factory,
   StETHStrategy,
   StETHStrategy__factory,
-} from '../../../typechain';
+} from '../../../../typechain';
 
 async function main() {
   // =============== Simulation parameters ====================
@@ -45,7 +45,7 @@ async function main() {
 
   // If we're in mainnet fork, we're using the json.mainnet address
   // eslint-disable-next-line
-  const json = (await import('../../../deploy/networks/mainnet.json')) as any;
+  const json = (await import('../../../../deploy/networks/mainnet.json')) as any;
 
   const governance = CONTRACTS_ADDRESSES[ChainId.MAINNET].GovernanceMultiSig! as string;
 

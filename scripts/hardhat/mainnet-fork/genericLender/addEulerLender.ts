@@ -1,8 +1,10 @@
 // eslint-disable-next-line camelcase
 
-import { CONTRACTS_ADDRESSES, ChainId } from '@angleprotocol/sdk';
-import { network, ethers, deployments } from 'hardhat';
+import { ChainId, CONTRACTS_ADDRESSES } from '@angleprotocol/sdk';
 import { parseUnits } from 'ethers/lib/utils';
+import { deployments, ethers, network } from 'hardhat';
+
+import { logBN } from '../../../../test/hardhat/utils-interaction';
 import {
   GenericAaveNoStaker,
   GenericAaveNoStaker__factory,
@@ -14,8 +16,7 @@ import {
   OptimizerAPRGreedyStrategy__factory,
   PoolManager,
   PoolManager__factory,
-} from '../../../typechain';
-import { logBN } from '../../../test/hardhat/utils-interaction';
+} from '../../../../typechain';
 
 async function main() {
   // =============== Simulation parameters ====================
