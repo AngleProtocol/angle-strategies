@@ -332,7 +332,7 @@ contract OptimizerAPRGreedyStrategy is BaseStrategyUpgradeable {
     }
 
     /// @notice The weighted apr of all lenders. sum(nav * apr)/totalNav
-    function estimatedAPR() external view returns (uint256) {
+    function estimatedAPR() external view override returns (uint256) {
         uint256 bal = estimatedTotalAssets();
         if (bal == 0) {
             return 0;

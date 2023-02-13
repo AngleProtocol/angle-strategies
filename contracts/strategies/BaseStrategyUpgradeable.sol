@@ -180,6 +180,9 @@ abstract contract BaseStrategyUpgradeable is BaseStrategyEvents, AccessControlAn
     /// mechanisms).
     function estimatedTotalAssets() public view virtual returns (uint256);
 
+    /// @notice Returns the strategy estimated apr
+    function estimatedAPR() external view virtual returns (uint256);
+
     /// @notice Provides an indication of whether this strategy is currently "active"
     /// in that it is managing an active position, or will manage a position in
     /// the future. This should correlate to `harvest()` activity, so that Harvest
