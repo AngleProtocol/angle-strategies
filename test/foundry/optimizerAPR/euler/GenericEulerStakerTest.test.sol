@@ -127,24 +127,64 @@ contract GenericEulerStakerTest is BaseTest {
 
     // ================================== WITHDRAW =================================
 
-    function testWithdawSuccess(uint256 amount, uint256 propWithdraw) public {
+    function testWithdawSuccess(
+        uint256 amount,
+        uint256 amountAirDropToken,
+        uint256 amountAirDropEToken,
+        uint256 propWithdraw
+    ) public {
         amount = bound(amount, minTokenAmount, maxTokenAmount);
+        amountAirDropToken = bound(amountAirDropToken, 0, maxTokenAmount);
+        amountAirDropEToken = bound(amountAirDropEToken, minTokenAmount, maxTokenAmount);
         propWithdraw = bound(propWithdraw, 1, BASE_PARAMS);
-        uint256 toWithdraw = (amount * propWithdraw) / BASE_PARAMS;
+        uint256 toWithdraw = ((amount + amountAirDropToken + amountAirDropEToken) * propWithdraw) / BASE_PARAMS;
         if (toWithdraw < minTokenAmount) toWithdraw = minTokenAmount;
         deal(address(_TOKEN), address(lender), amount);
         vm.prank(_KEEPER);
         lender.deposit();
+
+        // make the want balance non null
+        deal(address(_TOKEN), address(lender), amountAirDropToken);
+        vm.startPrank(_KEEPER);
+        deal(address(_TOKEN), address(_KEEPER), amountAirDropEToken);
+        _TOKEN.approve(address(_euler), amountAirDropEToken);
+        _eUSDC.deposit(0, amountAirDropEToken);
+        IERC20(address(_eUSDC)).transfer(address(lender), _eUSDC.balanceOf(address(_KEEPER)));
+        vm.stopPrank();
+
         vm.prank(_KEEPER);
         lender.withdraw(toWithdraw);
-        assertEq(_TOKEN.balanceOf(address(lender)), 0);
-        assertApproxEqAbs(_eUSDC.balanceOf(address(lender)), 0, 10**(18 - 6));
         uint256 balanceInUnderlying = _eUSDC.convertBalanceToUnderlying(
-            IERC20(address(_STAKER)).balanceOf(address(lender))
+            IERC20(address(_STAKER)).balanceOf(address(lender)) + IERC20(address(_eUSDC)).balanceOf(address(lender))
         );
-        assertApproxEqAbs(_TOKEN.balanceOf(address(strat)), toWithdraw, 1 wei);
-        assertApproxEqAbs(balanceInUnderlying, amount - toWithdraw, 1 wei);
-        assertApproxEqAbs(lender.underlyingBalanceStored(), amount - toWithdraw, 1 wei);
+        // 2 wei because approx on amount and amountAirDropEToken
+        assertApproxEqAbs(_TOKEN.balanceOf(address(strat)), toWithdraw, 2 wei);
+        assertApproxEqAbs(lender.nav(), amount + amountAirDropEToken + amountAirDropToken - toWithdraw, 2 wei);
+        if (toWithdraw > amountAirDropToken) {
+            assertApproxEqAbs(
+                balanceInUnderlying,
+                amount + amountAirDropEToken - (toWithdraw - amountAirDropToken),
+                2 wei
+            );
+            assertApproxEqAbs(
+                lender.underlyingBalanceStored(),
+                amount + amountAirDropEToken - (toWithdraw - amountAirDropToken),
+                2 wei
+            );
+            assertEq(_TOKEN.balanceOf(address(lender)), 0);
+            if (amountAirDropEToken > toWithdraw - amountAirDropToken)
+                assertApproxEqAbs(
+                    _eUSDC.balanceOfUnderlying((address(lender))),
+                    amountAirDropEToken - (toWithdraw - amountAirDropToken),
+                    10**(18 - 6)
+                );
+            else assertApproxEqAbs(_eUSDC.balanceOfUnderlying((address(lender))), 0, 1 wei);
+        } else {
+            assertApproxEqAbs(balanceInUnderlying, amount + amountAirDropEToken, 2 wei);
+            assertApproxEqAbs(lender.underlyingBalanceStored(), amount + amountAirDropEToken, 2 wei);
+            assertEq(_TOKEN.balanceOf(address(lender)), amountAirDropToken - toWithdraw);
+            assertApproxEqAbs(_eUSDC.balanceOfUnderlying((address(lender))), amountAirDropEToken, 1 wei);
+        }
     }
 
     function testWithdawAllSuccess(uint256 amount) public {
