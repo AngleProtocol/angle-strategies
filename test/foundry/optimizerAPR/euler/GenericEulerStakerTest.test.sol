@@ -4,7 +4,7 @@ pragma solidity ^0.8.12;
 import "../../BaseTest.test.sol";
 import { PoolManager } from "../../../../contracts/mock/MockPoolManager2.sol";
 import { OptimizerAPRStrategy } from "../../../../contracts/strategies/OptimizerAPR/OptimizerAPRStrategy.sol";
-import { GenericEulerStaker, IERC20, IEulerStakingRewards, IEuler, IEulerExec, IEulerEToken, IEulerDToken, IGenericLender, AggregatorV3Interface } from "../../../../contracts/strategies/OptimizerAPR/genericLender/euler/GenericEulerStaker.sol";
+import { GenericEulerStaker, IERC20, IEulerStakingRewards, IEuler, IEulerExec, IEulerEToken, IEulerDToken, IEulerMarkets, IGenericLender, AggregatorV3Interface } from "../../../../contracts/strategies/OptimizerAPR/genericLender/euler/GenericEulerStaker.sol";
 
 interface IMinimalLiquidityGauge {
     // solhint-disable-next-line
@@ -21,8 +21,11 @@ contract GenericEulerStakerTest is BaseTest {
     IEulerExec private constant _EXEC = IEulerExec(0x59828FdF7ee634AaaD3f58B19fDBa3b03E2D9d80);
     IEulerStakingRewards internal constant _STAKER = IEulerStakingRewards(0xE5aFE81e63f0A52a3a03B922b30f73B8ce74D570);
     IEuler private constant _euler = IEuler(0x27182842E098f60e3D576794A5bFFb0777E025d3);
+    IEulerMarkets private constant _eulerMarkets = IEulerMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
     IEulerEToken internal constant _eUSDC = IEulerEToken(0xEb91861f8A4e1C12333F42DCE8fB0Ecdc28dA716);
     IEulerDToken internal constant _dUSDC = IEulerDToken(0x84721A3dB22EB852233AEAE74f9bC8477F8bcc42);
+    IEulerEToken internal constant _eDAI = IEulerEToken(0xe025E3ca2bE02316033184551D4d3Aa22024D9DC);
+    IERC20 internal constant _DAI = IERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
     AggregatorV3Interface private constant _CHAINLINK =
         AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
 
@@ -183,6 +186,84 @@ contract GenericEulerStakerTest is BaseTest {
             assertApproxEqAbs(balanceInUnderlying, amount + amountAirDropEToken, 2 wei);
             assertApproxEqAbs(lender.underlyingBalanceStored(), amount + amountAirDropEToken, 2 wei);
             assertEq(_TOKEN.balanceOf(address(lender)), amountAirDropToken - toWithdraw);
+            assertApproxEqAbs(_eUSDC.balanceOfUnderlying((address(lender))), amountAirDropEToken, 1 wei);
+        }
+    }
+
+    function testWithdawPartialLiquiditySuccess(
+        uint256 amount,
+        uint256 availableLiquidity,
+        uint256 amountAirDropToken,
+        uint256 amountAirDropEToken,
+        uint256 propWithdraw
+    ) public {
+        amount = bound(amount, minTokenAmount, maxTokenAmount);
+        amountAirDropToken = bound(amountAirDropToken, 0, maxTokenAmount);
+        amountAirDropEToken = bound(amountAirDropEToken, minTokenAmount, maxTokenAmount);
+        propWithdraw = bound(propWithdraw, 1, BASE_PARAMS);
+        uint256 toWithdraw = ((amount + amountAirDropToken + amountAirDropEToken) * propWithdraw) / BASE_PARAMS;
+        if (toWithdraw < minTokenAmount) toWithdraw = minTokenAmount;
+        deal(address(_TOKEN), address(lender), amount);
+        vm.prank(_KEEPER);
+        lender.deposit();
+
+        // make the want balance non null
+        deal(address(_TOKEN), address(lender), amountAirDropToken);
+        vm.startPrank(_KEEPER);
+        deal(address(_TOKEN), address(_KEEPER), amountAirDropEToken);
+        _TOKEN.approve(address(_euler), amountAirDropEToken);
+        _eUSDC.deposit(0, amountAirDropEToken);
+        IERC20(address(_eUSDC)).transfer(address(lender), _eUSDC.balanceOf(address(_KEEPER)));
+        vm.stopPrank();
+
+        // artificially decrease Euler balance
+        vm.startPrank(_BOB);
+        {
+            uint256 curBalanceEuler = _TOKEN.balanceOf(address(_euler));
+            availableLiquidity = bound(availableLiquidity, 0, curBalanceEuler);
+            uint256 depositAmount = 10 * (curBalanceEuler - availableLiquidity) * 10**12;
+            deal(address(_DAI), _BOB, depositAmount);
+            _DAI.approve(address(_euler), depositAmount);
+            _eulerMarkets.enterMarket(0, address(_DAI));
+            _eDAI.deposit(0, depositAmount);
+            _dUSDC.borrow(0, curBalanceEuler - availableLiquidity);
+        }
+        vm.stopPrank();
+
+        vm.prank(_KEEPER);
+        lender.withdraw(toWithdraw);
+        uint256 balanceInUnderlying = _eUSDC.convertBalanceToUnderlying(
+            IERC20(address(_STAKER)).balanceOf(address(lender)) + IERC20(address(_eUSDC)).balanceOf(address(lender))
+        );
+        uint256 withdrawnAmount = availableLiquidity + amountAirDropToken < toWithdraw
+            ? availableLiquidity + amountAirDropToken
+            : toWithdraw;
+        // 2 wei because approx on amount and amountAirDropEToken
+        assertApproxEqAbs(_TOKEN.balanceOf(address(strat)), withdrawnAmount, 2 wei);
+        assertApproxEqAbs(lender.nav(), amount + amountAirDropEToken + amountAirDropToken - withdrawnAmount, 2 wei);
+        if (withdrawnAmount > amountAirDropToken) {
+            assertApproxEqAbs(
+                balanceInUnderlying,
+                amount + amountAirDropEToken + amountAirDropToken - withdrawnAmount,
+                2 wei
+            );
+            assertApproxEqAbs(
+                lender.underlyingBalanceStored(),
+                amount + amountAirDropEToken + amountAirDropToken - withdrawnAmount,
+                2 wei
+            );
+            assertEq(_TOKEN.balanceOf(address(lender)), 0);
+            if (amountAirDropEToken > withdrawnAmount - amountAirDropToken)
+                assertApproxEqAbs(
+                    _eUSDC.balanceOfUnderlying((address(lender))),
+                    amountAirDropEToken - (withdrawnAmount - amountAirDropToken),
+                    10**(18 - 6)
+                );
+            else assertApproxEqAbs(_eUSDC.balanceOfUnderlying((address(lender))), 0, 1 wei);
+        } else {
+            assertApproxEqAbs(balanceInUnderlying, amount + amountAirDropEToken, 2 wei);
+            assertApproxEqAbs(lender.underlyingBalanceStored(), amount + amountAirDropEToken, 2 wei);
+            assertEq(_TOKEN.balanceOf(address(lender)), amountAirDropToken - withdrawnAmount);
             assertApproxEqAbs(_eUSDC.balanceOfUnderlying((address(lender))), amountAirDropEToken, 1 wei);
         }
     }
