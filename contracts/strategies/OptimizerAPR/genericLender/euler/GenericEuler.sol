@@ -194,9 +194,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
             uint256 toUnstake;
             // We can take all
             if (toWithdraw <= availableLiquidity)
-                toUnstake = toWithdraw > (balanceUnderlying + looseBalance)
-                    ? toWithdraw - (balanceUnderlying + looseBalance)
-                    : 0;
+                toUnstake = toWithdraw > balanceUnderlying ? toWithdraw - balanceUnderlying : 0;
             else {
                 // Take all we can
                 toUnstake = availableLiquidity > balanceUnderlying ? availableLiquidity - balanceUnderlying : 0;
