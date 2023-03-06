@@ -24,6 +24,35 @@ Other Angle-related smart contracts can be found in the following repositories:
 
 Otherwise, for more info about the protocol, check out [this portal](https://linktr.ee/angleprotocol) of resources.
 
+## Audits
+
+Angle smart contracts have been audited by [Chainsecurity](https://docs.angle.money/resources/audits#chainsecurity-july-october-2021) and [Sigma Prime](https://docs.angle.money/resources/audits#sigma-prime-july-october-2021).
+
+All Angle Protocol related audits can be found in [this page](https://docs.angle.money/resources/audits) of our docs.
+
+Some strategies in this repo have not been audited, but were forked from other protocols like Yearn.
+
+## Bug Bounty
+
+At Angle, we consider the security of our systems a top priority. But even putting top priority status and maximum effort, there is still possibility that vulnerabilities exist.
+
+We have therefore setup a bug bounty program with the help of Immunefi. The Angle Protocol bug bounty program is focused around our smart contracts with a primary interest in the prevention of:
+
+- Thefts and freezing of principal of any amount
+- Thefts and freezing of unclaimed yield of any amount
+- Theft of governance funds
+- Governance activity disruption
+
+For more details, please refer to the [official page of the bounty on Immunefi](https://immunefi.com/bounty/angleprotocol/).
+
+| Level    |                     |
+| :------- | :------------------ |
+| Critical | up to USD \$500,000 |
+| High     | USD \$20,000        |
+| Medium   | USD \$2,500         |
+
+All bug reports must include a Proof of Concept demonstrating how the vulnerability can be exploited to be eligible for a reward. This may be a smart contract itself or a transaction.
+
 ## Starting
 
 ### Install packages
