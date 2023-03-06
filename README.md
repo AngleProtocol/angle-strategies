@@ -1,8 +1,57 @@
 # <img src="logo.svg" alt="Angle Strategies" height="40px"> Angle Project Strategies
 
-[![CI](https://github.com/AngleProtocol/strategies-dev/workflows/CI/badge.svg)](https://github.com/AngleProtocol/strategies-dev/actions?query=workflow%3ACI)
+[![CI](https://github.com/AngleProtocol/angle-strategies/workflows/CI/badge.svg)](https://github.com/AngleProtocol/angle-strategies/actions?query=workflow%3ACI)
 
-This repository proposes a template that mixes hardhat and foundry frameworks. It also provides templates for EVM compatible smart contracts (in `./contracts/examples`), tests and deployment scripts.
+## Documentation
+
+### To Start With
+
+Like many yield aggregators, Angle implements yield strategies to provide the best yields to its LPs, and to make a revenue for veANGLE holders. This repo contains the strategies implemented on the Angle Protocol.
+
+Documentation to understand Angle Protocol's strategies is available [here](https://docs.angle.money/angle-core-module/lending).
+
+Developers documentation to understand the smart contract architecture is available [here](https://developers.angle.money/core-module-contracts/smart-contracts-docs/adapters).
+
+### Further Information
+
+For a broader overview of the protocol and its different modules, you can also check [this overview page](https://developers.angle.money) of our developers documentation.
+
+Other Angle-related smart contracts can be found in the following repositories:
+
+- [Angle Borrowing module contracts](https://github.com/AngleProtocol/angle-borrow)
+- [Angle Core module contracts](https://github.com/AngleProtocol/angle-core)
+- [Angle Direct deposit module contracts](https://github.com/AngleProtocol/angle-amo)
+
+Otherwise, for more info about the protocol, check out [this portal](https://linktr.ee/angleprotocol) of resources.
+
+## Audits
+
+Angle smart contracts have been audited by [Chainsecurity](https://docs.angle.money/resources/audits#chainsecurity-july-october-2021) and [Sigma Prime](https://docs.angle.money/resources/audits#sigma-prime-july-october-2021).
+
+All Angle Protocol related audits can be found in [this page](https://docs.angle.money/resources/audits) of our docs.
+
+Some strategies in this repo have not been audited, but were forked from other protocols like Yearn.
+
+## Bug Bounty
+
+At Angle, we consider the security of our systems a top priority. But even putting top priority status and maximum effort, there is still possibility that vulnerabilities exist.
+
+We have therefore setup a bug bounty program with the help of Immunefi. The Angle Protocol bug bounty program is focused around our smart contracts with a primary interest in the prevention of:
+
+- Thefts and freezing of principal of any amount
+- Thefts and freezing of unclaimed yield of any amount
+- Theft of governance funds
+- Governance activity disruption
+
+For more details, please refer to the [official page of the bounty on Immunefi](https://immunefi.com/bounty/angleprotocol/).
+
+| Level    |                     |
+| :------- | :------------------ |
+| Critical | up to USD \$500,000 |
+| High     | USD \$20,000        |
+| Medium   | USD \$2,500         |
+
+All bug reports must include a Proof of Concept demonstrating how the vulnerability can be exploited to be eligible for a reward. This may be a smart contract itself or a transaction.
 
 ## Starting
 
@@ -30,11 +79,11 @@ Warning: always keep your confidential information safe.
 
 ## Headers
 
-To automatically create headers, follow: https://github.com/Picodes/headers
+To automatically create headers, follow: <https://github.com/Picodes/headers>
 
 ## Hardhat Command line completion
 
-Follow these instructions to have hardhat command line arguments completion: https://hardhat.org/hardhat-runner/docs/guides/command-line-completion
+Follow these instructions to have hardhat command line arguments completion: <https://hardhat.org/hardhat-runner/docs/guides/command-line-completion>
 
 ## Foundry Installation
 
@@ -76,6 +125,13 @@ docker run -it --rm -v $(pwd):/app -w /app foundry sh
 ```
 
 Then you are inside the container and can run Foundry’s commands.
+
+### Compilation
+
+```bash
+yarn hardhat:compile
+yarn foundry:compile
+```
 
 ### Tests
 
