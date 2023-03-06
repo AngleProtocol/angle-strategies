@@ -2,7 +2,27 @@
 
 [![CI](https://github.com/AngleProtocol/strategies-dev/workflows/CI/badge.svg)](https://github.com/AngleProtocol/strategies-dev/actions?query=workflow%3ACI)
 
-This repository proposes a template that mixes hardhat and foundry frameworks. It also provides templates for EVM compatible smart contracts (in `./contracts/examples`), tests and deployment scripts.
+## Documentation
+
+### To Start With
+
+Like many yield aggregators, Angle implements yield strategies to provide the best yields to its LPs, and to make a revenue for veANGLE holders. This repo contains the strategies implemented on the Angle Protocol.
+
+Documentation to understand Angle Protocol's strategies is available [here](https://docs.angle.money/angle-core-module/lending).
+
+Developers documentation to understand the smart contract architecture is available [here](https://developers.angle.money/core-module-contracts/smart-contracts-docs/adapters).
+
+### Further Information
+
+For a broader overview of the protocol and its different modules, you can also check [this overview page](https://developers.angle.money) of our developers documentation.
+
+Other Angle-related smart contracts can be found in the following repositories:
+
+- [Angle Borrowing module contracts](https://github.com/AngleProtocol/angle-borrow)
+- [Angle Core module contracts](https://github.com/AngleProtocol/angle-core)
+- [Angle Direct deposit module contracts](https://github.com/AngleProtocol/angle-amo)
+
+Otherwise, for more info about the protocol, check out [this portal](https://linktr.ee/angleprotocol) of resources.
 
 ## Starting
 
@@ -30,11 +50,11 @@ Warning: always keep your confidential information safe.
 
 ## Headers
 
-To automatically create headers, follow: https://github.com/Picodes/headers
+To automatically create headers, follow: <https://github.com/Picodes/headers>
 
 ## Hardhat Command line completion
 
-Follow these instructions to have hardhat command line arguments completion: https://hardhat.org/hardhat-runner/docs/guides/command-line-completion
+Follow these instructions to have hardhat command line arguments completion: <https://hardhat.org/hardhat-runner/docs/guides/command-line-completion>
 
 ## Foundry Installation
 
@@ -76,6 +96,13 @@ docker run -it --rm -v $(pwd):/app -w /app foundry sh
 ```
 
 Then you are inside the container and can run Foundry’s commands.
+
+### Compilation
+
+```bash
+yarn hardhat:compile
+yarn foundry:compile
+```
 
 ### Tests
 
