@@ -857,7 +857,7 @@ contract AaveFlashloanStrategy is BaseStrategyUpgradeable, IERC3156FlashBorrower
         borrow = uint256(ComputeProfitability.computeProfitability(parameters)) / normalizationFactor;
     }
 
-    function estimatedAPR() public view returns (uint256) {
+    function estimatedAPR() public view override returns (uint256) {
         (
             ,
             ,

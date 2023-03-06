@@ -106,7 +106,7 @@ contract StETHStrategy is BaseStrategyUpgradeable {
     }
 
     /// @notice The ETH APR of owning stETH
-    function estimatedAPR() external view returns (uint256) {
+    function estimatedAPR() external view override returns (uint256) {
         return apr;
     }
 
