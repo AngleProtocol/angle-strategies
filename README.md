@@ -1,6 +1,6 @@
 # <img src="logo.svg" alt="Angle Strategies" height="40px"> Angle Project Strategies
 
-[![CI](https://github.com/AngleProtocol/strategies-dev/workflows/CI/badge.svg)](https://github.com/AngleProtocol/strategies-dev/actions?query=workflow%3ACI)
+[![CI](https://github.com/AngleProtocol/angle-strategies/workflows/CI/badge.svg)](https://github.com/AngleProtocol/angle-strategies/actions?query=workflow%3ACI)
 
 ## Documentation
 
