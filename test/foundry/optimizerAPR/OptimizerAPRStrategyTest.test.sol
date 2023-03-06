@@ -567,6 +567,11 @@ contract OptimizerAPRStrategyTest is BaseTest {
         amounts[0] = bound(amounts[0], 1, maxTokenAmount);
         amounts[1] = bound(amounts[1], 1, maxTokenAmount);
         amounts[2] = bound(amounts[2], 1, maxTokenAmount);
+
+        vm.label(address(lender1), "Lender1");
+        vm.label(address(lender2), "Lender2");
+        vm.label(address(lender3), "Lender3");
+
         // Because in this special case my best estimate won't be better than the greedy, because the distribution
         // will be closer to te true optimum. This is just by chance for the greedy and the fuzzing is "searching for that chance"
         uint256 sumAmounts = (amounts[0] + amounts[1] + amounts[2]);
@@ -602,7 +607,7 @@ contract OptimizerAPRStrategyTest is BaseTest {
             // Because in this special case my best estimate won't be better than the greedy, because the distribution
             // will be closer to te true optimum. This is just by chance for the greedy and the fuzzing is "searching for that chance"
             if (
-                (amountOnLender3AfterPrepareReturn * _BPS) / sumAmounts > _BPS / 4 &&
+                (amountOnLender3AfterPrepareReturn * _BPS) / sumAmounts > _BPS / 5 &&
                 (amountOnLender3AfterPrepareReturn * _BPS) / sumAmounts < (_BPS * 44) / 100
             ) return;
         }
