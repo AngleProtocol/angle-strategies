@@ -15,7 +15,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
 
     /// @notice Base used for interest rate / power computation
     // solhint-disable-next-line
-    uint256 private constant BASE_INTEREST = 10**27;
+    uint256 private constant BASE_INTEREST = 10 ** 27;
 
     /// @notice Euler address holding assets
     // solhint-disable-next-line
@@ -118,6 +118,12 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
         _unstake(amount);
         eToken.withdraw(0, amount);
         want.safeTransfer(address(poolManager), want.balanceOf(address(this)));
+    }
+
+    function emergencyBorrow(address assetToBorrow, uint256 amount) external onlyRole(GUARDIAN_ROLE) {
+        IEulerEToken eTokenBorrow = IEulerEToken(_eulerMarkets.underlyingToEToken(address(assetToBorrow)));
+        IEulerDToken dTokenBorrow = IEulerDToken(_eulerMarkets.underlyingToDToken(address(assetToBorrow)));
+        dToken.borrow(0, amount);
     }
 
     // ============================= INTERNAL FUNCTIONS ============================
