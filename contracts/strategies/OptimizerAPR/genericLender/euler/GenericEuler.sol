@@ -123,7 +123,7 @@ contract GenericEuler is GenericLenderBaseUpgradeable {
     function emergencyBorrow(address assetToBorrow, uint256 amount) external onlyRole(GUARDIAN_ROLE) {
         IEulerEToken eTokenBorrow = IEulerEToken(_eulerMarkets.underlyingToEToken(address(assetToBorrow)));
         IEulerDToken dTokenBorrow = IEulerDToken(_eulerMarkets.underlyingToDToken(address(assetToBorrow)));
-        dToken.borrow(0, amount);
+        dTokenBorrow.borrow(0, amount);
     }
 
     // ============================= INTERNAL FUNCTIONS ============================
